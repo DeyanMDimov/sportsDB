@@ -332,7 +332,7 @@ def loadModel(request, target):
                 if(completed):
                     gameEspnId = gameData['id']
                     match = nflMatch.objects.get(espnId = gameEspnId)
-                    print("Game ID: ", gameEspnId)
+                    #print("Game ID: ", gameEspnId)
                     if match.awayTeamPoints != None:     
                         individualModelResult.team1ActualYards = match.homeTeamTotalYards
                         individualModelResult.team2ActualYards = match.awayTeamTotalYards
@@ -343,7 +343,7 @@ def loadModel(request, target):
                         individualModelResult.bookProvidedTotal = match.overUnderLine
                         individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
                         individualModelResult.gameCompleted = True
-                        print("Model generated for game ID: ", gameEspnId)
+                        #print("Model generated for game ID: ", gameEspnId)
                     
 
                 modelResults.append(individualModelResult)
