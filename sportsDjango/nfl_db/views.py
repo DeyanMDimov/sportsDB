@@ -394,7 +394,7 @@ def fullTeamStats(request):
             listOfFieldNames = []
 
             for f in teamMatchPerformance._meta.get_fields():
-                if f in ['id', 'matchEspnId', "nflMatch", 'team', 'teamEspnId', 'opponent', 'weekOfSeason', 'yearOfSeason', 'atHome']:
+                if f.name in ['id', 'matchEspnId', "nflMatch", 'team', 'teamEspnId', 'opponent', 'weekOfSeason', 'yearOfSeason', 'atHome']:
                     pass
                 else:
                     listOfFieldNames.append(f.name)
