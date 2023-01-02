@@ -329,17 +329,25 @@ def loadModel(request, target):
 
                 individualModelResult = businessLogic.generateBettingModel(gameData, weekOfSeason, yearOfSeason, completed)
 
-                if(completed and match.awayTeamPoints != None):
+                if(completed):
                     gameEspnId = gameData['id']
                     match = nflMatch.objects.get(espnId = gameEspnId)
-                    individualModelResult.team1ActualYards = match.homeTeamTotalYards
-                    individualModelResult.team2ActualYards = match.awayTeamTotalYards
-                    individualModelResult.team1ActualPoints = match.homeTeamPoints
-                    individualModelResult.team2ActualPoints = match.awayTeamPoints
-                    individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
-                    individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
-                    individualModelResult.bookProvidedTotal = match.overUnderLine
-                    individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                    print("Game ID: ", gameEspnId)
+                    if match.awayTeamPoints == None: 
+                        #match.completed = False
+                        #match.save()
+                        pass
+                    else:    
+                        individualModelResult.team1ActualYards = match.homeTeamTotalYards
+                        individualModelResult.team2ActualYards = match.awayTeamTotalYards
+                        individualModelResult.team1ActualPoints = match.homeTeamPoints
+                        individualModelResult.team2ActualPoints = match.awayTeamPoints
+                        individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
+                        individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+                        individualModelResult.bookProvidedTotal = match.overUnderLine
+                        individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                        print("Model generated for game ID: ", gameEspnId)
+                    
 
                 modelResults.append(individualModelResult)
                 
