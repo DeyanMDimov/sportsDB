@@ -1,0 +1,19 @@
+.nav-menu .menu-item{
+    display: inline;
+}
+
+.nav-menu{
+    padding-inline-start: 0px;
+}
+
+#modelSummary tr td{
+    text-align: center;
+}
+
+#modelSummary thead{
+    font-size:16px;
+}
+
+#modelSummary thead td{
+    padding: 0 5px;
+}

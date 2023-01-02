@@ -1,0 +1,181 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% block loadModel %}
+    <div class = "container">
+        
+        <div>
+            Plug data into model for:
+            <form method="GET">
+                <select name="season" id="season">
+                    <option value="2022">2022</option>
+                </select> 
+                and Week: 
+                <select name="week" id="week">
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                    <option value="13">13</option>
+                    <option value="14">14</option>
+                    <option value="15">15</option>
+                    <option value="16">16</option>
+                    <option value="17">17</option>
+                    <option value="18">18</option>
+                </select>
+                <br>
+                <button type="submit">Load!</button>
+            </form>
+        </div>
+        <div id="modelResultContainer">
+            {% if modelResults %}
+            
+            <h2>Summary for Week {{weekOfSeason}} in {{yearOfSeason}}</h2>
+
+            <p>Description: 
+                <ol>
+                    <li>Average the team's offensive yards per game with opponents defensive yards allowed per game.</li>
+                    <li>Average the team's offensive yards per point with the opponents defensive yards per point allowed.</li>
+                    <li>Divide the result from Step 1 (expected offensive yards in the game) by the result from Step 2 (expected yards per point).</li>
+                    <li>Result from Step 3 is your expected score.</li>
+                </ol>
+            </p>
+            <div id="modelSummary">
+                <table class="table-bordered" id="modelSummary">
+                    <thead>
+                        <td>Home Team</td>
+                        <td>Model Score</td>
+                        <td>Actual Score</td>
+                        <td style="padding: 0 25px;"></td>
+                        <td>Away Team</td>
+                        <td>Model Score</td>
+                        <td>Actual Score</td>
+                        <td>Sheet O/U</td>
+                        <td>Book O/U</td>
+                        <td>Actual Total</td>
+                        <td>Model Line</td>
+                        <td>Book Line</td>
+                        <td>Result Line</td>
+                    </thead>
+                    <tbody>
+                        {% for result in modelResults %}
+                        <tr>
+                            <td>{{ result.team1Name }}</td>
+                            <td>{{ result.team1CalculatedPoints }}</td>
+                            <td>{{ result.team1ActualPoints }}</td>
+                            <td>vs.</td>
+                            <td>{{ result.team2Name }}</td>
+                            <td>{{ result.team2CalculatedPoints }}</td>
+                            <td>{{ result.team2ActualPoints }}</td>
+                            <td>{{ result.calculatedTotal }}</td>
+                            <td>{{ result.bookProvidedTotal }}</td>
+                            <td>{{ result.actualTotal }}</td>
+                            <td>{{ result.team1Name }} {{ result.calculatedSpread }}</td>
+                            <td>{{ result.bookProvidedSpread }}</td>
+                            <td>{{ result.team1Name }} {{result.actualSpread }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% comment %} {% for result in modelResults %}
+            <div class="individiualModelResult">
+                {% if gameCompleted %}
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <td style="width: 200px"> Team Name </td>
+                            <td style="width: 440px" colspan="2"> {{ result.team1Name}}</td>
+                            <td colspan="2"> {{ result.team2Name}}</td>
+                        </tr>
+                        <tr>
+                            <td> OFF Yds/Game </td>
+                            <td colspan="2"> {{ result.team1TotalOffensiveYardsPerGame}}</td>
+                            <td colspan="2"> {{ result.team2TotalOffensiveYardsPerGame}}</td>
+                        </tr>
+                        <tr>
+                            <td> OFF Yds/Point </td>
+                            <td colspan="2"> {{ result.team1TotalYardsPerPoint}}</td>
+                            <td colspan="2"> {{ result.team2TotalYardsPerPoint}}</td>
+                        </tr>
+                        <tr>
+                            <td> DEF Yds/Game </td>
+                            <td colspan="2"> {{ result.team1TotalDefensiveYardsPerGame}}</td>
+                            <td colspan="2"> {{ result.team2TotalDefensiveYardsPerGame}}</td>
+                        </tr>
+                        <tr>
+                            <td> DEF Yds/Point </td>
+                            <td colspan="2"> {{ result.team1TotalDefensiveYardsPerPoint}}</td>
+                            <td colspan="2"> {{ result.team2TotalDefensiveYardsPerPoint}}</td>
+                        </tr>
+                        <tr>
+                            <td> Expected Yards Gained</td>
+                            <td style="width: 220px"> {{ result.team1ExpectedYardsPerGame}}</td>
+                            <td style="width: 220px">Actual:  {{ result.team1ActualYards}} </td>
+                            <td style="width: 220px"> {{ result.team2ExpectedYardsPerGame}}</td>
+                            <td> Actual: {{ result.team2ActualYards}} </td>
+                        </tr>
+                        <tr>
+                            <td> Expected Score </td>
+                            <td style="width: 220px"> {{ result.team1CalculatedPoints}}</td>
+                            <td style="width: 220px">Actual:  {{ result.team1ActualPoints }} </td>
+                            <td style="width: 220px"> {{ result.team2CalculatedPoints}}</td>
+                            <td> Actual: {{ result.team2ActualPoints }} </td>
+                        </tr>
+                    </tbody>
+                </table> 
+                {% else %}
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <td style="width: 200px"> Team Name </td>
+                            <td style="width: 440px"> {{ result.team1Name}}</td>
+                            <td> {{ result.team2Name}}</td>
+                        </tr>
+                        <tr>
+                            <td> OFF Yds/Game </td>
+                            <td> {{ result.team1TotalOffensiveYardsPerGame}}</td>
+                            <td> {{ result.team2TotalOffensiveYardsPerGame}}</td>
+                        </tr>
+                        <tr>
+                            <td> OFF Yds/Point </td>
+                            <td> {{ result.team1TotalYardsPerPoint}}</td>
+                            <td> {{ result.team2TotalYardsPerPoint}}</td>
+                        </tr>
+                        <tr>
+                            <td> DEF Yds/Game </td>
+                            <td> {{ result.team1TotalDefensiveYardsPerGame}}</td>
+                            <td> {{ result.team2TotalDefensiveYardsPerGame}}</td>
+                        </tr>
+                        <tr>
+                            <td> DEF Yds/Point </td>
+                            <td> {{ result.team1TotalDefensiveYardsPerPoint}}</td>
+                            <td> {{ result.team2TotalDefensiveYardsPerPoint}}</td>
+                        </tr>
+                        <tr>
+                            <td> Expected Yards Gained</td>
+                            <td> {{ result.team1ExpectedYardsPerGame}}</td>
+                            <td> {{ result.team2ExpectedYardsPerGame}}</td>
+                        </tr>
+                        <tr>
+                            <td> Expected Score </td>
+                            <td> {{ result.team1CalculatedPoints}}</td>
+                            <td> {{ result.team2CalculatedPoints}}</td>
+                        </tr>
+                    </tbody>
+                </table> 
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %} {% endcomment %}
+        </div>
+
+    </div>
+{% endblock %}

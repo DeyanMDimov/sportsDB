@@ -1,0 +1,83 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% block getData %}
+    <div class = "container">
+        {% comment %} <form method="GET">
+            <input type="hidden" name="teams" value="all">
+            <button type="submit">Load All Teams</button>
+        </form>
+        {% if teamNames %}
+            <div> 32 Teams Loaded </div>
+            {% for tn in teamNames %}
+            <div> {{tn}}</div>
+            {% endfor %}
+        {% endif %} {% endcomment %}
+        {% comment %} <form method="GET">
+            <input type="hidden" name="resetPerf" value="all">
+            <button type="submit">Clear All Performances</button>
+        </form> {% endcomment %}
+        
+        <h4>{{ message }}</h4>
+        <div>
+            Load data for Season: 
+            <form method="GET">
+                <select name="season" id="season">
+                    <option value="2022">2022</option>
+                    <option value="2021">2021</option>
+                    <option value="2020">2020</option>
+                    <option value="2019">2019</option>
+                    <option value="2018">2018</option>
+                    <option value="2017">2017</option>
+                    <option value="2016">2016</option>
+                </select> 
+                and Week: 
+                <select name="week" id="week">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                    <option value="13">13</option>
+                    <option value="14">14</option>
+                    <option value="15">15</option>
+                    <option value="16">16</option>
+                    <option value="17">17</option>
+                    <option value="18">18</option>
+                </select>
+                <br>
+                <button type="submit">Load!</button>
+            </form>
+        </div>
+        <br>
+        <br>
+        <div>
+            <form method="GET">
+                <select name="season" id="season">
+                    <option value="2022">2022</option>
+                    <option value="2021">2021</option>
+                    <option value="2020">2020</option>
+                    <option value="2019">2019</option>
+                    <option value="2018">2018</option>
+                    <option value="2017">2017</option>
+                    <option value="2016">2016</option>
+                </select> 
+                <input type="hidden" name="full" value="True">
+                <br>
+                <button type="submit">Load Full Season</button>
+        </div>
+        <div>
+            {% comment %} Load data for game with ID:
+            <form method="GET">
+                <input type="text" id="espnGameId" name="espnGameId"><br><br>
+                <button type="submit">Load!</button>
+            </form> {% endcomment %}
+        </div>
+    </div>
+{% endblock %}
