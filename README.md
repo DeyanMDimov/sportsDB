@@ -1,2 +1,2 @@
-# sports_db
+# sportsDB
 Capturing sports data for analysis.
