@@ -14,6 +14,9 @@ import time
 # Create your views here.
 
 def index(request):
+    return render (request, 'nfl/base.html')
+
+def getData(request):
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
             print("Hit game stats endpoint")
@@ -91,12 +94,94 @@ def index(request):
                         responseMessage = "Hit an error while pulling in Week " + str(weekOfSeason) + " for " + str(yearOfSeason)
 
             return render (request, 'nfl/nflhome.html', {"message": responseMessage})
+
         elif 'espnGameId' in request.GET:
             print("Hit single game endpoint")
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = inputReq['week'].strip()
         
+        elif 'season' in request.GET and 'startWeek' in request.GET and 'endWeek' in request.GET:
+            inputReq = request.GET
+            yearOfSeason = inputReq['season'].strip()
+            startWeek = int(inputReq['startWeek'].strip())
+            endWeek = int(inputReq['endWeek'].strip())
+
+            i = startWeek
+
+            while i <= endWeek:
+                time.sleep(2)
+                weekOfSeason = str(i)
+            
+                url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
+                response = requests.get(url)
+                data = response.json()
+                gameLinks = data['items']
+
+                for link in gameLinks:
+                    
+                    gameDataResponse = requests.get(link['$ref'])
+                    gameData=gameDataResponse.json()
+
+                    matchEspnId = gameData['id']
+                    dateOfGameFromApi = gameData['date']
+                    dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
+
+                    completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False)
+
+                    oddsUrl = gameData['competitions'][0]['odds']['$ref']
+                    oddsResponse = requests.get(oddsUrl)
+                    oddsData = oddsResponse.json()
+
+                    existingMatch = None
+
+                    try:
+                        existingMatch = nflMatch.objects.get(espnId = matchEspnId)
+                    except:
+                        pass
+                    
+                    if datetime.datetime.now()<dateOfGame or completed==False:
+                        businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, weekOfSeason, yearOfSeason)
+                    else:
+                        homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
+                        homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
+                        homeTeamStats = homeTeamStatsResponse.json()
+
+                        homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
+                        homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
+                        homeTeamScore = homeTeamScoreResponse.json()
+
+                        awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
+                        awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
+                        awayTeamStats = awayTeamStatsResponse.json()
+                        
+                        awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
+                        awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
+                        awayTeamScore = awayTeamScoreResponse.json()
+
+                        playsDataUrl = gameData['competitions'][0]['details']['$ref']
+                        playsDataResponse = requests.get(playsDataUrl)
+                        playsData = playsDataResponse.json()
+                        
+                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
+
+                        try:
+                            businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+                            businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+                        except Exception as e: 
+                            print("Hit an Exception")
+                            print(type(e))
+                            print(e)
+                            
+                
+                print("Week ", str(i), " loaded.")
+                i += 1
+            if startWeek == endWeek:
+                message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
+            else:
+                message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
+            return render (request, 'nfl/nflhome.html', {'message': message})
+
         elif 'season' in request.GET and 'full' in request.GET:
             
             print("Hit full season endpoint")
