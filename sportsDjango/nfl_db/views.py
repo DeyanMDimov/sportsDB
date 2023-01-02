@@ -333,11 +333,7 @@ def loadModel(request, target):
                     gameEspnId = gameData['id']
                     match = nflMatch.objects.get(espnId = gameEspnId)
                     print("Game ID: ", gameEspnId)
-                    if match.awayTeamPoints == None: 
-                        #match.completed = False
-                        #match.save()
-                        pass
-                    else:    
+                    if match.awayTeamPoints != None:     
                         individualModelResult.team1ActualYards = match.homeTeamTotalYards
                         individualModelResult.team2ActualYards = match.awayTeamTotalYards
                         individualModelResult.team1ActualPoints = match.homeTeamPoints
@@ -346,6 +342,7 @@ def loadModel(request, target):
                         individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
                         individualModelResult.bookProvidedTotal = match.overUnderLine
                         individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                        individualModelResult.gameCompleted = True
                         print("Model generated for game ID: ", gameEspnId)
                     
 
@@ -353,10 +350,10 @@ def loadModel(request, target):
                 
 
             if(reqTarget == 'showModel'):
-                return render(request, 'nfl/bettingModel.html', {"modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, "gameCompleted": completed})
+                return render(request, 'nfl/bettingModel.html', {"modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason})
             else:
                 print("passing stuff")
-                return render(request, 'nfl/modelSummary.html', {"modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, "gameCompleted": completed})
+                return render(request, 'nfl/modelSummary.html', {"modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason})
         else: 
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html')

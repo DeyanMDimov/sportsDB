@@ -68,17 +68,33 @@
                         <tr>
                             <td>{{ result.team1Name }}</td>
                             <td>{{ result.team1CalculatedPoints }}</td>
-                            <td>{{ result.team1ActualPoints }}</td>
+                            <td>
+                                {% if result.gameCompleted %}
+                                {{ result.team1ActualPoints }}
+                                {% endif %}
+                            </td>
                             <td>vs.</td>
                             <td>{{ result.team2Name }}</td>
                             <td>{{ result.team2CalculatedPoints }}</td>
-                            <td>{{ result.team2ActualPoints }}</td>
+                            <td>
+                                {% if result.gameCompleted %}
+                                {{ result.team2ActualPoints }}
+                                {% endif %}
+                            </td>
                             <td>{{ result.calculatedTotal }}</td>
                             <td>{{ result.bookProvidedTotal }}</td>
-                            <td>{{ result.actualTotal }}</td>
+                            <td>
+                                {% if result.gameCompleted %}
+                                {{ result.actualTotal }}
+                                {% endif %}
+                            </td>
                             <td>{{ result.team1Name }} {{ result.calculatedSpread }}</td>
-                            <td>{{ result.bookProvidedSpread }}</td>
-                            <td>{{ result.team1Name }} {{result.actualSpread }}</td>
+                            <td>{{ result.team1Name }} {{ result.bookProvidedSpread }}</td>
+                            <td>
+                                {% if result.gameCompleted%}
+                                {{ result.team1Name }} {{result.actualSpread }}
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

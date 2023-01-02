@@ -481,6 +481,8 @@ class individualBettingModelResult:
     bookProvidedTotal = 0.0
     actualTotal = 0.0
 
+    gameCompleted = False
+
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
