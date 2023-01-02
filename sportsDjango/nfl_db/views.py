@@ -329,7 +329,7 @@ def loadModel(request, target):
 
                 individualModelResult = businessLogic.generateBettingModel(gameData, weekOfSeason, yearOfSeason, completed)
 
-                if(completed):
+                if(completed and match.awayTeamPoints != None):
                     gameEspnId = gameData['id']
                     match = nflMatch.objects.get(espnId = gameEspnId)
                     individualModelResult.team1ActualYards = match.homeTeamTotalYards
