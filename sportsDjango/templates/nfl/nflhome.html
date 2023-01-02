@@ -18,7 +18,7 @@
         </form> {% endcomment %}
         
         <h4>{{ message }}</h4>
-        <div>
+        {% comment %} <div>
             Load data for Season: 
             <form method="GET">
                 <select name="season" id="season">
@@ -54,7 +54,7 @@
                 <br>
                 <button type="submit">Load!</button>
             </form>
-        </div>
+        </div> {% endcomment %}
         <br>
         <br>
         <div>
@@ -122,7 +122,7 @@
         </div>
         <br>
         <br>
-        <div>
+        {% comment %} <div>
             <form method="GET">
                 <select name="season" id="season">
                     <option value="2022">2022</option>
@@ -136,7 +136,8 @@
                 <input type="hidden" name="full" value="True">
                 <br>
                 <button type="submit">Load Full Season</button>
-        </div>
+            </form>
+        </div> {% endcomment %}
         <div>
             {% comment %} Load data for game with ID:
             <form method="GET">
