@@ -94,9 +94,10 @@ def createOrUpdateNflMatch(nflMatchObject, gameData, homeTeamScore, homeTeamStat
         matchData.save()
     else:
         matchData = nflMatchObject
-        if matchData.completed == False:
+        gameCompleted = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
+        if gameCompleted:
             
-            matchData.completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
+            matchData.completed = gameCompleted
             matchData.overtime= False
             matchData.homeTeamPoints= homeTeamScore['value']
             matchData.homeTeamPointsAllowed= awayTeamScore['value']
