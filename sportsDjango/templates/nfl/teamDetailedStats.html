@@ -44,7 +44,7 @@
                         <td>Date Played</td>
                         {% for perf in teamPerf %}
                             {% for match in perf.nflMatch.all %}
-                                <td> {{match.datePlayed}} </td>
+                                <td> {{match.datePlayed|date:"M d Y"}} </td>
                             {% endfor %}
                         {% endfor %}
                     </tr>
