@@ -407,9 +407,9 @@ def getExplosivePlays(playByPlayData, teamId):
     return teamExplosivePlays
 
 
-def capturePlayByPlayInfo(playByPlayData, teamId, opponenetId):
+def captureStatsFromPlayByPlay(playByPlayData, teamId, opponenetId):
     teamRushingTenPlus          = 0
-    teamPassPlaysTwentyFivePlus = 0
+    teamPassPlaysTwentyPlus = 0
     redZoneAttempts             = 0
     redZoneTDConversionPct      = 0.0
     redZoneFumbles              = 0
@@ -508,7 +508,7 @@ def capturePlayByPlayInfo(playByPlayData, teamId, opponenetId):
             if(play['type']['text'] == "Rush" and play['statYardage']>=10):
                 teamRushingTenPlus += 1
             elif (play['type']['text'] == "Pass Reception" and play['statYardage']>=25):
-                teamPassPlaysTwentyFivePlus += 1
+                teamPassPlaysTwentyPlus += 1
     
     for pt in listOfPlayTypes:
         print(pt)
