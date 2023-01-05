@@ -329,22 +329,25 @@ def loadModel(request, target):
 
                 individualModelResult = businessLogic.generateBettingModel(gameData, weekOfSeason, yearOfSeason, completed)
 
+                gameEspnId = gameData['id']
+                match = nflMatch.objects.get(espnId = gameEspnId)
+
                 if(completed):
-                    gameEspnId = gameData['id']
-                    match = nflMatch.objects.get(espnId = gameEspnId)
+                    
                     #print("Game ID: ", gameEspnId)
                     if match.awayTeamPoints != None:     
                         individualModelResult.team1ActualYards = match.homeTeamTotalYards
                         individualModelResult.team2ActualYards = match.awayTeamTotalYards
                         individualModelResult.team1ActualPoints = match.homeTeamPoints
                         individualModelResult.team2ActualPoints = match.awayTeamPoints
-                        individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
                         individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
-                        individualModelResult.bookProvidedTotal = match.overUnderLine
                         individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
-                        individualModelResult.gameCompleted = True
                         #print("Model generated for game ID: ", gameEspnId)
                     
+                if match.overUnderLine != 0:
+                    individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
+                    individualModelResult.bookProvidedTotal = match.overUnderLine
+                      
 
                 modelResults.append(individualModelResult)
                 

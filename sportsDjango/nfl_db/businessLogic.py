@@ -198,8 +198,8 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
                 matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
                 matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
                 matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
-            except:
-                pass
+            except Exception as e:
+                print(e)
 
             matchData.save()   
 
