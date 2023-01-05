@@ -116,7 +116,7 @@ class teamMatchPerformance(models.Model):
     #offense-passing
     passCompletions             = models.SmallIntegerField(null = True, blank = True)
     passingAttempts             = models.SmallIntegerField(null = True, blank = True)
-    passPlaysTwentyPlus     = models.SmallIntegerField(null = True, blank = True)
+    passPlaysTwentyFivePlus     = models.SmallIntegerField(null = True, blank = True)
     totalPassingYards           = models.SmallIntegerField(null = True, blank = True)
     qbHitsTaken                 = models.SmallIntegerField(null = True, blank = True)
     sacksTaken                  = models.SmallIntegerField(null = True, blank = True)
