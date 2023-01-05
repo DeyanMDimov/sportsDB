@@ -88,11 +88,19 @@
                                 {{ result.actualTotal }}
                                 {% endif %}
                             </td>
-                            <td>{{ result.team1Name }} {{ result.calculatedSpread }}</td>
-                            <td>{{ result.team1Name }} {{ result.bookProvidedSpread }}</td>
-                            <td>
+                            <td class="modelSummaryLine">
+                                {{ result.team1Name }} 
+                                    {% if result.calculatedSpread > 0 %}
+                                    +{% endif %}{{ result.calculatedSpread }}</td>
+                            <td class="modelSummaryLine">
+                                {{ result.team1Name }} 
+                                    {% if result.bookProvidedSpread > 0 %}
+                                    +{% endif %}{{ result.bookProvidedSpread }}</td>
+                            <td class="modelSummaryLine">
                                 {% if result.gameCompleted%}
-                                {{ result.team1Name }} {{result.actualSpread }}
+                                {{ result.team1Name }} 
+                                    {% if result.actualSpread > 0 %}
+                                    +{% endif %}{{result.actualSpread }}
                                 {% endif %}
                             </td>
                         </tr>

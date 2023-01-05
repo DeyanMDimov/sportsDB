@@ -17,3 +17,7 @@
 #modelSummary thead td{
     padding: 0 5px;
 }
+
+.modelSummaryLine {
+    width: 100px;
+}

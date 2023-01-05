@@ -5,7 +5,7 @@ from nfl_db.models import nflTeam
 import json
 
 
-def createOrUpdateNflMatch(nflMatchObject, gameData, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, seasonYear):
+def createOrUpdateNflMatch(nflMatchObject, gameData, gameCompleted, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, seasonYear):
     
     
     if nflMatchObject == None:
@@ -16,7 +16,7 @@ def createOrUpdateNflMatch(nflMatchObject, gameData, homeTeamScore, homeTeamStat
                         homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id'],
                         #awayTeam = nflTeam.objects.get(espnId=gameData['competitions'][0]['competitors'][1]['id']),
                         awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id'],
-                        completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full"),
+                        completed = gameCompleted,
                         weekOfSeason = weekOfSeason,
                         yearOfSeason = seasonYear,
                         neutralStadium = gameData['competitions'][0]['neutralSite'],
@@ -94,7 +94,7 @@ def createOrUpdateNflMatch(nflMatchObject, gameData, homeTeamScore, homeTeamStat
         matchData.save()
     else:
         matchData = nflMatchObject
-        gameCompleted = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
+        
         if gameCompleted:
             
             matchData.completed = gameCompleted

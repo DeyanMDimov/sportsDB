@@ -127,7 +127,12 @@ def getData(request):
                     dateOfGameFromApi = gameData['date']
                     dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
 
-                    completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False)
+                    gameStatusUrl = gameData['competitions'][0]['status']['$ref']
+                    gameStatusResponse = requests.get(gameStatusUrl)
+                    gameStatus = gameStatusResponse.json()
+
+
+                    gameCompleted = (gameStatus['type']['completed'] == True) 
 
                     oddsUrl = gameData['competitions'][0]['odds']['$ref']
                     oddsResponse = requests.get(oddsUrl)
@@ -140,7 +145,7 @@ def getData(request):
                     except:
                         pass
                     
-                    if datetime.datetime.now()<dateOfGame or completed==False:
+                    if datetime.datetime.now()<dateOfGame or gameCompleted==False:
                         businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, weekOfSeason, yearOfSeason)
                     else:
                         homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
@@ -163,7 +168,7 @@ def getData(request):
                         playsDataResponse = requests.get(playsDataUrl)
                         playsData = playsDataResponse.json()
                         
-                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
+                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
 
                         try:
                             businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
@@ -342,7 +347,7 @@ def loadModel(request, target):
                         individualModelResult.team2ActualPoints = match.awayTeamPoints
                         individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
                         individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
-                        #print("Model generated for game ID: ", gameEspnId)
+                        individualModelResult.gameCompleted = True
                     
                 if match.overUnderLine != 0:
                     individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
