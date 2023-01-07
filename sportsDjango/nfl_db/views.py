@@ -34,13 +34,19 @@ def getData(request):
             for link in gameLinks:
                 
                 gameDataResponse = requests.get(link['$ref'])
-                gameData=gameDataResponse.json()
+                gameData = gameDataResponse.json()
 
                 matchEspnId = gameData['id']
                 dateOfGameFromApi = gameData['date']
                 dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
 
-                completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
+                gameStatusUrl = gameData['competitions'][0]['status']['$ref']
+                gameStatusResponse = requests.get(gameStatusUrl)
+                gameStatus = gameStatusResponse.json()
+
+
+                gameCompleted = (gameStatus['type']['completed'] == True)
+                gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
 
                 oddsUrl = gameData['competitions'][0]['odds']['$ref']
@@ -56,7 +62,7 @@ def getData(request):
                 except:
                     pass
                 
-                if datetime.datetime.now()<dateOfGame or completed == False:
+                if datetime.datetime.now()<dateOfGame or gameCompleted == False:
                     print("updating scheduled match")
                     businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, weekOfSeason, yearOfSeason)
                 else:
@@ -81,7 +87,7 @@ def getData(request):
                     playsDataResponse = requests.get(playsDataUrl)
                     playsData = playsDataResponse.json()
                     
-                    matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
+                    matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
 
                     try:
                         businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
@@ -132,7 +138,8 @@ def getData(request):
                     gameStatus = gameStatusResponse.json()
 
 
-                    gameCompleted = (gameStatus['type']['completed'] == True) 
+                    gameCompleted = (gameStatus['type']['completed'] == True)
+                    gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
                     oddsUrl = gameData['competitions'][0]['odds']['$ref']
                     oddsResponse = requests.get(oddsUrl)
@@ -168,15 +175,15 @@ def getData(request):
                         playsDataResponse = requests.get(playsDataUrl)
                         playsData = playsDataResponse.json()
                         
-                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
+                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameOvertime, gameCompleted, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
 
                         try:
                             businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
                             businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
                         except Exception as e: 
-                            print("Hit an Exception")
-                            print(type(e))
-                            print(e)
+                            businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, weekOfSeason, yearOfSeason)
+                            businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, weekOfSeason, yearOfSeason)
+                            
                             
                 
                 print("Week ", str(i), " loaded.")
@@ -212,7 +219,13 @@ def getData(request):
                     dateOfGameFromApi = gameData['date']
                     dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
 
-                    completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False)
+                    gameStatusUrl = gameData['competitions'][0]['status']['$ref']
+                    gameStatusResponse = requests.get(gameStatusUrl)
+                    gameStatus = gameStatusResponse.json()
+
+
+                    gameCompleted = (gameStatus['type']['completed'] == True)
+                    gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
                     oddsUrl = gameData['competitions'][0]['odds']['$ref']
                     oddsResponse = requests.get(oddsUrl)
@@ -225,7 +238,7 @@ def getData(request):
                     except:
                         pass
                     
-                    if datetime.datetime.now()<dateOfGame or completed==False:
+                    if datetime.datetime.now()<dateOfGame or gameCompleted == False:
                         businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, weekOfSeason, yearOfSeason)
                     else:
                         homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
