@@ -213,6 +213,24 @@ class player(models.Model):
     firstSeason = models.SmallIntegerField(default = "2000")
     lastSeason = models.SmallIntegerField(null = True, blank = True)
     team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
+    playerEspnId = models.BigIntegerField(default = 0)
+    playerHeightInches = models.SmallIntegerField(default = 60)
+    playerWeightPounds = models.SmallIntegerField(default = 100)
+    playerPositions = (
+        (1, "QB"),
+        (2, "WR"),
+        (3, "TE"),
+        (4, "RB"),
+        (5, "FB"),
+        (6, "O-Line"),
+        (7, "D-Line"),
+        (8, "LB"),
+        (9, "CB"),
+        (10, "S"),
+        (11, "K"),
+        (12, "P")
+    )
+    playerPosition = models.SmallIntegerField(choices = playerPositions, default = 1)
 
 # class playByPlay(models.Model):
 #     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
@@ -223,17 +241,26 @@ class player(models.Model):
 #         (3, "INCOMPLETE PASS"),
 #         (4, "SACK"),
 #         (5, "INTERCEPTION"),
-#         (6, "OFFENSIVE FUMBLE RECOVERY"),
-#         (7, "DEFENSIVE FUMBLE RECOVERY"),
-#         (8, "PUNT"),
-#         (9, "FG KICK"),
-#         (10, "KICKOFF"),
-#         (11, "PAT KICK"),
-#         (12, "2PT CONVERSION"),
-#         (13, "KNEEL"),
-#         (14, "SPIKE"),
-#         (15, "NO PLAY/BLOWN DEAD"),
-#         (16, "TIMEOUT")
+#         (6, "INTERCEPTION RETURN TOUCHDOWN")
+#         (7, "OFFENSIVE FUMBLE RECOVERY"),
+#         (8, "OFFENSIVE FUMBLE RECOVERY TOUCHDOWN")
+#         (9, "DEFENSIVE FUMBLE RECOVERY"),
+#         (10, "DEFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
+#         (11, "PUNT"),
+#         (12, "PUNT BLOCKED")
+#         (13, "PUNT MUFFED PUNTING TEAM RECOVERY")
+#         (14, "PUNT MUFFED RECEIVING TEAM RECOVERY")
+#         (15, "FG KICK"),
+#         (16, "FG KICK MISSED")
+#         (17, "KICKOFF"),
+#         (18, "KICKOFF RECOVERY KICKING TEAM"),
+#         (19, "PAT KICK MADE"),
+#         (20, "PAT KICK MISSED")
+#         (21, "2PT CONVERSION"),
+#         (22, "KNEEL"),
+#         (23, "SPIKE"),
+#         (24, "NO PLAY/BLOWN DEAD"),
+#         (25, "TIMEOUT")
 #     )
 #     playType = models.SmallIntegerField(choices = playTypes, default = 1)
 #     yardsFromEndzone = models.SmallIntegerField(null = True, blank = True)

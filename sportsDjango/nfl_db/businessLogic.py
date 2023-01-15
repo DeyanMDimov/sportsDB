@@ -38,7 +38,7 @@ def createOrUpdateNflMatch(nflMatchObject, gameData, gameCompleted, gameOvertime
                         homeTeamReceivingYardsAllowed= awayTeamStats['splits']['categories'][3]['stats'][12]['value'],
                         homeTeamGiveaways= homeTeamStats['splits']['categories'][10]['stats'][33]['value'],
                         homeTeamTakeaways= homeTeamStats['splits']['categories'][10]['stats'][37]['value'],
-                        #homeTeamExplosivePlays= 
+
                         homeTeamRushingTDScored= homeTeamStats['splits']['categories'][9]['stats'][7]['value'],
                         homeTeamRushingTDAllowed= awayTeamStats['splits']['categories'][9]['stats'][7]['value'],
                         homeTeamReceivingTDScored= homeTeamStats['splits']['categories'][9]['stats'][5]['value'],
@@ -139,6 +139,8 @@ def createOrUpdateNflMatch(nflMatchObject, gameData, gameCompleted, gameOvertime
             matchData.awayTeamSpecialTeamsPointsScored= awayTeamStats['splits']['categories'][9]['stats'][3]['value']
             matchData.awayTeamDefensePointsScored= int((awayTeamStats['splits']['categories'][5]['stats'][1]['value']+awayTeamStats['splits']['categories'][0]['stats'][9]['value'])*6)
             
+            print(awayTeamStats['splits']['categories'][5]['stats'][1]['value'])
+            print(awayTeamStats['splits']['categories'][0]['stats'][9]['value'])
         
         if len(oddsData['items']) > 2:
             try:
@@ -205,7 +207,7 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
 
     return matchData
 
-def createTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, seasonWeek, seasonYear):
+def createTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, seasonWeek, seasonYear):
     
     teamPerf = teamMatchPerformance.objects.create(
         matchEspnId      = matchEspnId,
@@ -354,6 +356,9 @@ def createTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId,
 
     teamPerf.save()
 
+    captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf)
+
+
 def updateTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, seasonWeek, seasonYear):
     teamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = teamId)
     nflMatchInstance = models.nflMatch.objects.get(espnId=matchEspnId)
@@ -361,6 +366,8 @@ def updateTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId,
     
     if teamId == nflMatchInstance.homeTeamEspnId:
         teamPerf.totalPointsAllowed             = nflMatchInstance.awayTeamPoints
+        print("awayTeamPoints: ", nflMatchInstance.awayTeamPoints)
+        print("awayTeamDefensePointsScored: ", nflMatchInstance.awayTeamDefensePointsScored)
         teamPerf.totalPointsAllowedByDefense    = nflMatchInstance.awayTeamPoints-nflMatchInstance.awayTeamDefensePointsScored
         teamPerf.totalYardsAllowedByDefense     = nflMatchInstance.homeTeamYardsAllowed
         teamPerf.totalPassYardsAllowed          = nflMatchInstance.homeTeamReceivingYardsAllowed
@@ -510,11 +517,7 @@ def captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf):
 
 
 
-            # if "penalty" in play['shortText'].lower():
-            #     if teamPenaltyText in play['text']:
-            #         totalOffensePenalties += 1
-            #         totalOffensePenaltyYards += abs()
-            #     else:
+            
 
                 # if play['type']['text'] != "Punt" and play['type']['text'] != "Kickoff" and "Field goal" not in play['type']['text']:
                 #     if play['statYardage'] < 0:
@@ -526,6 +529,21 @@ def captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf):
                 teamRushingTenPlus += 1
             elif (play['type']['text'] == "Pass Reception" and play['statYardage']>=25):
                 teamPassPlaysTwentyFivePlus += 1
+        
+        else:
+            if "No Play" in play['text'] : 
+                if teamPenaltyText in play['text']:
+                   totalDefensePenalties += 1
+                   totalDefensePenaltyYards += abs(play['statYardage'])
+            else:
+                if "penalty" in play['shortText'].lower():
+                    if teamPenaltyText in play['text']:
+                        totalDefensePenalties += 1
+                        totalDefensePenaltyYards += abs(play['statYardage'])
+                    if play['type']['text'] == "Pass Incompletion" and play['end']['down'] == 1:
+                        firstDownsByPenaltyGiven += 1
+                if play['type']['text'] == "Fumble Recovery (Opponent)":
+                    defenseFumblesRecovered += 1
 
 
 
@@ -565,7 +583,11 @@ def captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf):
 
     teamPerf.totalOffensePenalties      = totalOffensePenalties
     teamPerf.totalOffensePenaltyYards   = totalOffensePenaltyYards
+    teamPerf.totalDefensePenalties      = totalDefensePenalties
+    teamPerf.totalDefensePenaltyYards   = totalDefensePenaltyYards
+    teamPerf.firstDownsByPenaltyGiven   = firstDownsByPenaltyGiven
 
+    teamPerf.defenseFumblesRecovered    = defenseFumblesRecovered
 
     teamPerf.save()
     
