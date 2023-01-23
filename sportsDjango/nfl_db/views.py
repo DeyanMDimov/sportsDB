@@ -8,6 +8,7 @@ from nfl_db.models import teamMatchPerformance
 from django.db import models
 import requests
 from nfl_db import businessLogic
+from nfl_db import crudLogic
 import datetime
 import time
 
@@ -83,20 +84,26 @@ def getData(request):
                     awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
                     awayTeamScore = awayTeamScoreResponse.json()
 
+                    drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
+                    drivesDataResponse = requests.get(drivesDataUrl)
+                    drivesData = drivesDataResponse.json()
+
                     playsDataUrl = gameData['competitions'][0]['details']['$ref']
                     playsDataResponse = requests.get(playsDataUrl)
                     playsData = playsDataResponse.json()
+
+
                     
-                    matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
+                    matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, yearOfSeason)
 
                     try:
-                        businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
-                        businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+                        businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+                        businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
 
                         responseMessage = "Successfully pulled in Week " + str(weekOfSeason) + " for " + str(yearOfSeason)
                     except Exception as e: 
-                        businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, weekOfSeason, yearOfSeason)
-                        businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, weekOfSeason, yearOfSeason)
+                        businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
+                        businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
 
             return render (request, 'nfl/pullData.html', {"message": responseMessage})
 
@@ -182,20 +189,24 @@ def getData(request):
                         awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
                         awayTeamScore = awayTeamScoreResponse.json()
 
+                        drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
+                        drivesDataResponse = requests.get(drivesDataUrl)
+                        drivesData = drivesDataResponse.json()
+
                         playsDataUrl = gameData['competitions'][0]['details']['$ref']
                         playsDataResponse = requests.get(playsDataUrl)
                         playsData = playsDataResponse.json()
                         
-                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, str(weekOfSeason), str(yearOfSeason))
+                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
 
                         try:
-                            businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
+                            businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e: 
-                            businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, str(weekOfSeason), str(yearOfSeason))
+                            businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
                         try:
-                            businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
+                            businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e:
-                            businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, str(weekOfSeason), str(yearOfSeason))
+                            businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
                             
                             
                 
@@ -282,6 +293,10 @@ def getData(request):
                         awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
                         awayTeamScore = awayTeamScoreResponse.json()
 
+                        drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
+                        drivesDataResponse = requests.get(drivesDataUrl)
+                        drivesData = drivesDataResponse.json()
+
                         playsDataUrl = gameData['competitions'][0]['details']['$ref']
                         playsDataResponse = requests.get(playsDataUrl)
                         playsData = playsDataResponse.json()
@@ -289,11 +304,14 @@ def getData(request):
                         matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
 
                         try:
-                            businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
-                            businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+                            businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
                         except Exception as e: 
-                            businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, weekOfSeason, yearOfSeason)
-                            businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, weekOfSeason, yearOfSeason)
+                            businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
+                        
+                        try:
+                            businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+                        except Exception as e:
+                            businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
                             
                 
                 print("Week ", str(i), " loaded.")

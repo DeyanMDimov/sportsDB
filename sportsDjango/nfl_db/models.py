@@ -208,78 +208,123 @@ class teamMatchPerformance(models.Model):
             models.UniqueConstraint(fields=['matchEspnId', 'teamEspnId'], name="UniqueTeamsPerMatch")
         ]
 
-class player(models.Model):
-    name = models.CharField(max_length = 60, default = "-")
-    firstSeason = models.SmallIntegerField(default = "2000")
-    lastSeason = models.SmallIntegerField(null = True, blank = True)
-    team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
-    playerEspnId = models.BigIntegerField(default = 0)
-    playerHeightInches = models.SmallIntegerField(default = 60)
-    playerWeightPounds = models.SmallIntegerField(default = 100)
-    playerPositions = (
-        (1, "QB"),
-        (2, "WR"),
-        (3, "TE"),
-        (4, "RB"),
-        (5, "FB"),
-        (6, "O-Line"),
-        (7, "D-Line"),
-        (8, "LB"),
-        (9, "CB"),
-        (10, "S"),
-        (11, "K"),
-        (12, "P")
-    )
-    playerPosition = models.SmallIntegerField(choices = playerPositions, default = 1)
-
-# class playByPlay(models.Model):
-#     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
-#     teamOnOffense = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
-#     playTypes = (
-#         (1, "RUSH"),
-#         (2, "COMPLETED PASS"),
-#         (3, "INCOMPLETE PASS"),
-#         (4, "SACK"),
-#         (5, "INTERCEPTION"),
-#         (6, "INTERCEPTION RETURN TOUCHDOWN")
-#         (7, "OFFENSIVE FUMBLE RECOVERY"),
-#         (8, "OFFENSIVE FUMBLE RECOVERY TOUCHDOWN")
-#         (9, "DEFENSIVE FUMBLE RECOVERY"),
-#         (10, "DEFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
-#         (11, "PUNT"),
-#         (12, "PUNT BLOCKED")
-#         (13, "PUNT MUFFED PUNTING TEAM RECOVERY")
-#         (14, "PUNT MUFFED RECEIVING TEAM RECOVERY")
-#         (15, "FG KICK"),
-#         (16, "FG KICK MISSED")
-#         (17, "KICKOFF"),
-#         (18, "KICKOFF RECOVERY KICKING TEAM"),
-#         (19, "PAT KICK MADE"),
-#         (20, "PAT KICK MISSED")
-#         (21, "2PT CONVERSION"),
-#         (22, "KNEEL"),
-#         (23, "SPIKE"),
-#         (24, "NO PLAY/BLOWN DEAD"),
-#         (25, "TIMEOUT")
+# class player(models.Model):
+#     name = models.CharField(max_length = 60, default = "-")
+#     firstSeason = models.SmallIntegerField(default = "2000")
+#     lastSeason = models.SmallIntegerField(null = True, blank = True)
+#     team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
+#     playerEspnId = models.BigIntegerField(default = 0)
+#     playerHeightInches = models.SmallIntegerField(default = 60)
+#     playerWeightPounds = models.SmallIntegerField(default = 100)
+#     playerPositions = (
+#         (1, "QB"),
+#         (2, "WR"),
+#         (3, "TE"),
+#         (4, "RB"),
+#         (5, "FB"),
+#         (6, "O-Line"),
+#         (7, "D-Line"),
+#         (8, "LB"),
+#         (9, "CB"),
+#         (10, "S"),
+#         (11, "K"),
+#         (12, "P")
 #     )
-#     playType = models.SmallIntegerField(choices = playTypes, default = 1)
-#     yardsFromEndzone = models.SmallIntegerField(null = True, blank = True)
-#     yardsOnPlay = models.SmallIntegerField(null = True, blank = True)
-#     playDown = models.SmallIntegerField(validators = [MinValueValidator(1), MaxValueValidator(4)], null = True, blank = True)
-#     rusher = models.ManyToManyField(player, blank = True, related_name = 'ballCarrier')
-#     passer = models.ManyToManyField(player, blank = True, related_name = 'passer')
-#     reciever = models.ManyToManyField(player, blank = True, related_name = 'receiver')
-#     kickReciever = models.ManyToManyField(player, blank = True, related_name = 'kickReceiver')
-#     turnover = models.BooleanField()
-#     penaltyOnPlay = models.BooleanField()
-#     penaltyIsOnOffense = models.BooleanField(null = True, blank = True)
-#     yardsGainedOrLostOnPenalty = models.SmallIntegerField(null = True, blank = True)
-#     scoringPlay = models.BooleanField()
-#     offenseScored = models.BooleanField(null = True, blank = True)
-#     pointsScored = models.SmallIntegerField(null = True, blank = True)
+#     playerPosition = models.SmallIntegerField(choices = playerPositions, default = 1)
+
+class driveOfPlay(models.Model):
+    nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
+    teamOnOffense = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+    sequenceNumber = models.SmallIntegerField(null = True, blank = True)
+    espnId = models.BigIntegerField(unique = True, null = True, blank = True)
     
+    timeSpanOfDrive = models.DurationField(null = True, blank = True)
+    driveResultTypes = (
+        (1, "TOUCHDOWN"),
+        (2, "FIELD GOAL MADE"),
+        (3, "FIELD GOAL MISSED"),
+        (4, "PUNT"),
+        (5, "PUNT BLOCKED"),
+        (6, "PUNT BLOCKED TD"),
+        (7, "INTERCEPTION"),
+        (8, "INTERCEPTION RETURNED FOR TOUCHDOWN"),
+        (9, "FUMBLE LOST"),
+        (10, "FUMBLE LOST RETURNED FOR TOUCHDOWN"),
+        (11, "OFFENSE RECOVERED FUMBLE FOR TOUCHDOWN"),
+        (12, "TURNOVER ON DOWNS"),
+        (13, "END OF HALF"),
+        (14, "END OF SECOND HALF"),
+        (15, "END OF OVERTIME"),
+        (16, "SAFETY")
+        
+    )
+    driveResult = models.SmallIntegerField(choices = driveResultTypes, default = 4)
+    startOfDriveYardLine = models.SmallIntegerField(null = True, blank = True)
+    endOfDriveYardLine = models.SmallIntegerField(null = True, blank = True)
+    numberOffensivePlays = models.SmallIntegerField(null = True, blank = True)
+    timeElapsedInSeconds = models.SmallIntegerField(null = True, blank = True)
+    reachedRedZone = models.BooleanField()
 
     
+
+
+
+class playByPlay(models.Model):
+    nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
+    teamOnOffense = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+    driveOfPlay = models.ForeignKey(driveOfPlay, on_delete = models.CASCADE)
+    espnId = models.BigIntegerField(unique = True, blank = True, null = True)
+    playTypes = (
+        (1, "RUSH"),
+        (2, "COMPLETED PASS"),
+        (3, "INCOMPLETE PASS"),
+        (4, "SACK"),
+        (5, "INTERCEPTION"),
+        (6, "INTERCEPTION RETURN TOUCHDOWN"),
+        (7, "OFFENSIVE FUMBLE RECOVERY"),
+        (8, "OFFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
+        (9, "DEFENSIVE FUMBLE RECOVERY"),
+        (10, "DEFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
+        (11, "SAFETY"),
+        (12, "PUNT"),
+        (13, "PUNT BLOCKED"),
+        (14, "PUNT MUFFED PUNTING TEAM RECOVERY"),
+        (15, "PUNT MUFFED RECEIVING TEAM RECOVERY"),
+        (16, "FG KICK"),
+        (17, "FG KICK MISSED"),
+        (18, "KICKOFF"),
+        (19, "KICKOFF RECOVERY KICKING TEAM"),
+        (20, "PAT KICK MADE"),
+        (21, "PAT KICK MISSED"),
+        (22, "2PT CONVERSION SUCCESS RUSH"),
+        (23, "2PT CONVERSION SUCCESS PASS"),
+        (24, "2PT CONVERSION FAILED RUSH"),
+        (25, "2PT CONVERSION FAILED PASS"),
+        (26, "2PT CONVERSION SUCCESS OTHER"),
+        (27, "2PT CONVERSION FAILED OTHER"),
+        (28, "KNEEL"),
+        (29, "SPIKE"),
+        (30, "NO PLAY/BLOWN DEAD"),
+        (31, "TIMEOUT")
+    )
+    playType = models.SmallIntegerField(choices = playTypes, default = 1)
+    yardsFromEndzone = models.SmallIntegerField(null = True, blank = True)
+    yardsOnPlay = models.SmallIntegerField(null = True, blank = True)
+    playDown = models.SmallIntegerField(validators = [MinValueValidator(1), MaxValueValidator(4)], null = True, blank = True)
+    # rusher = models.ManyToManyField(player, blank = True, related_name = 'ballCarrier')
+    # passer = models.ManyToManyField(player, blank = True, related_name = 'passer')
+    # reciever = models.ManyToManyField(player, blank = True, related_name = 'receiver')
+    # kickReciever = models.ManyToManyField(player, blank = True, related_name = 'kickReceiver')
+    turnover = models.BooleanField()
+    penaltyOnPlay = models.BooleanField()
+    penaltyIsOnOffense = models.BooleanField(null = True, blank = True)
+    yardsGainedOrLostOnPenalty = models.SmallIntegerField(null = True, blank = True)
+    scoringPlay = models.BooleanField()
+    offenseScored = models.BooleanField(null = True, blank = True)
+    pointsScored = models.SmallIntegerField(null = True, blank = True)
+    
+
+
 
 # class playerMatchOffense(models.Model):
 #     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
