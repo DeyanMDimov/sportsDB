@@ -107,7 +107,7 @@ class teamMatchPerformance(models.Model):
     totalExplosivePlays         = models.SmallIntegerField(null = True, blank = True)
     totalGiveaways              = models.SmallIntegerField(null = True, blank = True)
     redZoneAttempts             = models.SmallIntegerField(null = True, blank = True)
-    redZoneTDConversionPct      = models.SmallIntegerField(null = True, blank = True)
+    redZoneTDConversions        = models.SmallIntegerField(null = True, blank = True)
     redZoneFumbles              = models.SmallIntegerField(null = True, blank = True)
     redZoneFumblesLost          = models.SmallIntegerField(null = True, blank = True)
     redZoneInterceptions        = models.SmallIntegerField(null = True, blank = True)
@@ -255,7 +255,10 @@ class driveOfPlay(models.Model):
         (13, "END OF HALF"),
         (14, "END OF SECOND HALF"),
         (15, "END OF OVERTIME"),
-        (16, "SAFETY")
+        (16, "SAFETY"),
+        (17, "OTHER"),
+        (18, "BLOCKED FG TD"),
+        (19, "BLOCKED FG")
         
     )
     driveResult = models.SmallIntegerField(choices = driveResultTypes, default = 4)

@@ -171,7 +171,7 @@ def getData(request):
                         pass
                     
                     if datetime.datetime.now()<dateOfGame or gameCompleted==False:
-                        businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
+                        crudLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
                     else:
                         homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
                         homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
@@ -197,16 +197,16 @@ def getData(request):
                         playsDataResponse = requests.get(playsDataUrl)
                         playsData = playsDataResponse.json()
                         
-                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+                        matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
 
                         try:
-                            businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
+                            crudLogic.createTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e: 
-                            businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            crudLogic.updateTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
                         try:
-                            businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
+                            crudLogic.createTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e:
-                            businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            crudLogic.updateTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
                             
                             
                 
@@ -328,6 +328,10 @@ def getData(request):
             resetMessage = businessLogic.resetAllPerformanceAssociationsForClearing()
             return render(request, 'nfl/pullData.html', {"message": resetMessage})
         
+        elif 'deleteDrives' in request.GET:
+            deleteDrivesMessage = crudLogic.deleteDriveOfPlay()
+            return render(request, 'nfl/pullData.html', {"message": deleteDrivesMessage})
+
         elif 'teams' in request.GET:    
             #return render (request, 'nfl/nflhome.html')
    
