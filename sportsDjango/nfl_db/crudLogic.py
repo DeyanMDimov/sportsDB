@@ -32,9 +32,6 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
                         indoorStadium = gameData['competitions'][0]['venue']['indoor'],
                         
                         overtime = gameOvertime,
-                        temperature = gameData['competitions'][0]['weather']['temperature'],
-                        precipitation = gameData['competitions'][0]['weather']['precipitation'],
-                        windSpeed = gameData['competitions'][0]['weather']['windSpeed'],
                         
                         preseason= True if int(weekOfSeason) < 0 else False,
                         
@@ -84,6 +81,13 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
         matchData.homeTeam.add(models.nflTeam.objects.get(espnId=homeTeamEspnId))
         matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
+
+        try:
+            matchData.temperature = gameData['competitions'][0]['weather']['temperature']
+            matchData.precipitation = gameData['competitions'][0]['weather']['precipitation']
+            matchData.windSpeed = gameData['competitions'][0]['weather']['windSpeed']
+        except: 
+            pass
         
         if len(oddsData['items']) > 2:
             try:
@@ -130,7 +134,10 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         matchData.awayTeamRushYardsAllowed= homeTeamStats['splits']['categories'][2]['stats'][12]['value']
         matchData.awayTeamReceivingYards= awayTeamStats['splits']['categories'][3]['stats'][12]['value']
         matchData.awayTeamReceivingYardsAllowed= homeTeamStats['splits']['categories'][3]['stats'][12]['value']
-        matchData.awayTeamGiveaways= awayTeamStats['splits']['categories'][10]['stats'][33]['value']
+        try:
+            matchData.awayTeamGiveaways= awayTeamStats['splits']['categories'][10]['stats'][33]['value']
+        except:
+            print("Issue with away team giveaways for match: " + str(matchData.espnId))
         matchData.awayTeamTakeaways= awayTeamStats['splits']['categories'][10]['stats'][37]['value']
         matchData.awayTeamRushingTDScored= awayTeamStats['splits']['categories'][9]['stats'][7]['value']
         matchData.awayTeamRushingTDAllowed= homeTeamStats['splits']['categories'][9]['stats'][7]['value']
@@ -141,8 +148,8 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         matchData.awayTeamSpecialTeamsPointsScored= awayTeamStats['splits']['categories'][9]['stats'][3]['value']
         matchData.awayTeamDefensePointsScored= int((awayTeamStats['splits']['categories'][5]['stats'][1]['value']+awayTeamStats['splits']['categories'][0]['stats'][9]['value'])*6)
         
-        print(awayTeamStats['splits']['categories'][5]['stats'][1]['value'])
-        print(awayTeamStats['splits']['categories'][0]['stats'][9]['value'])
+        #print(awayTeamStats['splits']['categories'][5]['stats'][1]['value'])
+        #print(awayTeamStats['splits']['categories'][0]['stats'][9]['value'])
     
         if len(oddsData['items']) > 2:
             try:
@@ -368,7 +375,7 @@ def createOrUpdateNflMatch(nflMatchObject, gameData, gameCompleted, gameOvertime
 
             timeElapsedInSeconds = individualDrive['timeElapsed']['value'],
 
-            driveResult = setResultOfDrive(individualDrive['result']),
+            driveResult = setResultOfDrive(individualDrive['result'], gameData['id']),
             
             startOfDriveYardLine = individualDrive['start']['yardLine'],
             endOfDriveYardLine = individualDrive['end']['yardLine'],
@@ -413,7 +420,7 @@ def deleteNflMatchesByYear(yearOfSeason):
 
 
 
-def createTeamMatchPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, drivesData, seasonWeek, seasonYear):
+def createTeamMatchPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, playByPlayObj, drivesData, seasonWeek, seasonYear):
     teamPerf = teamMatchPerformance.objects.create(
         matchEspnId     = matchEspnId,
         teamEspnId      = teamId,
@@ -556,19 +563,19 @@ def createTeamMatchPerformance(teamScore, teamStats, matchEspnId, teamId, oppone
 
     teamPerf.save()
 
-    captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf)
+    captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId, teamPerf)
 
     captureStatsFromDrives(drivesData, matchEspnId, teamId, opponentId, teamPerf)
 
-def updateTeamMatchPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, drivesData, seasonWeek, seasonYear):
+def updateTeamMatchPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, playByPlayObj, drivesData, seasonWeek, seasonYear):
     teamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = teamId)
     nflMatchInstance = models.nflMatch.objects.get(espnId=matchEspnId)
     
     
     if teamId == nflMatchInstance.homeTeamEspnId:
         teamPerf.totalPointsAllowed             = nflMatchInstance.awayTeamPoints
-        print("awayTeamPoints: ", nflMatchInstance.awayTeamPoints)
-        print("awayTeamDefensePointsScored: ", nflMatchInstance.awayTeamDefensePointsScored)
+        #print("awayTeamPoints: ", nflMatchInstance.awayTeamPoints)
+        #print("awayTeamDefensePointsScored: ", nflMatchInstance.awayTeamDefensePointsScored)
         teamPerf.totalPointsAllowedByDefense    = nflMatchInstance.awayTeamPoints-nflMatchInstance.awayTeamDefensePointsScored
         teamPerf.totalYardsAllowedByDefense     = nflMatchInstance.homeTeamYardsAllowed
         teamPerf.totalPassYardsAllowed          = nflMatchInstance.homeTeamReceivingYardsAllowed
@@ -590,14 +597,24 @@ def updateTeamMatchPerformance(teamScore, teamStats, matchEspnId, teamId, oppone
 
     teamPerf.save()
 
-    captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf)
+    captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId, teamPerf)
 
     captureStatsFromDrives(drivesData, matchEspnId, teamId, opponentId, teamPerf)
 
 def deleteTeamMatchPerformance ():
     pass
 
-def captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf):
+class playByPlayData:
+    playByPlayPages = []
+
+    def __init__(self, playByPlayJSON):
+        self.playByPlayPages = []
+        self.playByPlayPages.append(playByPlayJSON)
+    
+    def addJSON(self, playByPlayJSON):
+        self.playByPlayPages.append(playByPlayJSON)
+
+def captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId, teamPerf):
     
     teamAbbreviation = nflTeam.objects.get(espnId = teamId).abbreviation
     opponentAbbreviation = nflTeam.objects.get(espnId = opponentId).abbreviation
@@ -640,97 +657,103 @@ def captureStatsFromPlayByPlay(playByPlayData, teamId, opponentId, teamPerf):
     totalCompletionsOnThirdDown = 0
 
     listOfPlayTypes = []
+    playPages = 0
     
-    for play in playByPlayData['items']:
-        
-        playType = play['type']['text']
-        if playType not in listOfPlayTypes:
-            listOfPlayTypes.append(playType)
+    for playByPlayData in playByPlayObj.playByPlayPages:
+        for play in playByPlayData['items']:
+            playType = play['type']['text']
+            if playType not in listOfPlayTypes:
+                listOfPlayTypes.append(playType)
 
-        teamRefUrl = ""
-        try:
-            teamRefUrl = play['team']['$ref']
-        except(KeyError):
-            continue
-        
-        teamIdString = "teams/"+str(teamId)+"?"
-        
-
-
-        if teamIdString in teamRefUrl:
-            if "No Play" in play['text'] : 
-                if teamPenaltyText in play['text']:
-                   totalOffensePenalties += 1
-                   totalOffensePenaltyYards += abs(play['statYardage'])
-            else:
-                if play['start']['down'] == 1:
-                    totalFirstDownPlays += 1
-                    if(play['type']['text'] == "Rush"):
-                        totalRushOnFirstDown += 1
-                    elif (play['type']['text'] == "Pass Reception"):
-                        totalPassOnFirstDown += 1
-                        totalCompletionsOnFirstDown += 1
-                    elif (play['type']['text'] == "Pass Incompletion") or (play['type']['text'] == "Sack") or (play['type']['text'] == "Interception Return Touchdown") or (play['type']['text'] == "Interception Return Touchdown"):
-                        totalPassOnFirstDown += 1
-                    
-                elif play['start']['down'] == 2:
-                    totalSecondDownPlays += 1
-                    if(play['type']['text'] == "Rush"):
-                        totalRushOnSecondDown += 1
-                    elif (play['type']['text'] == "Pass Reception"):
-                        totalPassOnSecondDown += 1
-                        totalCompletionsOnSecondDown += 1
-                    elif (play['type']['text'] == "Pass Incompletion") or (play['type']['text'] == "Sack") or (play['type']['text'] == "Interception Return Touchdown") or (play['type']['text'] == "Interception Return Touchdown"):
-                        totalPassOnSecondDown += 1
-                
-                elif play['start']['down'] == 3:
-                    totalThirdDownPlays +=1
-                    if(play['type']['text'] == "Rush"):
-                        totalRushOnThirdDown += 1
-                    elif (play['type']['text'] == "Pass Reception"):
-                        totalPassOnThirdDown += 1
-                        totalCompletionsOnThirdDown += 1
-                    elif (play['type']['text'] == "Pass Incompletion") or (play['type']['text'] == "Sack") or (play['type']['text'] == "Interception Return Touchdown") or (play['type']['text'] == "Interception Return Touchdown"):
-                        totalPassOnThirdDown += 1
-
-
-
+            teamRefUrl = ""
+            try:
+                teamRefUrl = play['team']['$ref']
+            except(KeyError):
+                continue
+            
+            teamIdString = "teams/"+str(teamId)+"?"
             
 
-                # if play['type']['text'] != "Punt" and play['type']['text'] != "Kickoff" and "Field goal" not in play['type']['text']:
-                #     if play['statYardage'] < 0:
-                #         totalOffensePenalties +=1
-                #         totalOffensePenaltyYards += play['statYardage']
-                # elif play['start']['down']
 
-            if(play['type']['text'] == "Rush" and play['statYardage']>=10):
-                teamRushingTenPlus += 1
-            elif (play['type']['text'] == "Pass Reception" and play['statYardage']>=25):
-                teamPassPlaysTwentyFivePlus += 1
+            if teamIdString in teamRefUrl:
+                if "No Play" in play['text']: 
+                    if teamPenaltyText in play['text']:
+                        totalOffensePenalties += 1
+                        totalOffensePenaltyYards += abs(play['statYardage'])
+                        print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
+                    elif teamAbbreviation == "ARI" and "on ARZ" in play['text']:
+                        totalOffensePenalties += 1
+                        totalOffensePenaltyYards += abs(play['statYardage'])
+                        print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
+                else:
+                    if play['start']['down'] == 1:
+                        totalFirstDownPlays += 1
+                        if(play['type']['text'] == "Rush"):
+                            totalRushOnFirstDown += 1
+                        elif (play['type']['text'] == "Pass Reception"):
+                            totalPassOnFirstDown += 1
+                            totalCompletionsOnFirstDown += 1
+                        elif (play['type']['text'] == "Pass Incompletion") or (play['type']['text'] == "Sack") or (play['type']['text'] == "Interception Return Touchdown") or (play['type']['text'] == "Interception Return Touchdown"):
+                            totalPassOnFirstDown += 1
+                        
+                    elif play['start']['down'] == 2:
+                        totalSecondDownPlays += 1
+                        if(play['type']['text'] == "Rush"):
+                            totalRushOnSecondDown += 1
+                        elif (play['type']['text'] == "Pass Reception"):
+                            totalPassOnSecondDown += 1
+                            totalCompletionsOnSecondDown += 1
+                        elif (play['type']['text'] == "Pass Incompletion") or (play['type']['text'] == "Sack") or (play['type']['text'] == "Interception Return Touchdown") or (play['type']['text'] == "Interception Return Touchdown"):
+                            totalPassOnSecondDown += 1
+                    
+                    elif play['start']['down'] == 3:
+                        totalThirdDownPlays +=1
+                        if(play['type']['text'] == "Rush"):
+                            totalRushOnThirdDown += 1
+                        elif (play['type']['text'] == "Pass Reception"):
+                            totalPassOnThirdDown += 1
+                            totalCompletionsOnThirdDown += 1
+                        elif (play['type']['text'] == "Pass Incompletion") or (play['type']['text'] == "Sack") or (play['type']['text'] == "Interception Return Touchdown") or (play['type']['text'] == "Interception Return Touchdown"):
+                            totalPassOnThirdDown += 1
 
-            if(play['start']['yardsToEndzone'] <= 25):
-                if(play['type']['text'] == "Fumble Recovery (Opponent)" or play['type']['text'] == "Fumble Recovery (Opponent)"):
-                    redZoneFumbles += 1
-                    redZoneFumblesLost += 1
-                elif(play['type']['text'] == "Fumble Recovery (Own)"):
-                    redZoneFumbles += 1
-                elif(play['type']['text'] == "Pass Interception Return" or play['type']['text'] == "Interception Return Touchdown"):
-                    redZoneInterceptions += 1
-        
-        else:
-            if "No Play" in play['text'] : 
-                if teamPenaltyText in play['text']:
-                   totalDefensePenalties += 1
-                   totalDefensePenaltyYards += abs(play['statYardage'])
+
+
+                
+
+                    # if play['type']['text'] != "Punt" and play['type']['text'] != "Kickoff" and "Field goal" not in play['type']['text']:
+                    #     if play['statYardage'] < 0:
+                    #         totalOffensePenalties +=1
+                    #         totalOffensePenaltyYards += play['statYardage']
+                    # elif play['start']['down']
+
+                if(play['type']['text'] == "Rush" and play['statYardage']>=10):
+                    teamRushingTenPlus += 1
+                elif (play['type']['text'] == "Pass Reception" and play['statYardage']>=25):
+                    teamPassPlaysTwentyFivePlus += 1
+
+                if(play['start']['yardsToEndzone'] <= 25):
+                    if(play['type']['text'] == "Fumble Recovery (Opponent)" or play['type']['text'] == "Fumble Recovery (Opponent)"):
+                        redZoneFumbles += 1
+                        redZoneFumblesLost += 1
+                    elif(play['type']['text'] == "Fumble Recovery (Own)"):
+                        redZoneFumbles += 1
+                    elif(play['type']['text'] == "Pass Interception Return" or play['type']['text'] == "Interception Return Touchdown"):
+                        redZoneInterceptions += 1
+            
             else:
-                if "penalty" in play['text'].lower():
+                if "No Play" in play['text'] : 
                     if teamPenaltyText in play['text']:
                         totalDefensePenalties += 1
                         totalDefensePenaltyYards += abs(play['statYardage'])
-                    if play['type']['text'] == "Pass Incompletion" and play['end']['down'] == 1:
-                        firstDownsByPenaltyGiven += 1
-                if play['type']['text'] == "Fumble Recovery (Opponent)":
-                    defenseFumblesRecovered += 1
+                else:
+                    if "penalty" in play['text'].lower():
+                        if teamPenaltyText in play['text']:
+                            totalDefensePenalties += 1
+                            totalDefensePenaltyYards += abs(play['statYardage'])
+                        if play['type']['text'] == "Pass Incompletion" and play['end']['down'] == 1:
+                            firstDownsByPenaltyGiven += 1
+                    if play['type']['text'] == "Fumble Recovery (Opponent)":
+                        defenseFumblesRecovered += 1
 
 
 
@@ -829,7 +852,7 @@ def createDriveOfPlay (individualDrive, matchData):
     teamOnOffenseId = checkTeamFromRefUrl(teamOnOffenseUrl)
     offenseTeam = nflTeam.objects.get(espnId = teamOnOffenseId)
 
-    resultOfDrive = setResultOfDrive(individualDrive['result'])
+    resultOfDrive = setResultOfDrive(individualDrive['result'], matchData.espnId)
 
 
     try:
@@ -886,7 +909,7 @@ def deleteDriveOfPlay ():
     driveOfPlay.objects.all().delete()
     return "All drives deleted"
 
-def setResultOfDrive(inputResult):
+def setResultOfDrive(inputResult, matchEspnId = ""):
     def switch(inputResult):
         if inputResult == "TD":
             return 1
@@ -906,7 +929,7 @@ def setResultOfDrive(inputResult):
             return 8
         elif inputResult == "FUMBLE":
             return 9
-        elif inputResult == "FUMBLE RETURN TD":
+        elif inputResult == "FUMBLE RETURN TD" or "FUMBLE TD":
             return 10
         elif inputResult == "DOWNS":
             return 12
@@ -921,7 +944,7 @@ def setResultOfDrive(inputResult):
         elif inputResult == "BLOCKED FG" : 
             return 19
         else:
-            print("UNEXPECTED DRIVE RESULT - ", inputResult)
+            print("UNEXPECTED DRIVE RESULT - ", inputResult, "Match ID: ", matchEspnId)
             return 17
     
     return switch(inputResult)
@@ -1284,6 +1307,8 @@ def getExplosivePlays(playByPlayData, teamId):
                 teamExplosivePlays += 1
     
     return teamExplosivePlays
+
+
 
 
 

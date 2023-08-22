@@ -2,13 +2,10 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.core import serializers
 import json
-from nfl_db.models import nflTeam
-from nfl_db.models import nflMatch
-from nfl_db.models import teamMatchPerformance
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance
 from django.db import models
 import requests
-from nfl_db import businessLogic
-from nfl_db import crudLogic
+from nfl_db import businessLogic, crudLogic
 import datetime
 import time
 
@@ -89,10 +86,11 @@ def getData(request):
                     drivesData = drivesDataResponse.json()
 
                     playsDataUrl = gameData['competitions'][0]['details']['$ref']
+                    
                     playsDataResponse = requests.get(playsDataUrl)
                     playsData = playsDataResponse.json()
 
-
+                    
                     
                     matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, yearOfSeason)
 
@@ -196,17 +194,35 @@ def getData(request):
                         playsDataUrl = gameData['competitions'][0]['details']['$ref']
                         playsDataResponse = requests.get(playsDataUrl)
                         playsData = playsDataResponse.json()
-                        
-                        matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
 
+                        playByPlayOfGame = crudLogic.playByPlayData(playsData)
+                        
+                        pagesOfPlaysData = playsData['pageCount']
+                        if pagesOfPlaysData > 1:
+                            print("Multiple pages of Data in game")
+                            for page in range(2, pagesOfPlaysData+1):
+                                multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
+                                pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
+                                pagePlaysData = pagePlaysDataResponse.json()
+                                playByPlayOfGame.addJSON(pagePlaysData)
                         try:
-                            crudLogic.createTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
+                            matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+                        except:
+                            pass
+                        try:
+                            crudLogic.createTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e: 
-                            crudLogic.updateTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            try:
+                                crudLogic.updateTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            except:
+                                print("Error with home team match performance MatchEspnID: " + str(matchData.espnId))
                         try:
-                            crudLogic.createTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
+                            crudLogic.createTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e:
-                            crudLogic.updateTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            try:
+                                crudLogic.updateTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            except:
+                                print("Error with away team match performance MatchEspnID: " + str(matchData.espnId))
                             
                             
                 
@@ -480,3 +496,22 @@ def fullTeamStats(request):
             return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation')})
     else:
         return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation')})
+    
+def testPage(request):
+    inputReq = request.GET
+
+    if(request.method == 'GET'):
+        if 'week' in inputReq:
+            yearOfSeason = inputReq['season']
+            wkOfSeason = inputReq['week']
+
+            selectedGames = nflMatch.objects.filter(yearOfSeason = yearOfSeason).order_by('weekOfSeason')
+
+            return render(request, 'nfl/testPage.html', {"games": selectedGames})
+        else:
+            return render(request, 'nfl/testPage.html')
+
+
+
+
+

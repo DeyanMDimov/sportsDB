@@ -1,7 +1,5 @@
 from nfl_db import models
-from nfl_db.models import nflMatch
-from nfl_db.models import teamMatchPerformance
-from nfl_db.models import nflTeam
+from nfl_db.models import nflMatch, teamMatchPerformance, nflTeam
 import json
 
 
