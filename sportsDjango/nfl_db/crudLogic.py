@@ -18,6 +18,9 @@ import json
 
 def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, seasonYear):
     
+    exceptionThrown = False
+    exceptions = []
+
     if nflMatchObject == None:
         matchData = nflMatch.objects.create(
                         espnId = gameData['id'],
@@ -41,39 +44,39 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
                         homeTeamTotalYards = homeTeamStats['splits']['categories'][1]['stats'][32]['value'],
                         homeTeamYardsAllowed = awayTeamStats['splits']['categories'][1]['stats'][32]['value'],
                         homeTeamRushingYards = homeTeamStats['splits']['categories'][2]['stats'][12]['value'],
-                        homeTeamRushYardsAllowed= awayTeamStats['splits']['categories'][2]['stats'][12]['value'],
-                        homeTeamReceivingYards= homeTeamStats['splits']['categories'][3]['stats'][12]['value'],
-                        homeTeamReceivingYardsAllowed= awayTeamStats['splits']['categories'][3]['stats'][12]['value'],
-                        homeTeamGiveaways= homeTeamStats['splits']['categories'][10]['stats'][33]['value'],
-                        homeTeamTakeaways= homeTeamStats['splits']['categories'][10]['stats'][37]['value'],
-                        homeTeamRushingTDScored= homeTeamStats['splits']['categories'][9]['stats'][7]['value'],
-                        homeTeamRushingTDAllowed= awayTeamStats['splits']['categories'][9]['stats'][7]['value'],
-                        homeTeamReceivingTDScored= homeTeamStats['splits']['categories'][9]['stats'][5]['value'],
-                        homeTeamReceivingTDAllowed= awayTeamStats['splits']['categories'][9]['stats'][8]['value'],
-                        homeTeamFGScored= homeTeamStats['splits']['categories'][9]['stats'][1]['value'],
-                        homeTeamFGAllowed= awayTeamStats['splits']['categories'][9]['stats'][1]['value'],
-                        homeTeamSpecialTeamsPointsScored= homeTeamStats['splits']['categories'][9]['stats'][3]['value'],
-                        homeTeamDefensePointsScored= int((homeTeamStats['splits']['categories'][5]['stats'][1]['value']+homeTeamStats['splits']['categories'][0]['stats'][9]['value'])*6),
+                        homeTeamRushYardsAllowed = awayTeamStats['splits']['categories'][2]['stats'][12]['value'],
+                        homeTeamReceivingYards = homeTeamStats['splits']['categories'][3]['stats'][12]['value'],
+                        homeTeamReceivingYardsAllowed = awayTeamStats['splits']['categories'][3]['stats'][12]['value'],
+                        homeTeamGiveaways = homeTeamStats['splits']['categories'][10]['stats'][33]['value'],
+                        homeTeamTakeaways = homeTeamStats['splits']['categories'][10]['stats'][37]['value'],
+                        homeTeamRushingTDScored = homeTeamStats['splits']['categories'][9]['stats'][7]['value'],
+                        homeTeamRushingTDAllowed = awayTeamStats['splits']['categories'][9]['stats'][7]['value'],
+                        homeTeamReceivingTDScored = homeTeamStats['splits']['categories'][9]['stats'][5]['value'],
+                        homeTeamReceivingTDAllowed = awayTeamStats['splits']['categories'][9]['stats'][8]['value'],
+                        homeTeamFGScored = homeTeamStats['splits']['categories'][9]['stats'][1]['value'],
+                        homeTeamFGAllowed = awayTeamStats['splits']['categories'][9]['stats'][1]['value'],
+                        homeTeamSpecialTeamsPointsScored = homeTeamStats['splits']['categories'][9]['stats'][3]['value'],
+                        homeTeamDefensePointsScored = int((homeTeamStats['splits']['categories'][5]['stats'][1]['value']+homeTeamStats['splits']['categories'][0]['stats'][9]['value'])*6),
                         
                         #-----awayTeam stuff
-                        awayTeamPoints= awayTeamScore['value'],
-                        awayTeamPointsAllowed= homeTeamScore['value'],
-                        awayTeamTotalYards= awayTeamStats['splits']['categories'][1]['stats'][32]['value'],
-                        awayTeamYardsAllowed= homeTeamStats['splits']['categories'][1]['stats'][32]['value'],
-                        awayTeamRushingYards= awayTeamStats['splits']['categories'][2]['stats'][12]['value'],
-                        awayTeamRushYardsAllowed= homeTeamStats['splits']['categories'][2]['stats'][12]['value'],
-                        awayTeamReceivingYards= awayTeamStats['splits']['categories'][3]['stats'][12]['value'],
-                        awayTeamReceivingYardsAllowed= homeTeamStats['splits']['categories'][3]['stats'][12]['value'],
-                        awayTeamGiveaways= awayTeamStats['splits']['categories'][10]['stats'][33]['value'],
-                        awayTeamTakeaways= awayTeamStats['splits']['categories'][10]['stats'][37]['value'],
-                        awayTeamRushingTDScored= awayTeamStats['splits']['categories'][9]['stats'][7]['value'],
-                        awayTeamRushingTDAllowed= homeTeamStats['splits']['categories'][9]['stats'][7]['value'],
-                        awayTeamReceivingTDScored= awayTeamStats['splits']['categories'][9]['stats'][5]['value'],
-                        awayTeamReceivingTDAllowed= homeTeamStats['splits']['categories'][9]['stats'][5]['value'],
-                        awayTeamFGScored= awayTeamStats['splits']['categories'][9]['stats'][1]['value'],
-                        awayTeamFGAllowed= homeTeamStats['splits']['categories'][9]['stats'][1]['value'],
-                        awayTeamSpecialTeamsPointsScored= awayTeamStats['splits']['categories'][9]['stats'][3]['value'],
-                        awayTeamDefensePointsScored= int((awayTeamStats['splits']['categories'][5]['stats'][1]['value']+awayTeamStats['splits']['categories'][0]['stats'][9]['value'])*6),
+                        awayTeamPoints = awayTeamScore['value'],
+                        awayTeamPointsAllowed = homeTeamScore['value'],
+                        awayTeamTotalYards = awayTeamStats['splits']['categories'][1]['stats'][32]['value'],
+                        awayTeamYardsAllowed = homeTeamStats['splits']['categories'][1]['stats'][32]['value'],
+                        awayTeamRushingYards = awayTeamStats['splits']['categories'][2]['stats'][12]['value'],
+                        awayTeamRushYardsAllowed = homeTeamStats['splits']['categories'][2]['stats'][12]['value'],
+                        awayTeamReceivingYards = awayTeamStats['splits']['categories'][3]['stats'][12]['value'],
+                        awayTeamReceivingYardsAllowed = homeTeamStats['splits']['categories'][3]['stats'][12]['value'],
+                        awayTeamGiveaways = awayTeamStats['splits']['categories'][10]['stats'][33]['value'],
+                        awayTeamTakeaways = awayTeamStats['splits']['categories'][10]['stats'][37]['value'],
+                        awayTeamRushingTDScored = awayTeamStats['splits']['categories'][9]['stats'][7]['value'],
+                        awayTeamRushingTDAllowed = homeTeamStats['splits']['categories'][9]['stats'][7]['value'],
+                        awayTeamReceivingTDScored = awayTeamStats['splits']['categories'][9]['stats'][5]['value'],
+                        awayTeamReceivingTDAllowed = homeTeamStats['splits']['categories'][9]['stats'][5]['value'],
+                        awayTeamFGScored = awayTeamStats['splits']['categories'][9]['stats'][1]['value'],
+                        awayTeamFGAllowed = homeTeamStats['splits']['categories'][9]['stats'][1]['value'],
+                        awayTeamSpecialTeamsPointsScored = awayTeamStats['splits']['categories'][9]['stats'][3]['value'],
+                        awayTeamDefensePointsScored = int((awayTeamStats['splits']['categories'][5]['stats'][1]['value']+awayTeamStats['splits']['categories'][0]['stats'][9]['value'])*6),
                         
                     )
 
@@ -81,6 +84,18 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
         matchData.homeTeam.add(models.nflTeam.objects.get(espnId=homeTeamEspnId))
         matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
+
+        try:
+            matchData.homeTeamGiveaways= homeTeamStats['splits']['categories'][10]['stats'][33]['value']
+            matchData.homeTeamTakeaways= homeTeamStats['splits']['categories'][10]['stats'][37]['value']
+        except:
+            pass
+
+        try:
+            matchData.awayTeamGiveaways = awayTeamStats['splits']['categories'][10]['stats'][33]['value']
+            matchData.awayTeamTakeaways = awayTeamStats['splits']['categories'][10]['stats'][37]['value']
+        except:
+            pass
 
         try:
             matchData.temperature = gameData['competitions'][0]['weather']['temperature']
@@ -91,7 +106,7 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         
         if len(oddsData['items']) > 2:
             try:
-                matchData.overUnderLine= oddsData['items'][0]['overUnder']
+                matchData.overUnderLine = oddsData['items'][0]['overUnder']
                 matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
                 matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
                 matchData.matchLineHomeTeam = oddsData['items'][0]['spread']

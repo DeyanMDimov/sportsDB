@@ -205,24 +205,20 @@ def getData(request):
                                 pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
                                 pagePlaysData = pagePlaysDataResponse.json()
                                 playByPlayOfGame.addJSON(pagePlaysData)
-                        try:
-                            matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
-                        except:
-                            pass
+                        
+                        matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+
+
                         try:
                             crudLogic.createTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e: 
-                            try:
-                                crudLogic.updateTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
-                            except:
-                                print("Error with home team match performance MatchEspnID: " + str(matchData.espnId))
+                            crudLogic.updateTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            
                         try:
                             crudLogic.createTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
                         except Exception as e:
-                            try:
-                                crudLogic.updateTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
-                            except:
-                                print("Error with away team match performance MatchEspnID: " + str(matchData.espnId))
+                            crudLogic.updateTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            
                             
                             
                 
