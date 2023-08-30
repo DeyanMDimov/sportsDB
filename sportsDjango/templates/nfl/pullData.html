@@ -17,7 +17,7 @@
             <button type="submit">Clear All Performances</button>
         </form> {% endcomment %}
         
-        <h4>{{ message }}</h4>
+       
         {% comment %} <div>
             Load data for Season: 
             <form method="GET">
@@ -57,49 +57,31 @@
         </div> {% endcomment %}
         <br>
         <div>
-            
             <form method="GET">
                 Load data for Season: 
                 <select name="season" id="season">
-                    <option value="2023">2023</option>
-                    <option value="2022">2022</option>
-                    <option value="2021">2021</option>
-                    <option value="2020">2020</option>
-                    <option value="2019">2019</option>
-                    <option value="2018">2018</option>
-                    <option value="2017">2017</option>
-                    <option value="2016">2016</option>
+                    {% for yr in years %}
+                    <option value="{{yr}}" 
+                        {%if yr == sel_year %}
+                            selected
+                        {% endif %} >{{yr}}</option>
+                    {% endfor %}
+                   
                 </select> 
                 - 
                 
                 Week: 
                 <select name="startWeek" id="week">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10</option>
-                    <option value="11">11</option>
-                    <option value="12">12</option>
-                    <option value="13">13</option>
-                    <option value="14">14</option>
-                    <option value="15">15</option>
-                    <option value="16">16</option>
-                    <option value="17">17</option>
-                    <option value="18">18</option>
-                    <option value="19">Wildcard Weekend</option>
-                    <option value="20">Divisional Round</option>
-                    <option value="21">Conference Championship</option>
-                    <option value="23">Super Bowl</option>
+                    {% for wk in weeks %}
+                    <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                    {% endfor %}
                 </select>
                  through Week: 
                 <select name="endWeek" id="week">
-                    <option value="1">1</option>
+                    {% for wk in weeks %}
+                    <option value="{{wk.0}}">{{wk.1}}</option>
+                    {% endfor %}
+                    {% comment %} <option value="1">1</option>
                     <option value="2">2</option>
                     <option value="3">3</option>
                     <option value="4">4</option>
@@ -120,16 +102,34 @@
                     <option value="19">Wildcard Weekend</option>
                     <option value="20">Divisional Round</option>
                     <option value="21">Conference Championship</option>
-                    <option value="23">Super Bowl</option>
+                    <option value="23">Super Bowl</option> {% endcomment %}
                 </select>
                 <br>
                 <br>
                 <button type="submit">Load!</button>
             </form>
+            <br>
             <form method="GET">
                 <input type="hidden" name="deleteDrives" value ="allDrives">
-                <button type="submit">Delete All Drives</button>
+                <button type="submit" disabled>Delete All Drives</button>
             </form>
+        </div>
+        <div>
+            <h4>{{ message }}</h4>
+            {% if exceptions %}
+                {% for ex in exceptions%}
+                    <div class="pull_data_exception accordion">
+                        <input type="checkbox" name="collapse" id="handle{{ex.3}}" checked="checked">
+                        <h5 class="handle">
+                            <label for="handle{{ex.3}}">{{ex.0}}</label>
+                        </h5>
+                        <p>{{ex.1}}</p>
+                        <div class="content collapsible-content">
+                            <pre>{{ex.2 | pprint}}</pre>
+                        </div>
+                    </div>
+                {%endfor%}
+            {%endif%}
         </div>
         <br>
         <br>

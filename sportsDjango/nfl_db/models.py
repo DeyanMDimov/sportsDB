@@ -308,7 +308,8 @@ class playByPlay(models.Model):
         (28, "KNEEL"),
         (29, "SPIKE"),
         (30, "NO PLAY/BLOWN DEAD"),
-        (31, "TIMEOUT")
+        (31, "TIMEOUT"),
+        (32, "QB FUMBLE (UNCLEAR TYPE)")
     )
     playType = models.SmallIntegerField(choices = playTypes, default = 1)
     yardsFromEndzone = models.SmallIntegerField(null = True, blank = True)

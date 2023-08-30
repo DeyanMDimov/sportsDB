@@ -7,31 +7,27 @@
             Plug data into model for:
             <form method="GET">
                 <select name="season" id="season">
-                    <option value="2022">2022</option>
+                    {% for yr in years %}
+                    <option value="{{yr}}" 
+                        {%if yr|stringformat:"i"  == yearOfSeason %}
+                            selected
+                        {% endif %} >{{yr}}</option>
+                    {% endfor %}
+                   
                 </select> 
-                and Week: 
+                - 
+                
+                Week: 
                 <select name="week" id="week">
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10</option>
-                    <option value="11">11</option>
-                    <option value="12">12</option>
-                    <option value="13">13</option>
-                    <option value="14">14</option>
-                    <option value="15">15</option>
-                    <option value="16">16</option>
-                    <option value="17">17</option>
-                    <option value="18">18</option>
-                    <option value="19">Wildcard Weekend</option>
-                    <option value="20">Divisional Round</option>
-                    <option value="21">Conference Championship</option>
-                    <option value="23">Super Bowl</option>
+                    {% for wk in weeks %}
+                    <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                    {% endfor %}
+                </select>
+
+                Model:
+                <select name="model" id="model">
+                    <option value="v1">V1.0 (Avg Yds/Yds per Pt)</option>
+                    <option value="v2">V2.0 (Drives vs Drive Result)</option>
                 </select>
                 <br>
                 <button type="submit">Load!</button>
@@ -94,6 +90,30 @@
                             <td style="width: 220px"> {{ result.team2CalculatedPoints}}</td>
                             <td> Actual: {{ result.team2ActualPoints }} </td>
                         </tr>
+                        {% if selectedModel == "v2" %}
+                        <tr>
+                            <td> Expected Drives </td>
+                            <td style="width: 220px"> {{ result.expected_t1_OffenseDrives}}</td>
+                            <td style="width: 220px">Actual:  {{ result.actual_t1_OffenseDrives }} </td>
+                            <td style="width: 220px"> {{ result.expected_t2_OffenseDrives}}</td>
+                            <td> Actual: {{ result.actual_t2_OffenseDrives }} </td>
+                        </tr>
+                        <tr>
+                            <td> Expected Red Zone Drives </td>
+                            <td style="width: 220px"> {{ result.expected_t1_DrivesRedZone}}</td>
+                            <td style="width: 220px">Actual:  {{ result.actual_t1_DrivesRedZone }} </td>
+                            <td style="width: 220px"> {{ result.expected_t2_DrivesRedZone}}</td>
+                            <td> Actual: {{ result.actual_t2_DrivesRedZone }} </td>
+                        </tr>
+                        <tr>
+                            <td> Expected Red Zone Conversions </td>
+                            <td style="width: 220px"> {{ result.expected_t1_RedZoneConv}}</td>
+                            <td style="width: 220px">Actual:  {{ result.actual_t1_RedZoneConv }} </td>
+                            <td style="width: 220px"> {{ result.expected_t2_RedZoneConv}}</td>
+                            <td> Actual: {{ result.actual_t2_RedZoneConv }} </td>
+                        </tr>
+                        {% endif %}
+                        
                     </tbody>
                 </table> 
                 {% else %}
@@ -134,6 +154,23 @@
                             <td> {{ result.team1CalculatedPoints}}</td>
                             <td> {{ result.team2CalculatedPoints}}</td>
                         </tr>
+                        {% if selectedModel == "v2" %}
+                        <tr>
+                            <td> Expected Drives </td>
+                            <td> {{ result.expected_t1_OffenseDrives}}</td>
+                            <td> {{ result.expected_t2_OffenseDrives}}</td>
+                        </tr>
+                        <tr>
+                            <td> Expected Red Zone Drives </td>
+                            <td> {{ result.expected_t1_DrivesRedZone}}</td>
+                            <td> {{ result.expected_t2_DrivesRedZone}}</td>
+                        </tr>
+                        <tr>
+                            <td> Expected Red Zone Conversions </td>
+                            <td> {{ result.expected_t1_RedZoneConv}}</td>
+                            <td> {{ result.expected_t2_RedZoneConv}}</td>
+                        </tr>
+                        {% endif %}
                     </tbody>
                 </table> 
                 {% endif %}

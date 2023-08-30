@@ -2,12 +2,10 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.core import serializers
 import json
-from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay
 from django.db import models
-import requests
 from nfl_db import businessLogic, crudLogic
-import datetime
-import time
+import datetime, time, requests, traceback
 
 # Create your views here.
 
@@ -15,6 +13,18 @@ def index(request):
     return render (request, 'nfl/base.html')
 
 def getData(request):
+    weeksOnPage = []
+    for w in range(1,19):
+        weeksOnPage.append([w, w])
+    weeksOnPage.append([19, "Wildcard Weekend"])
+    weeksOnPage.append([20, "Divisional Round"])
+    weeksOnPage.append([21, "Conference Championship"])
+    weeksOnPage.append([22, "Super Bowl"])
+
+    yearsOnPage = []
+    for y in range(2023, 2015, -1):
+        yearsOnPage.append(y)
+
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
             print("Hit game stats endpoint")
@@ -103,7 +113,7 @@ def getData(request):
                         businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
                         businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
 
-            return render (request, 'nfl/pullData.html', {"message": responseMessage})
+            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'message': responseMessage})
 
         elif 'espnGameId' in request.GET:
             print("Hit single game endpoint")
@@ -119,6 +129,8 @@ def getData(request):
             endWeek = int(inputReq['endWeek'].strip())
 
             i = startWeek
+
+            exceptionCollection = []
 
             while i <= endWeek:
                 time.sleep(2)
@@ -148,11 +160,17 @@ def getData(request):
                     matchEspnId = gameData['id']
                     dateOfGameFromApi = gameData['date']
                     dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
-
+                    
+                    homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+                    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+                    homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
+                    awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
+                    
+                    print()
+                    print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
                     gameStatusUrl = gameData['competitions'][0]['status']['$ref']
                     gameStatusResponse = requests.get(gameStatusUrl)
                     gameStatus = gameStatusResponse.json()
-
 
                     gameCompleted = (gameStatus['type']['completed'] == True)
                     gameOvertime = ("OT" in gameStatus['type']['detail']) 
@@ -162,11 +180,23 @@ def getData(request):
                     oddsData = oddsResponse.json()
 
                     existingMatch = None
+                    existingHomeTeamPerf = None
+                    existingAwayTeamPerf = None
 
                     try:
                         existingMatch = nflMatch.objects.get(espnId = matchEspnId)
-                    except:
-                        pass
+                    except Exception as e:
+                        print(e)
+                    
+                    try:
+                        existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = homeTeamEspnId)
+                    except Exception as e:
+                        print(e)
+
+                    try:    
+                        existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
+                    except Exception as e:
+                        print(e)                        
                     
                     if datetime.datetime.now()<dateOfGame or gameCompleted==False:
                         crudLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
@@ -205,19 +235,69 @@ def getData(request):
                                 pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
                                 pagePlaysData = pagePlaysDataResponse.json()
                                 playByPlayOfGame.addJSON(pagePlaysData)
-                        
-                        matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
-
-
                         try:
-                            crudLogic.createTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
-                        except Exception as e: 
-                            crudLogic.updateTeamMatchPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
-                            
-                        try:
-                            crudLogic.createTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))
+                            matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+
                         except Exception as e:
-                            crudLogic.updateTeamMatchPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, str(weekOfSeason), str(yearOfSeason))
+                            matchData = nflMatch.objects.get(espnId = matchEspnId)
+                            print("There was an exception")
+                            game_exception = []
+                            if len(e.args) > 1:
+                                game_exception.append("There were multiple exceptions when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                                print("Multiple exceptions in one game")
+                                game_exception.append(e.args[0][0][0])
+                                game_exception.append(e.args[0][0][1])
+                            else:
+                                game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                                game_exception.append(e.args[0][0][0])
+                                game_exception.append(e.args[0][0][1])
+                                game_exception.append(matchEspnId)
+                            exceptionCollection.append(game_exception)
+
+                        try:
+                            existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
+                            print()
+                            print("Team performance found for combination of data")
+                            print("matchEspnId = " + str(matchEspnId))
+                            print("homeTeamEspnId = " + str(homeTeamEspnId))
+                            print("matchData.espnId = " + str(matchData.espnId))
+                            print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
+                        
+                        except Exception as e:
+                            print()
+                            print(e)
+                            print("matchEspnId = " + str(matchEspnId))
+                            print("homeTeamEspnId = " + str(homeTeamEspnId))
+                            print("matchData.espnId = " + str(matchData.espnId))
+                            print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
+                            print()
+
+                        
+                        
+                        
+                        try:
+                            crudLogic.createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
+                        
+                        except Exception as e: 
+                            print("Problem with creating home team Match performance")
+                            game_exception = []
+                            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                            game_exception.append(e.args[0][0][0])
+                            game_exception.append(e.args[0][0][1])
+                            game_exception.append(str(matchEspnId)+str(homeTeamEspnId))
+                            exceptionCollection.append(game_exception)
+
+                        try:
+                            crudLogic.createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
+
+                        except Exception as e:
+                            print("Problem with creating away team Match performance")
+                            game_exception = []
+                            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                            game_exception.append(e.args[0][0][0])
+                            game_exception.append(e.args[0][0][1])
+                            game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
+                            exceptionCollection.append(game_exception)
                             
                             
                             
@@ -228,7 +308,11 @@ def getData(request):
                 message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
             else:
                 message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
-            return render (request, 'nfl/pullData.html', {'message': message})
+            if len(exceptionCollection) > 0:
+                print("There were exceptions.")
+                return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'sel_year': yearOfSeason, 'message': message, 'exceptions': exceptionCollection})
+            else:
+                return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'sel_year': yearOfSeason, 'message': message})
 
         elif 'season' in request.GET and 'full' in request.GET:
             
@@ -330,7 +414,7 @@ def getData(request):
                 i += 1
             
             message = "Full " + str(yearOfSeason) + " season loaded."
-            return render (request, 'nfl/pullData.html', {'message': message})
+            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'message': message})
 
         elif 'reset' in request.GET:
             businessLogic.resetAllMatchAssociationsForClearing()
@@ -376,14 +460,26 @@ def getData(request):
             
 
 
-            return render (request, 'nfl/pullData.html', {"teamNames": teamNames})
+            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'teamNames': teamNames})
         else:
-            return render (request, 'nfl/pullData.html')
+            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage})
     else: 
         return HttpResponse('unsuccessful')
 
 
 def loadModel(request, target):
+    weeksOnPage = []
+    for w in range(2,19):
+        weeksOnPage.append([w, w])
+    weeksOnPage.append([19, "Wildcard Weekend"])
+    weeksOnPage.append([20, "Divisional Round"])
+    weeksOnPage.append([21, "Conference Championship"])
+    weeksOnPage.append([22, "Super Bowl"])
+
+    yearsOnPage = []
+    for y in range(2023, 2018, -1):
+        yearsOnPage.append(y)
+    
     inputReq = request.GET
     reqTarget = target
     if request.method == 'GET':
@@ -393,6 +489,7 @@ def loadModel(request, target):
             #inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = inputReq['week'].strip()
+            selectedModel = inputReq['model']
 
             
             url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
@@ -410,41 +507,80 @@ def loadModel(request, target):
                 gameData = gameDataResponse.json()
                 completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
 
-                individualModelResult = businessLogic.generateBettingModel(gameData, weekOfSeason, yearOfSeason, completed)
+                if selectedModel == "v1":
+                    individualModelResult = businessLogic.generateBettingModelV1(gameData, weekOfSeason, yearOfSeason)
 
-                gameEspnId = gameData['id']
-                match = nflMatch.objects.get(espnId = gameEspnId)
+                    gameEspnId = gameData['id']
+                    match = nflMatch.objects.get(espnId = gameEspnId)
 
-                if(completed):
+                    if(completed):
+                        
+                        #print("Game ID: ", gameEspnId)
+                        if match.awayTeamPoints != None:     
+                            individualModelResult.team1ActualYards = match.homeTeamTotalYards
+                            individualModelResult.team2ActualYards = match.awayTeamTotalYards
+                            individualModelResult.team1ActualPoints = match.homeTeamPoints
+                            individualModelResult.team2ActualPoints = match.awayTeamPoints
+                            individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+                            individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                            individualModelResult.gameCompleted = True
+                        
+                    if match.overUnderLine != 0:
+                        individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
+                        individualModelResult.bookProvidedTotal = match.overUnderLine
+
+                elif(selectedModel == "v2"):
+                    individualModelResult = businessLogic.generateBettingModelV2(gameData, weekOfSeason, yearOfSeason)
+
+                    gameEspnId = gameData['id']
+                    match = nflMatch.objects.get(espnId = gameEspnId)
                     
-                    #print("Game ID: ", gameEspnId)
-                    if match.awayTeamPoints != None:     
-                        individualModelResult.team1ActualYards = match.homeTeamTotalYards
-                        individualModelResult.team2ActualYards = match.awayTeamTotalYards
-                        individualModelResult.team1ActualPoints = match.homeTeamPoints
-                        individualModelResult.team2ActualPoints = match.awayTeamPoints
-                        individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
-                        individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
-                        individualModelResult.gameCompleted = True
-                    
-                if match.overUnderLine != 0:
-                    individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
-                    individualModelResult.bookProvidedTotal = match.overUnderLine
-                      
+
+                    if(completed):
+                        team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
+                        team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+                        #team1_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.homeTeamEspnId)
+                        #team2_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.awayTeamEspnId)    
+                        team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team1)
+                        team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team2)
+
+                        #print("Game ID: ", gameEspnId)
+                        if match.awayTeamPoints != None:     
+                            individualModelResult.team1ActualYards = match.homeTeamTotalYards
+                            individualModelResult.team1ActualPoints = match.homeTeamPoints
+                            individualModelResult.actual_t1_OffenseDrives = len(team1_drives)
+                            individualModelResult.actual_t1_DrivesRedZone = len(team1_drives.filter(reachedRedZone = True))
+                            individualModelResult.actual_t1_RedZoneConv = len(team1_drives.filter(driveResult = 1))
+                            
+                            
+                            individualModelResult.team2ActualYards = match.awayTeamTotalYards
+                            individualModelResult.team2ActualPoints = match.awayTeamPoints
+                            individualModelResult.actual_t2_OffenseDrives = len(team2_drives)
+                            individualModelResult.actual_t2_DrivesRedZone = len(team2_drives.filter(reachedRedZone = True))
+                            individualModelResult.actual_t2_RedZoneConv = len(team2_drives.filter(driveResult = 1))
+                            
+                            
+                            individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+                            individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                            individualModelResult.gameCompleted = True
+                        
+                    if match.overUnderLine != 0:
+                        individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
+                        individualModelResult.bookProvidedTotal = match.overUnderLine
 
                 modelResults.append(individualModelResult)
                 
 
             if(reqTarget == 'showModel'):
-                return render(request, 'nfl/bettingModel.html', {"modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason})
+                return render(request, 'nfl/bettingModel.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason,'weeks':weeksOnPage, 'years': yearsOnPage})
             else:
                 print("passing stuff")
-                return render(request, 'nfl/modelSummary.html', {"modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason})
+                return render(request, 'nfl/modelSummary.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, 'weeks':weeksOnPage, 'years': yearsOnPage})
         else: 
             if(reqTarget == 'showModel'):
-                return render(request, 'nfl/bettingModel.html')
+                return render(request, 'nfl/bettingModel.html', {'weeks':weeksOnPage, 'years': yearsOnPage})
             else:
-                return render(request, 'nfl/modelSummary.html')
+                return render(request, 'nfl/modelSummary.html', {'weeks':weeksOnPage, 'years': yearsOnPage})
     else:
         if(reqTarget == 'model'):
             return render(request, 'nfl/bettingModel.html')
@@ -453,6 +589,11 @@ def loadModel(request, target):
 
 
 def fullTeamStats(request):
+
+    yearsOnPage = []
+    for y in range(2023, 2018, -1):
+        yearsOnPage.append(y)
+    
     inputReq = request.GET
 
     if(request.method == 'GET'):
@@ -463,6 +604,7 @@ def fullTeamStats(request):
             selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
 
             selectedTeamEspnId = selectedTeam.espnId
+            print("Team EspnId: " + str(selectedTeamEspnId))
 
             teamHomeGames = nflMatch.objects.filter(homeTeam = selectedTeam).filter(yearOfSeason = yearOfSeason).filter(completed = True)
             teamAwayGames = nflMatch.objects.filter(awayTeam = selectedTeam).filter(yearOfSeason = yearOfSeason).filter(completed = True)
@@ -473,25 +615,34 @@ def fullTeamStats(request):
 
             listOfPerformances = []
 
+            print (str(len(allTeamGames)))
+            
             for game in allTeamGames:
-                performance = teamMatchPerformance.objects.get(matchEspnId = game.espnId, teamEspnId = selectedTeamEspnId)
-                listOfPerformances.append(performance)
+                try:
+                    performance = teamMatchPerformance.objects.get(matchEspnId = game.espnId, teamEspnId = selectedTeamEspnId)
+                    print()
+                    print("Week of Season:" + str(game.weekOfSeason))
+                    
+                    
+                    listOfPerformances.append(performance)
+                except Exception as e:
+                    print(e)
 
             listOfFieldNames = []
 
             for f in teamMatchPerformance._meta.get_fields():
-                if f.name in ['id', 'matchEspnId', "nflMatch", 'team', 'teamEspnId', 'opponent', 'weekOfSeason', 'yearOfSeason', 'atHome']:
+                if f.name in ['id', 'matchEspnId', "nflMatch", 'team', 'teamEspnId', 'opponent', 'yearOfSeason', 'atHome']:
                     pass
                 else:
                     listOfFieldNames.append(f.name)
 
-            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), "season": yearOfSeason, "teamName": inputReq['teamName'], "teamEspnId": selectedTeamEspnId, "teamPerf": listOfPerformances, "fieldNames": listOfFieldNames})
+            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), "season": yearOfSeason, "teamName": inputReq['teamName'], "teamEspnId": selectedTeamEspnId, "teamPerf": listOfPerformances, "fieldNames": listOfFieldNames, 'years': yearsOnPage})
 
             
         else:
-            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation')})
+            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage})
     else:
-        return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation')})
+        return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage})
     
 def testPage(request):
     inputReq = request.GET

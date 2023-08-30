@@ -7,31 +7,30 @@
             Plug data into model for:
             <form method="GET">
                 <select name="season" id="season">
-                    <option value="2022">2022</option>
+                    {% for yr in years %}
+                    <option value="{{yr}}" 
+                        {%if yr|stringformat:"i" == yearOfSeason %}
+                            selected
+                        {% endif %} >{{yr}}</option>
+                    {% endfor %}
+                   
                 </select> 
-                and Week: 
+                - 
+                
+                Week: 
                 <select name="week" id="week">
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10</option>
-                    <option value="11">11</option>
-                    <option value="12">12</option>
-                    <option value="13">13</option>
-                    <option value="14">14</option>
-                    <option value="15">15</option>
-                    <option value="16">16</option>
-                    <option value="17">17</option>
-                    <option value="18">18</option>
-                    <option value="19">Wildcard Weekend</option>
-                    <option value="20">Divisional Round</option>
-                    <option value="21">Conf. Championship</option>
-                    <option value="23">Super Bowl</option>
+                    {% for wk in weeks %}
+                    <option value="{{wk.0}}"
+                        {%if wk.0|stringformat:"i" == weekOfSeason %}
+                            selected
+                        {% endif %}
+                        > {{ wk.1 }}</option>
+                    {% endfor %}
+                </select>
+
+                Model:
+                <select name="model" id="model">
+                    <option value="v1">V1.0 (Avg Yds/Yds per Pt)</option>
                 </select>
                 <br>
                 <button type="submit">Load!</button>
