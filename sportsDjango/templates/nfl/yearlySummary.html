@@ -37,14 +37,38 @@
             </form>
         </div>
         
-        {% if games %}
-            <p>Here are the games for:</p>
+        {% if seasonResults %}
+            <p>Here are the results for {{yearOfSeason}}</p>
         
+            <table>
+                <thead>
+                    <td>
+                    </td>
+                    <td>
+                        Over Under Record
+                    </td>
+                    <td>
+                        Lines Bet Record
+                    </td>
+                </thead>
+                <tbody>
+            {% for wk in seasonResults%}
+                <tr>
+                    <td style="width:200px">
+                        Week {{wk.0}}
+                    </td>
+                    <td style="width:400px">
+                        {{wk.1}}
+                    </td>
+                    <td style="width:400px">
+                        {{wk.2}}
+                    </td>
+                </tr>
 
-            {% for gm in games%}
-                <div>
 
-                    <h3> 
+
+
+                    {% comment %} <h3> 
                         {{ gm.homeTeamEspnId }} vs {{ gm.awayTeamEspnId }}
                     </h3>
                     <h4>Week {{gm.weekOfSeason}}</h4>
@@ -53,7 +77,7 @@
                         Home Team Line: {{gm.matchLineHomeTeam}}<br>
                         Home Team ML: {{gm.homeTeamMoneyLine}}<br>
                         Away Team ML: {{gm.awayTeamMoneyLine}}<br>
-                    </p>
+                    </p> {% endcomment %}
         
         
                     {% comment %} <table class="table table-bordered">
@@ -89,8 +113,21 @@
                             {% endfor %}
                         </tbody>
                     </table> {% endcomment %}
-                </div>
+                
             {% endfor %}
+                    <tr>
+                        <td>
+                            Total:
+                        </td>
+                        <td>
+                            {{ouWins}} - {{ouLosses}}
+                        </td>
+                        <td>
+                            {{lbWins}} - {{lbLosses}}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
    
 
         
