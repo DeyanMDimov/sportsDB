@@ -1009,7 +1009,7 @@ def captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId
                             if teamPenaltyText in play['text']:
                                 totalOffensePenalties += 1
                                 totalOffensePenaltyYards += abs(play['statYardage'])
-                                print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
+                                # print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
                             elif teamAbbreviation == "ARI" and "on ARZ" in play['text']:
                                 totalOffensePenalties += 1
                                 totalOffensePenaltyYards += abs(play['statYardage'])
