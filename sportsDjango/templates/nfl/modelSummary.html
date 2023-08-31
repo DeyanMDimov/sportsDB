@@ -126,9 +126,9 @@
                             </td>
                             {% if result.gameCompleted %}
                             <td class="modelSummaryLine 
-                                {% if result.overUnderBetIsCorrect %}
+                                {% if result.overUnderBetIsCorrect == 'True' %}
                                     correctBet
-                                {% elif result.overUnderBet == 'N/A' or result.overUnderBet == '' %}
+                                {% elif result.overUnderBetIsCorrect == 'None' or result.overUnderBetIsCorrect == 'Push' %}
                                     noBet
                                 {% else %}
                                     wrongBet
@@ -137,9 +137,9 @@
                                 {{result.overUnderBet}}
                             </td>
                             <td class="modelSummaryLine
-                            {% if result.lineBetIsCorrect %}
+                            {% if result.lineBetIsCorrect == 'True'%}
                                 correctBet
-                            {% elif result.lineBet == 'N/A' or result.lineBet == ''%}
+                            {% elif result.lineBetIsCorrect == 'None' or result.lineBetIsCorrect == 'Push'%}
                                 noBet
                             {% else %}
                                 wrongBet

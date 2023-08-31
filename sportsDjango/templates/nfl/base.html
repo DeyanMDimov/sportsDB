@@ -17,9 +17,10 @@
                 <ul id="main_navigation_menu" class="nav-menu">
                     <li id="menu-item-pull-data" class="menu-item"><a href="/getGames" class="btn btn-link btn-outline-dark" role="button">Pull Data</a></li>
                     <li id="menu-item-report" class="menu-item "><a href="/loadModel" class="btn btn-link btn-outline-dark" role="button">Generate Predictions</a></li>
-                    <li id="menu-item-report-summary" class="menu-item "><a href="/loadModelSummary" class="btn btn-link btn-outline-dark" role="button">Model Summary</a></li>
+                    <li id="menu-item-weekly-summary" class="menu-item "><a href="/loadModelSummary" class="btn btn-link btn-outline-dark" role="button">Weekly Summary</a></li>
+                    <li id="menu-item-yearly-summary" class="menu-item "><a href="/loadYearlySummary" class="btn btn-link btn-outline-dark" role="button">Yearly Summary</a></li>
                     <li id="all-team-stats" class="menu-item "><a href="/fullTeamStats" class="btn btn-link btn-outline-dark" role="button">Team Stats</a></li>
-                    <li id="test-page" class="menu-item "><a href="/testPage" class="btn btn-link btn-outline-dark" role="button">Test Page</a></li>
+                    
                 </ul>
             </nav>
             {% block getData %}
@@ -31,9 +32,12 @@
             {% block loadModelSummary %}
             {% endblock %}
 
+            {% block loadYearlySummary %}
+            {% endblock %}   
+
             {% block teamDetailedStats %}
             {% endblock %}    
-
+            
             {% block testPage %}
             {% endblock %}   
         </div>

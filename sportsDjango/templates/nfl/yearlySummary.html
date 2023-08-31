@@ -1,0 +1,100 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% load templateFilters%}
+{% block loadYearlySummary %}
+    <div class = "container">
+        
+        <div>
+            Get Games for :
+            <form method="GET">
+                <form method="GET">
+                    <select name="season" id="season">
+                        {% for yr in years %}
+                        <option value="{{yr}}" 
+                            {%if yr|stringformat:"i" == yearOfSeason %}
+                                selected
+                            {% endif %} >{{yr}}</option>
+                        {% endfor %}
+                       
+                    </select> 
+                    
+    
+                    Model:
+                    <select name="model" id="model">
+                        {% for model in models %}
+                        
+                        <option value="{{model.0}}"
+                      
+                        {% if selectedModel == model.0 %}
+                            selected
+                        {% endif %}
+                                    >{{model.1}}</option>
+                        
+                        {% endfor %}
+                    </select>
+                <br>
+                <button type="submit">Load!</button>
+            </form>
+        </div>
+        
+        {% if games %}
+            <p>Here are the games for:</p>
+        
+
+            {% for gm in games%}
+                <div>
+
+                    <h3> 
+                        {{ gm.homeTeamEspnId }} vs {{ gm.awayTeamEspnId }}
+                    </h3>
+                    <h4>Week {{gm.weekOfSeason}}</h4>
+                    <p>
+                        Over/Under: {{gm.overUnderLine}} <br>
+                        Home Team Line: {{gm.matchLineHomeTeam}}<br>
+                        Home Team ML: {{gm.homeTeamMoneyLine}}<br>
+                        Away Team ML: {{gm.awayTeamMoneyLine}}<br>
+                    </p>
+        
+        
+                    {% comment %} <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <td> {{perf.nflMatch.datePlayed}} </td>
+                            </tr>
+                            <tr> 
+                                <td>Opponent</td>
+                                {% for perf in teamPerf %}
+                                    {% for opp in perf.opponent.all %}
+                                        <td> {{opp.abbreviation}} </td>
+                                    {% endfor %}
+                                {% endfor %}
+                            </tr>
+                            <tr> 
+                                <td>Date Played</td>
+                                {% for perf in teamPerf %}
+                                    {% for match in perf.nflMatch.all %}
+                                        <td> {{match.datePlayed|date:"M d Y"}} </td>
+                                    {% endfor %}
+                                {% endfor %}
+                            </tr>
+                            {% for fName in fieldNames%}
+                            <tr>
+                                <td>{{fName}}</td>
+                                {% for perf in teamPerf %}
+                                <td> 
+                                    {{ perf|get_obj_attr:fName }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table> {% endcomment %}
+                </div>
+            {% endfor %}
+   
+
+        
+        {% endif %}
+
+    </div>
+{% endblock %}

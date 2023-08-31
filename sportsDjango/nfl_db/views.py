@@ -526,48 +526,10 @@ def loadModel(request, target):
                             individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
                             individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
                             individualModelResult.gameCompleted = True
-
-                        
-                    if match.overUnderLine != 0 and match.overUnderLine != None:
-                        individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
-                        individualModelResult.bookProvidedTotal = match.overUnderLine
-
-                        if(individualModelResult.calculatedTotal > match.overUnderLine):
-                                individualModelResult.overUnderBet = "OVER"
-                                if individualModelResult.actualTotal > match.overUnderLine:
-                                    individualModelResult.overUnderBetIsCorrect = True
-
-                        elif(individualModelResult.calculatedTotal < match.overUnderLine):
-                            individualModelResult.overUnderBet = "UNDER"
-                            if individualModelResult.actualTotal < match.overUnderLine:
-                                individualModelResult.overUnderBetIsCorrect = True
-                        else:
-                            individualModelResult.overUnderBet = "N/A"
-
-                        if individualModelResult.calculatedSpread > match.matchLineHomeTeam:
-                            if match.matchLineHomeTeam > 0:
-                                individualModelResult.lineBet = team2.abbreviation + " -" + str(match.matchLineHomeTeam)
-                            elif match.matchLineHomeTeam < 0:
-                                individualModelResult.lineBet = team2.abbreviation + " +" + str(match.matchLineHomeTeam*-1)
-                            else:
-                                individualModelResult.lineBet = team2.abbreviation + " ML"
-
-
-                            if individualModelResult.actualSpread > match.matchLineHomeTeam:
-                                individualModelResult.lineBetIsCorrect = True
-
-                        elif(individualModelResult.calculatedSpread < match.matchLineHomeTeam):
-                            if match.matchLineHomeTeam > 0:
-                                individualModelResult.lineBet = team1.abbreviation + " +" + str(match.matchLineHomeTeam)
-                            elif match.matchLineHomeTeam < 0:
-                                individualModelResult.lineBet = team1.abbreviation + " -" + str(match.matchLineHomeTeam*-1)
-                            else:
-                                individualModelResult.lineBet = team1.abbreviation + " ML"
-                            
-                            if individualModelResult.actualSpread < match.matchLineHomeTeam:
-                                individualModelResult.lineBetIsCorrect = True
-                        else:
-                            individualModelResult.lineBet = "N/A"
+                    
+                        if match.overUnderLine != 0 and match.overUnderLine != None:
+                            individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
+                    
 
                 elif(selectedModel == "v2"):
                     individualModelResult = businessLogic.generateBettingModelV2(gameData, weekOfSeason, yearOfSeason)
@@ -584,7 +546,6 @@ def loadModel(request, target):
                         team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team1)
                         team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team2)
 
-                        #print("Game ID: ", gameEspnId)
                         if match.awayTeamPoints != None:     
                             individualModelResult.team1ActualYards = match.homeTeamTotalYards
                             individualModelResult.team1ActualPoints = match.homeTeamPoints
@@ -604,90 +565,24 @@ def loadModel(request, target):
                             individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
                             individualModelResult.gameCompleted = True
 
-                            # if(individualModelResult.calculatedTotal > match.overUnderLine):
-                            #     individualModelResult.overUnderBet = "OVER"
-                            #     if individualModelResult.actualTotal > match.overUnderLine:
-                            #         individualModelResult.overUnderBetIsCorrect = True
-
-                            # elif(individualModelResult.calculatedTotal < match.overUnderLine):
-                            #     individualModelResult.overUnderBet = "UNDER"
-                            #     if individualModelResult.actualTotal < match.overUnderLine:
-                            #         individualModelResult.overUnderBetIsCorrect = True
-                            # else:
-                            #     individualModelResult.overUnderBet = "N/A"
-
-
-                           
-
-                            # if individualModelResult.calculatedSpread > match.matchLineHomeTeam:
-                            #     if match.matchLineHomeTeam > 0:
-                            #         individualModelResult.lineBet = team2.abbreviation + " -" + str(match.matchLineHomeTeam)
-                            #     elif match.matchLineHomeTeam < 0:
-                            #         individualModelResult.lineBet = team2.abbreviation + " +" + str(match.matchLineHomeTeam*-1)
-                            #     else:
-                            #         individualModelResult.lineBet = team2.abbreviation + " ML"
-
-                            #     if individualModelResult.actualSpread > match.matchLineHomeTeam:
-                            #         individualModelResult.lineBetIsCorrect = True
-
-                            # elif(individualModelResult.calculatedSpread < match.matchLineHomeTeam):
-                            #     if match.matchLineHomeTeam > 0:
-                            #         individualModelResult.lineBet = team1.abbreviation + " +" + str(match.matchLineHomeTeam)
-                            #     elif match.matchLineHomeTeam < 0:
-                            #         individualModelResult.lineBet = team1.abbreviation + " -" + str(match.matchLineHomeTeam*-1)
-                            #     else:
-                            #         individualModelResult.lineBet = team1.abbreviation + " ML"
-                                
-                            #     if individualModelResult.actualSpread < match.matchLineHomeTeam:
-                            #         individualModelResult.lineBetIsCorrect = True
-                            # else:
-                            #     individualModelResult.lineBet = "N/A"
+                        if match.overUnderLine != 0 and match.overUnderLine != None:      
+                            individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
+                    
                         
-                    if match.overUnderLine != 0 and match.overUnderLine != None:
-                        if(individualModelResult.calculatedTotal > match.overUnderLine):
-                            individualModelResult.overUnderBet = "OVER"
-                            if individualModelResult.actualTotal > match.overUnderLine:
-                                individualModelResult.overUnderBetIsCorrect = True
-
-                        elif(individualModelResult.calculatedTotal < match.overUnderLine):
-                            individualModelResult.overUnderBet = "UNDER"
-                            if individualModelResult.actualTotal < match.overUnderLine:
-                                individualModelResult.overUnderBetIsCorrect = True
-                        else:
-                            individualModelResult.overUnderBet = "N/A"
-
-
-                        if individualModelResult.calculatedSpread > match.matchLineHomeTeam:
-                            if match.matchLineHomeTeam > 0:
-                                individualModelResult.lineBet = team2.abbreviation + " -" + str(match.matchLineHomeTeam)
-                            elif match.matchLineHomeTeam < 0:
-                                individualModelResult.lineBet = team2.abbreviation + " +" + str(match.matchLineHomeTeam*-1)
-                            else:
-                                individualModelResult.lineBet = team2.abbreviation + " ML"
-
-                            if individualModelResult.actualSpread > match.matchLineHomeTeam:
-                                individualModelResult.lineBetIsCorrect = True
-
-                        elif(individualModelResult.calculatedSpread < match.matchLineHomeTeam):
-                            if match.matchLineHomeTeam > 0:
-                                individualModelResult.lineBet = team1.abbreviation + " +" + str(match.matchLineHomeTeam)
-                            elif match.matchLineHomeTeam < 0:
-                                individualModelResult.lineBet = team1.abbreviation + " -" + str(match.matchLineHomeTeam*-1)
-                            else:
-                                individualModelResult.lineBet = team1.abbreviation + " ML"
-                            
-                            if individualModelResult.actualSpread < match.matchLineHomeTeam:
-                                individualModelResult.lineBetIsCorrect = True
-                        else:
-                            individualModelResult.lineBet = "N/A"
                         
-                        individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
-                        individualModelResult.bookProvidedTotal = match.overUnderLine
 
                 modelResults.append(individualModelResult)
 
-                overUnderRecord = str(len(list(filter(lambda x: x.overUnderBetIsCorrect == True, modelResults)))) + " - " + str(len(list(filter(lambda x: x.overUnderBetIsCorrect == False and x.overUnderBet != "N/A" and x.overUnderBet != "", modelResults))))
-                lineBetRecord = str(len(list(filter(lambda x: x.lineBetIsCorrect == True, modelResults)))) + " - " + str(len(list(filter(lambda x: x.lineBetIsCorrect == False and x.lineBet != "N/A" and x.lineBet != "", modelResults))))
+                overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
+                overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelResults)))
+                overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', modelResults)))
+                overUnderRecord = str(overUnderCorrect) + " - " + str(overUnderWrong) + " - " + str(overUnderPush)
+
+                lineBetCorrect = len(list(filter(lambda x: x.lineBetIsCorrect == "True", modelResults)))
+                lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", modelResults)))
+                lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", modelResults)))
+
+                lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
                 
 
             if(reqTarget == 'showModel'):
@@ -705,6 +600,34 @@ def loadModel(request, target):
             return render(request, 'nfl/bettingModel.html')
         else:
             return render(request, 'nfl/modelSummary.html')
+
+def loadModelYear(request):
+    yearsOnPage = []
+    for y in range(2023, 2017, -1):
+        yearsOnPage.append(y)
+
+    modelsOnPage = []
+    modelsOnPage.append(['v1', 'V1.0 (Avg Yds/Yds per Pt)'])
+    modelsOnPage.append(['v2','V2.0 (Drives vs Drive Result)'])
+    
+    inputReq = request.GET
+
+    if request.method == 'GET':
+       
+        if 'season' in request.GET and 'model' in request.GET: 
+            selectedModel = inputReq['model']
+            yearOfSeason = inputReq['season'].strip()
+
+            weeksInSeason = 18 if yearOfSeason >= 2021 else 17
+
+
+            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel})
+        else: 
+            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage})
+    else:
+        return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage})
+
+
 
 
 def fullTeamStats(request):

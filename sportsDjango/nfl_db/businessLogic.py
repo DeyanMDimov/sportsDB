@@ -801,10 +801,10 @@ class individualV2ModelResult:
     gameCompleted = False
 
     overUnderBet = ""
-    overUnderBetIsCorrect = False
+    overUnderBetIsCorrect = "None"
 
     lineBet = ""
-    lineBetIsCorrect = False
+    lineBetIsCorrect = "None"
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
@@ -1009,7 +1009,65 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
     return modelResult
 
 
+def checkModelBets(bookOverUnder, bookLineHometeam, individualModelResult, team1_abr, team2_abr):
+    if bookOverUnder != 0 and bookOverUnder != None:
+        individualModelResult.bookProvidedSpread = bookLineHometeam
+        individualModelResult.bookProvidedTotal = bookOverUnder
 
+        if(individualModelResult.calculatedTotal > bookOverUnder):
+                individualModelResult.overUnderBet = "OVER"
+                if individualModelResult.actualTotal > bookOverUnder:
+                    individualModelResult.overUnderBetIsCorrect = 'True'
+                elif individualModelResult.actualTotal < bookOverUnder:
+                    individualModelResult.overUnderBetIsCorrect = 'False'
+                else:
+                    individualModelResult.overUnderBetIsCorrect = 'Push'
+
+        elif(individualModelResult.calculatedTotal < bookOverUnder):
+            individualModelResult.overUnderBet = "UNDER"
+            if individualModelResult.actualTotal < bookOverUnder:
+                individualModelResult.overUnderBetIsCorrect = 'True'
+            elif individualModelResult.actualTotal > bookOverUnder:
+                    individualModelResult.overUnderBetIsCorrect = 'False'
+            else:
+                individualModelResult.overUnderBetIsCorrect = 'Push'
+        else:
+            individualModelResult.overUnderBet = 'N/A'
+
+        if individualModelResult.calculatedSpread > bookLineHometeam:
+            if bookLineHometeam > 0:
+                individualModelResult.lineBet = team2_abr + " -" + str(bookLineHometeam)
+            elif bookLineHometeam < 0:
+                individualModelResult.lineBet = team2_abr + " +" + str(bookLineHometeam*-1)
+            else:
+                individualModelResult.lineBet = team2_abr + " ML"
+
+
+            if individualModelResult.actualSpread > bookLineHometeam:
+                individualModelResult.lineBetIsCorrect = "True"
+            elif individualModelResult.actualSpread < bookLineHometeam:
+                individualModelResult.lineBetIsCorrect = "False"
+            else:
+                individualModelResult.lineBetIsCorrect = "Push"
+
+        elif(individualModelResult.calculatedSpread < bookLineHometeam):
+            if bookLineHometeam > 0:
+                individualModelResult.lineBet = team1_abr + " +" + str(bookLineHometeam)
+            elif bookLineHometeam < 0:
+                individualModelResult.lineBet = team1_abr + " -" + str(bookLineHometeam*-1)
+            else:
+                individualModelResult.lineBet = team1_abr + " ML"
+            
+            if individualModelResult.actualSpread < bookLineHometeam:
+                individualModelResult.lineBetIsCorrect = "True"
+            elif individualModelResult.actualSpread > bookLineHometeam:
+                individualModelResult.lineBetIsCorrect = "False"
+            else: 
+                individualModelResult.lineBetIsCorrect = "Push"
+        else:
+            individualModelResult.lineBet = "N/A"
+            
+    return individualModelResult
 
 
 
