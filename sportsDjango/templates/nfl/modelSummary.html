@@ -128,7 +128,7 @@
                             <td class="modelSummaryLine 
                                 {% if result.overUnderBetIsCorrect %}
                                     correctBet
-                                {% elif result.overUnderBet == 'N/A' %}
+                                {% elif result.overUnderBet == 'N/A' or result.overUnderBet == '' %}
                                     noBet
                                 {% else %}
                                     wrongBet
@@ -139,7 +139,7 @@
                             <td class="modelSummaryLine
                             {% if result.lineBetIsCorrect %}
                                 correctBet
-                            {% elif result.lineBet == 'N/A' %}
+                            {% elif result.lineBet == 'N/A' or result.lineBet == ''%}
                                 noBet
                             {% else %}
                                 wrongBet

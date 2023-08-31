@@ -657,8 +657,6 @@ def loadModel(request, target):
                             individualModelResult.overUnderBet = "N/A"
 
 
-                        
-
                         if individualModelResult.calculatedSpread > match.matchLineHomeTeam:
                             if match.matchLineHomeTeam > 0:
                                 individualModelResult.lineBet = team2.abbreviation + " -" + str(match.matchLineHomeTeam)
@@ -688,11 +686,8 @@ def loadModel(request, target):
 
                 modelResults.append(individualModelResult)
 
-                #overUnderRecord = str(len(modelResults.filter(overUnderBetIsCorrect = True))) + " - " + str(len(modelResults.filter(overUnderBetIsCorrect = False)))
-                
-                overUnderRecord = str(len(list(filter(lambda x: x.overUnderBetIsCorrect == True, modelResults)))) + " - " + str(len(list(filter(lambda x: x.overUnderBetIsCorrect == False, modelResults))))
-                #lineBetRecord = str(len(modelResults.filter(lineBetIsCorrect = True))) + " - " + str(len(modelResults.filter(lineBetIsCorrect = False)))
-                lineBetRecord = str(len(list(filter(lambda x: x.lineBetIsCorrect == True, modelResults)))) + " - " + str(len(list(filter(lambda x: x.lineBetIsCorrect == False, modelResults))))
+                overUnderRecord = str(len(list(filter(lambda x: x.overUnderBetIsCorrect == True, modelResults)))) + " - " + str(len(list(filter(lambda x: x.overUnderBetIsCorrect == False and x.overUnderBet != "N/A" and x.overUnderBet != "", modelResults))))
+                lineBetRecord = str(len(list(filter(lambda x: x.lineBetIsCorrect == True, modelResults)))) + " - " + str(len(list(filter(lambda x: x.lineBetIsCorrect == False and x.lineBet != "N/A" and x.lineBet != "", modelResults))))
                 
 
             if(reqTarget == 'showModel'):
