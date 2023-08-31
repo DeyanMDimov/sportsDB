@@ -31,6 +31,11 @@
                 Model:
                 <select name="model" id="model">
                     <option value="v1">V1.0 (Avg Yds/Yds per Pt)</option>
+                    <option value="v2"
+                    {% if selectedModel == "v2" %}
+                        selected
+                    {% endif %}
+                                        >V2.0 (Drives vs Drive Result)</option>
                 </select>
                 <br>
                 <button type="submit">Load!</button>
@@ -65,12 +70,20 @@
                         <td>Model Line</td>
                         <td>Book Line</td>
                         <td>Result Line</td>
+                        <td>Model O/U Bet</td>
+                        <td>Model Line Bet</td>
                     </thead>
                     <tbody>
                         {% for result in modelResults %}
                         <tr>
                             <td>{{ result.team1Name }}</td>
-                            <td>{{ result.team1CalculatedPoints }}</td>
+                            <td>{% if selectedModel == "v2" %}
+                                {{ result.expected_points_from_drives_t1 }}
+                                {% else %} 
+                                {{ result.team1CalculatedPoints }}
+                                {% endif %}
+
+                            </td>
                             <td>
                                 {% if result.gameCompleted %}
                                 {{ result.team1ActualPoints }}
@@ -78,7 +91,12 @@
                             </td>
                             <td>vs.</td>
                             <td>{{ result.team2Name }}</td>
-                            <td>{{ result.team2CalculatedPoints }}</td>
+                            <td>{% if selectedModel == "v2" %}
+                                {{ result.expected_points_from_drives_t2 }}
+                                {% else %} 
+                                {{ result.team2CalculatedPoints }}
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if result.gameCompleted %}
                                 {{ result.team2ActualPoints }}
@@ -106,8 +124,38 @@
                                     +{% endif %}{{result.actualSpread }}
                                 {% endif %}
                             </td>
+                            {% if result.gameCompleted %}
+                            <td class="modelSummaryLine 
+                                {% if result.overUnderBetIsCorrect %}
+                                    correctBet
+                                {% elif result.overUnderBet == 'N/A' %}
+                                    noBet
+                                {% else %}
+                                    wrongBet
+                                {% endif %}
+                                ">
+                                {{result.overUnderBet}}
+                            </td>
+                            <td class="modelSummaryLine
+                            {% if result.lineBetIsCorrect %}
+                                correctBet
+                            {% elif result.lineBet == 'N/A' %}
+                                noBet
+                            {% else %}
+                                wrongBet
+                            {% endif %}
+                                ">
+                                {{result.lineBet}}
+                            </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
+                        <tr>
+                            <td colspan="13">
+                            </td>
+                            <td>{{ouRecord}}</td>
+                            <td>{{lbRecord}}</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

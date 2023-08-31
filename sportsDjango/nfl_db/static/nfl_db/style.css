@@ -22,6 +22,14 @@
     width: 100px;
 }
 
+.correctBet { 
+  background-color: #beb;
+}
+
+.wrongBet { 
+  background-color: #ebb;
+}
+
 .pull_data_exception{
     border: solid 1px;
     margin: 20px 0;

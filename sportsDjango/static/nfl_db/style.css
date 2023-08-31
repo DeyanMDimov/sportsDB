@@ -22,6 +22,14 @@
     width: 100px;
 }
 
+.correctBet { 
+  background-color: #beb;
+}
+
+.wrongBet { 
+  background-color: #ebb;
+}
+
 .pull_data_exception{
     border: solid 1px;
     margin: 20px 0;
@@ -48,9 +56,7 @@
     display: block;
   }
   
-  /*
-   Styling
-  */
+
   body {
     font: 16px/1.5em "Overpass", "Open Sans", Helvetica, sans-serif;
     color: #333;
@@ -101,9 +107,7 @@
   }
   
   
-  /*
-   Demo purposes only
-  */
+
   *,
   *:before,
   *:after {
@@ -121,5 +125,5 @@
   }
 
   textarea{
-    resize:both;
+    resize: both;
   }

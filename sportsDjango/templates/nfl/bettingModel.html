@@ -27,7 +27,11 @@
                 Model:
                 <select name="model" id="model">
                     <option value="v1">V1.0 (Avg Yds/Yds per Pt)</option>
-                    <option value="v2">V2.0 (Drives vs Drive Result)</option>
+                    <option value="v2"
+                    {% if selectedModel == "v2" %}
+                        selected
+                    {% endif %}
+                                        >V2.0 (Drives vs Drive Result)</option>
                 </select>
                 <br>
                 <button type="submit">Load!</button>
@@ -111,6 +115,13 @@
                             <td style="width: 220px">Actual:  {{ result.actual_t1_RedZoneConv }} </td>
                             <td style="width: 220px"> {{ result.expected_t2_RedZoneConv}}</td>
                             <td> Actual: {{ result.actual_t2_RedZoneConv }} </td>
+                        </tr>
+                        <tr>
+                            <td> Expected Points Based on Drives </td>
+                            <td style="width: 220px"> {{ result.expected_points_from_drives_t1}}</td>
+                            <td style="width: 220px">Actual:  {{ result.team1ActualPoints }} </td>
+                            <td style="width: 220px"> {{ result.expected_points_from_drives_t2}}</td>
+                            <td> Actual: {{ result.team2ActualPoints }} </td>
                         </tr>
                         {% endif %}
                         

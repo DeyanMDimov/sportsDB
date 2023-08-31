@@ -627,6 +627,11 @@ class individualBettingModelResult:
 
     gameCompleted = False
 
+    overUnderBet = ""
+    overUnderBetIsCorrect = False
+
+    lineBet = ""
+    lineBetIsCorrect = False
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
@@ -780,6 +785,9 @@ class individualV2ModelResult:
     actual_t2_OffenseDrives = 0.0
     actual_t2_DrivesRedZone = 0.0
     actual_t2_RedZoneConv = 0.0
+
+    expected_points_from_drives_t1 = 0.0
+    expected_points_from_drives_t2 = 0.0
    
 
     calculatedSpread = 0.0
@@ -792,6 +800,11 @@ class individualV2ModelResult:
 
     gameCompleted = False
 
+    overUnderBet = ""
+    overUnderBetIsCorrect = False
+
+    lineBet = ""
+    lineBetIsCorrect = False
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
@@ -820,13 +833,19 @@ class individualV2ModelResult:
         self.calculatedTotal = self.team1CalculatedPoints + self.team2CalculatedPoints
 
     def calculateExpectedResult(self):
-        self.expected_t1_OffenseDrives = (self.avg_t1_OffenseDrives + self.avg_t2_OpponentDrives)/2
-        self.expected_t1_DrivesRedZone = (self.avg_t1_DrivesRedZone + self.avg_t2_OpponentDrivesRedZone)/2
-        self.expected_t1_RedZoneConv = (self.avg_t1_RedZoneConv + self.avg_t2_OpponentRedZoneConv)/2
+        self.expected_t1_OffenseDrives = round((self.avg_t1_OffenseDrives + self.avg_t2_OpponentDrives)/2, 2)
+        self.expected_t1_DrivesRedZone = round((self.avg_t1_DrivesRedZone + self.avg_t2_OpponentDrivesRedZone)/2, 2)
+        self.expected_t1_RedZoneConv = round((self.avg_t1_RedZoneConv + self.avg_t2_OpponentRedZoneConv)/2, 2)
 
-        self.expected_t2_OffenseDrives = (self.avg_t2_OffenseDrives + self.avg_t1_OpponentDrives)/2
-        self.expected_t2_DrivesRedZone = (self.avg_t2_DrivesRedZone + self.avg_t1_OpponentDrivesRedZone)/2
-        self.expected_t2_RedZoneConv = (self.avg_t2_RedZoneConv + self.avg_t1_OpponentRedZoneConv)/2
+        self.expected_t2_OffenseDrives = round((self.avg_t2_OffenseDrives + self.avg_t1_OpponentDrives)/2, 2)
+        self.expected_t2_DrivesRedZone = round((self.avg_t2_DrivesRedZone + self.avg_t1_OpponentDrivesRedZone)/2, 2)
+        self.expected_t2_RedZoneConv = round((self.avg_t2_RedZoneConv + self.avg_t1_OpponentRedZoneConv)/2, 2)
+
+        self.expected_points_from_drives_t1 = round((self.expected_t1_DrivesRedZone-self.expected_t1_RedZoneConv)*3 + self.expected_t1_RedZoneConv*7, 0)
+        self.expected_points_from_drives_t2 = round((self.expected_t2_DrivesRedZone-self.expected_t2_RedZoneConv)*3 + self.expected_t2_RedZoneConv*7, 0)
+
+        self.calculatedSpread = self.expected_points_from_drives_t2 - self.expected_points_from_drives_t1
+        self.calculatedTotal = self.expected_points_from_drives_t1 + self.expected_points_from_drives_t2
 
 
 def generateBettingModelV2(gameData, seasonWeek, seasonYear):
@@ -873,8 +892,6 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
 
         ht_redZoneDrivesConverted = ht_redZoneDrives.filter(driveResult = 1)
         homeTeamRedZoneConv.append(len(ht_redZoneDrivesConverted))
-        if homeTeamName == "NO":
-            print(len(ht_redZoneDrivesConverted))
 
         ht_opponentDrivesInGame = driveOfPlay.objects.filter(nflMatch = homeTeamPastMatch).exclude(teamOnOffense = homeTeamObject)
         homeTeamOpponentDriveCountArray.append(len(ht_opponentDrivesInGame))
@@ -944,8 +961,6 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
 
         at_redZoneDrivesConverted = at_redZoneDrives.filter(driveResult = 1)
         awayTeamRedZoneConv.append(len(at_redZoneDrivesConverted))
-        if awayTeamName == "NO":
-            print(len(at_redZoneDrivesConverted))
 
 
         at_opponentDrivesInGame = driveOfPlay.objects.filter(nflMatch = awayTeamPastMatch).exclude(teamOnOffense = awayTeamObject)
@@ -986,6 +1001,8 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
     modelResult.avg_t2_OpponentDrives = avg_at_OpponentDrives
     modelResult.avg_t2_OpponentDrivesRedZone = avg_at_OpponentDrivesRedZone
     modelResult.avg_t2_OpponentRedZoneConv = avg_at_OpponentRedZoneConv
+
+    
 
     modelResult.calculateExpectedResult()
 
