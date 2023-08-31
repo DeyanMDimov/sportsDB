@@ -628,10 +628,10 @@ class individualBettingModelResult:
     gameCompleted = False
 
     overUnderBet = ""
-    overUnderBetIsCorrect = False
+    overUnderBetIsCorrect = "None"
 
     lineBet = ""
-    lineBetIsCorrect = False
+    lineBetIsCorrect = "None"
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
