@@ -22,6 +22,10 @@
     width: 100px;
 }
 
+#year-summary td{
+  padding-left: 20px;
+}
+
 .correctBet { 
   background-color: #beb;
 }

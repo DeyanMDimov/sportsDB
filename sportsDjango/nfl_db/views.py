@@ -256,12 +256,12 @@ def getData(request):
 
                         try:
                             existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
-                            print()
-                            print("Team performance found for combination of data")
-                            print("matchEspnId = " + str(matchEspnId))
-                            print("homeTeamEspnId = " + str(homeTeamEspnId))
-                            print("matchData.espnId = " + str(matchData.espnId))
-                            print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
+                            # print()
+                            # print("Team performance found for combination of data")
+                            # print("matchEspnId = " + str(matchEspnId))
+                            # print("homeTeamEspnId = " + str(homeTeamEspnId))
+                            # print("matchData.espnId = " + str(matchData.espnId))
+                            # print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
                         
                         except Exception as e:
                             print()
@@ -485,104 +485,172 @@ def loadModel(request, target):
     if request.method == 'GET':
        
         if 'season' in request.GET and 'week' in request.GET:  
-            print("Hit generate model endpoint")
-            #inputReq = request.GET
+            
+            
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = inputReq['week'].strip()
             selectedModel = inputReq['model']
 
-            
-            url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
-            if(int(weekOfSeason) >= 19):
-                playoffWeekOfSeason = int(weekOfSeason) - 18
-                url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/3/weeks/'+str(playoffWeekOfSeason)+'/events')
-            
-            response = requests.get(url)
-            data = response.json()
-            gameLinks = data['items']
+            calculcatingCurrentSeason = businessLogic.checkIfCurrentSeason(yearOfSeason)
+
+            #weeksInSeason = 18 if int(yearOfSeason) >= 2021 else 17
+
             modelResults = []
-            for link in gameLinks:
-                
-                gameDataResponse = requests.get(link['$ref'])
-                gameData = gameDataResponse.json()
-                completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
+            if not calculcatingCurrentSeason:
+               
+                gamesInWeek = nflMatch.objects.filter(yearOfSeason = yearOfSeason).filter(weekOfSeason = int(weekOfSeason))
+                for match in gamesInWeek:
+                    if selectedModel == "v1":
+                        individualModelResult = businessLogic.generateBettingModelHistV1(match)
 
-                if selectedModel == "v1":
-                    individualModelResult = businessLogic.generateBettingModelV1(gameData, weekOfSeason, yearOfSeason)
-
-                    gameEspnId = gameData['id']
-                    match = nflMatch.objects.get(espnId = gameEspnId)
-
-                    if(completed):
-                        team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
-                        team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
-
-                        #print("Game ID: ", gameEspnId)
-                        if match.awayTeamPoints != None:     
-                            individualModelResult.team1ActualYards = match.homeTeamTotalYards
-                            individualModelResult.team2ActualYards = match.awayTeamTotalYards
-                            individualModelResult.team1ActualPoints = match.homeTeamPoints
-                            individualModelResult.team2ActualPoints = match.awayTeamPoints
-                            individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
-                            individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
-                            individualModelResult.gameCompleted = True
-                    
-                        if match.overUnderLine != 0 and match.overUnderLine != None:
-                            individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
-                    
-
-                elif(selectedModel == "v2"):
-                    individualModelResult = businessLogic.generateBettingModelV2(gameData, weekOfSeason, yearOfSeason)
-
-                    gameEspnId = gameData['id']
-                    match = nflMatch.objects.get(espnId = gameEspnId)
-                    
-
-                    if(completed):
-                        team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
-                        team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
-                        #team1_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.homeTeamEspnId)
-                        #team2_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.awayTeamEspnId)    
-                        team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team1)
-                        team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team2)
-
-                        if match.awayTeamPoints != None:     
-                            individualModelResult.team1ActualYards = match.homeTeamTotalYards
-                            individualModelResult.team1ActualPoints = match.homeTeamPoints
-                            individualModelResult.actual_t1_OffenseDrives = len(team1_drives)
-                            individualModelResult.actual_t1_DrivesRedZone = len(team1_drives.filter(reachedRedZone = True))
-                            individualModelResult.actual_t1_RedZoneConv = len(team1_drives.filter(driveResult = 1))
-                            
-                            
-                            individualModelResult.team2ActualYards = match.awayTeamTotalYards
-                            individualModelResult.team2ActualPoints = match.awayTeamPoints
-                            individualModelResult.actual_t2_OffenseDrives = len(team2_drives)
-                            individualModelResult.actual_t2_DrivesRedZone = len(team2_drives.filter(reachedRedZone = True))
-                            individualModelResult.actual_t2_RedZoneConv = len(team2_drives.filter(driveResult = 1))
-                            
-                            
-                            individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
-                            individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
-                            individualModelResult.gameCompleted = True
-
-                        if match.overUnderLine != 0 and match.overUnderLine != None:      
-                            individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
-                    
+                        gameEspnId = match.espnId
                         
+                        if(match.completed):
+                            team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
+                            team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+
+                            if match.completed:     
+                                individualModelResult.team1ActualYards = match.homeTeamTotalYards
+                                individualModelResult.team2ActualYards = match.awayTeamTotalYards
+                                individualModelResult.team1ActualPoints = match.homeTeamPoints
+                                individualModelResult.team2ActualPoints = match.awayTeamPoints
+                                individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+                                individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                                individualModelResult.gameCompleted = True
+                        
+                            if match.overUnderLine != 0 and match.overUnderLine != None:
+                                individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
+                        
+                        modelResults.append(individualModelResult)
                         
 
-                modelResults.append(individualModelResult)
+                    elif(selectedModel == "v2"):
+                        individualModelResult = businessLogic.generateBettingModelHistV2(match)
 
-                overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
-                overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelResults)))
-                overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', modelResults)))
-                overUnderRecord = str(overUnderCorrect) + " - " + str(overUnderWrong) + " - " + str(overUnderPush)
+                        gameEspnId = match.espnId
 
-                lineBetCorrect = len(list(filter(lambda x: x.lineBetIsCorrect == "True", modelResults)))
-                lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", modelResults)))
-                lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", modelResults)))
+                        if(match.completed):
+                            team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
+                            team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+                            #team1_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.homeTeamEspnId)
+                            #team2_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.awayTeamEspnId)    
+                            team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team1)
+                            team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team2)
 
-                lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
+                            if match.awayTeamPoints != None:     
+                                individualModelResult.team1ActualYards = match.homeTeamTotalYards
+                                individualModelResult.team1ActualPoints = match.homeTeamPoints
+                                individualModelResult.actual_t1_OffenseDrives = len(team1_drives)
+                                individualModelResult.actual_t1_DrivesRedZone = len(team1_drives.filter(reachedRedZone = True))
+                                individualModelResult.actual_t1_RedZoneConv = len(team1_drives.filter(driveResult = 1))
+                                
+                                individualModelResult.team2ActualYards = match.awayTeamTotalYards
+                                individualModelResult.team2ActualPoints = match.awayTeamPoints
+                                individualModelResult.actual_t2_OffenseDrives = len(team2_drives)
+                                individualModelResult.actual_t2_DrivesRedZone = len(team2_drives.filter(reachedRedZone = True))
+                                individualModelResult.actual_t2_RedZoneConv = len(team2_drives.filter(driveResult = 1))
+                                
+                                individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+                                individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                                individualModelResult.gameCompleted = True
+
+                            if match.overUnderLine != 0 and match.overUnderLine != None:      
+                                individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
+                        
+                        modelResults.append(individualModelResult)
+                else:
+
+                    url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
+                    if(int(weekOfSeason) >= 19):
+                        playoffWeekOfSeason = int(weekOfSeason) - 18
+                        url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/3/weeks/'+str(playoffWeekOfSeason)+'/events')
+                    
+                    response = requests.get(url)
+                    data = response.json()
+                    gameLinks = data['items']
+                    
+                    for link in gameLinks:
+                        
+                        gameDataResponse = requests.get(link['$ref'])
+                        gameData = gameDataResponse.json()
+                        completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
+
+                        if selectedModel == "v1":
+                            individualModelResult = businessLogic.generateBettingModelV1(gameData, weekOfSeason, yearOfSeason)
+
+                            gameEspnId = gameData['id']
+                            match = nflMatch.objects.get(espnId = gameEspnId)
+
+                            if(completed):
+                                team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
+                                team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+
+                                #print("Game ID: ", gameEspnId)
+                                if match.awayTeamPoints != None:     
+                                    individualModelResult.team1ActualYards = match.homeTeamTotalYards
+                                    individualModelResult.team2ActualYards = match.awayTeamTotalYards
+                                    individualModelResult.team1ActualPoints = match.homeTeamPoints
+                                    individualModelResult.team2ActualPoints = match.awayTeamPoints
+                                    individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+                                    individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                                    individualModelResult.gameCompleted = True
+                            
+                                if match.overUnderLine != 0 and match.overUnderLine != None:
+                                    individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
+                            
+
+                        elif(selectedModel == "v2"):
+                            individualModelResult = businessLogic.generateBettingModelV2(gameData, weekOfSeason, yearOfSeason)
+
+                            gameEspnId = gameData['id']
+                            match = nflMatch.objects.get(espnId = gameEspnId)
+                            
+
+                            if(completed):
+                                team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
+                                team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+                                #team1_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.homeTeamEspnId)
+                                #team2_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.awayTeamEspnId)    
+                                team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team1)
+                                team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team2)
+
+                                if match.awayTeamPoints != None:     
+                                    individualModelResult.team1ActualYards = match.homeTeamTotalYards
+                                    individualModelResult.team1ActualPoints = match.homeTeamPoints
+                                    individualModelResult.actual_t1_OffenseDrives = len(team1_drives)
+                                    individualModelResult.actual_t1_DrivesRedZone = len(team1_drives.filter(reachedRedZone = True))
+                                    individualModelResult.actual_t1_RedZoneConv = len(team1_drives.filter(driveResult = 1))
+                                    
+                                    
+                                    individualModelResult.team2ActualYards = match.awayTeamTotalYards
+                                    individualModelResult.team2ActualPoints = match.awayTeamPoints
+                                    individualModelResult.actual_t2_OffenseDrives = len(team2_drives)
+                                    individualModelResult.actual_t2_DrivesRedZone = len(team2_drives.filter(reachedRedZone = True))
+                                    individualModelResult.actual_t2_RedZoneConv = len(team2_drives.filter(driveResult = 1))
+                                    
+                                    
+                                    individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+                                    individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+                                    individualModelResult.gameCompleted = True
+
+                                if match.overUnderLine != 0 and match.overUnderLine != None:      
+                                    individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
+                            
+                                
+                                
+
+                        #modelResults.append(individualModelResult)
+
+                    overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
+                    overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelResults)))
+                    overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', modelResults)))
+                    overUnderRecord = str(overUnderCorrect) + " - " + str(overUnderWrong) + " - " + str(overUnderPush)
+
+                    lineBetCorrect = len(list(filter(lambda x: x.lineBetIsCorrect == "True", modelResults)))
+                    lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", modelResults)))
+                    lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", modelResults)))
+
+                    lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
                 
 
             if(reqTarget == 'showModel'):
@@ -809,14 +877,11 @@ def loadModelYear(request):
 
                     seasonResults.append([wk, overUnderRecord, lineBetRecord, modelWeekResults])
 
-            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel, 'seasonResults':seasonResults, 'ouWins': totalOverUnderWins, 'ouLosses': totalOverUnderLosses, 'lbWins': totalLineBetWins, 'lbLosses': totalLineBetLosses, })
+            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel, 'seasonResults':seasonResults, 'ouWins': totalOverUnderWins, 'ouLosses': totalOverUnderLosses, 'lbWins': totalLineBetWins, 'lbLosses': totalLineBetLosses, 'yearOfSeason':yearOfSeason})
         else: 
             return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage})
     else:
         return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage})
-
-
-
 
 def fullTeamStats(request):
 
@@ -845,13 +910,11 @@ def fullTeamStats(request):
 
             listOfPerformances = []
 
-            print (str(len(allTeamGames)))
+            # print (str(len(allTeamGames)))
             
             for game in allTeamGames:
                 try:
                     performance = teamMatchPerformance.objects.get(matchEspnId = game.espnId, teamEspnId = selectedTeamEspnId)
-                    print()
-                    print("Week of Season:" + str(game.weekOfSeason))
                     
                     
                     listOfPerformances.append(performance)
@@ -873,7 +936,10 @@ def fullTeamStats(request):
             return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage})
     else:
         return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage})
-    
+
+def viewIndividualStat(request):
+    pass
+
 def testPage(request):
     inputReq = request.GET
 

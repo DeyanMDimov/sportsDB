@@ -8,5 +8,6 @@ urlpatterns = [
     path('loadModel/', views.loadModel, {'target': 'showModel'}, name="showModel"),
     path('loadModelSummary/', views.loadModel, {'target': 'showSummary'}, name="modelSummary"),
     path('fullTeamStats/', views.fullTeamStats, name="fullTeamStats"),
-    path('loadYearlySummary/', views.loadModelYear, name="loadModelYear")
+    path('loadYearlySummary/', views.loadModelYear, name="loadModelYear"),
+    path('individualStat/', views.viewIndividualStat, name="individualStat")
 ]

@@ -1,0 +1,75 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% load templateFilters%}
+{% block individualStat %}
+    <div class = "container">
+        
+        <div>
+            Get Detailed Stats for :
+            <form method="GET">
+                <select name="season" id="season">
+                    {% for yr in years %}
+                    <option value="{{yr}}" 
+                        {%if yr|stringformat:"i" == season %}
+                            selected
+                        {% endif %} >{{yr}}</option>
+                    {% endfor %}
+                   
+                </select> 
+                 
+                <select name="statSelected" id="stat">
+                   
+                {% for stat in availableStats %}
+                    <option value="{{ team.abbreviation }}"> {{ team.abbreviation }}</option>
+                {% endfor %}
+                </select>
+                <br>
+                <button type="submit">Load!</button>
+            </form>
+        </div>
+        
+        {% if teamPerf %}
+        <div>
+            <h3> 
+                {{ teamName }} in {{ season }}
+            </h3>
+            <table class="table table-bordered">
+                <tbody>
+                    <tr>
+                        <td> {{perf.nflMatch.datePlayed}} </td>
+                    </tr>
+                    <tr> 
+                        <td>Opponent</td>
+                        {% for perf in teamPerf %}
+                            {% for opp in perf.opponent.all %}
+                                <td> {{opp.abbreviation}} </td>
+                            {% endfor %}
+                        {% endfor %}
+                    </tr>
+                    <tr> 
+                        <td>Date Played</td>
+                        {% for perf in teamPerf %}
+                            {% for match in perf.nflMatch.all %}
+                                <td> {{match.datePlayed|date:"M d Y"}} </td>
+                            {% endfor %}
+                        {% endfor %}
+                    </tr>
+                    {% for fName in fieldNames%}
+                    <tr>
+                        <td>{{fName}}</td>
+                        {% for perf in teamPerf %}
+                        <td> 
+                            {{ perf|get_obj_attr:fName }}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        
+        {% endif %}
+
+    </div>
+{% endblock %}

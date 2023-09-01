@@ -6,7 +6,7 @@
     padding-inline-start: 0px;
 }
 
-#modelSummary tr td{
+#modelSummary tr td, #year-summary tr td{
     text-align: center;
 }
 
@@ -14,7 +14,7 @@
     font-size:16px;
 }
 
-#modelSummary thead td{
+#modelSummary thead td, #year-summary thead td{
     padding: 0 5px;
 }
 
