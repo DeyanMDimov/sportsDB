@@ -26,6 +26,19 @@
   padding-left: 20px;
 }
 
+.modelSummaryContainer{
+  padding: 0px !important
+}
+
+#year_modelSummary{
+  font-size:14px;
+}
+
+#year_modelSummary thead td{
+  padding: 0px;
+  text-align:center;
+}
+
 .correctBet { 
   background-color: #beb;
 }

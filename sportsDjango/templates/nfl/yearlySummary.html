@@ -53,18 +53,126 @@
                 </thead>
                 <tbody>
             {% for wk in seasonResults%}
-                <tr>
-                    <td style="width:200px">
-                        Week {{wk.0}}
+                <tr id="accordion-{{wk.0}}">
+                    <td style="width:260px">
+                        <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{wk.0}}" aria-expanded="true" aria-controls="collapse{{wk.0}}">
+                            Week {{wk.0}}
+                          </button>
                     </td>
-                    <td style="width:400px">
+                    <td style="width:460px">
                         {{wk.1}}
                     </td>
-                    <td style="width:400px">
+                    <td style="width:460px">
                         {{wk.2}}
                     </td>
                 </tr>
-
+                <tr id="collapse{{wk.0}}" class="collapse" aria-labelledby="accordion-{{wk.0}}" data-parent="#accordion-{{wk.0}}">
+                    <td colspan="3" class="modelSummaryContainer">
+                        <table class="table-bordered" id="year_modelSummary">
+                            <thead>
+                                <td>Home Team</td>
+                                <td>Model Score</td>
+                                <td>Actual Score</td>
+                                <td style="padding: 0 25px;"></td>
+                                <td>Away Team</td>
+                                <td>Model Score</td>
+                                <td>Actual Score</td>
+                                <td>Sheet O/U</td>
+                                <td>Book O/U</td>
+                                <td>Actual Total</td>
+                                <td>Model Line</td>
+                                <td>Book Line</td>
+                                <td>Result Line</td>
+                                <td>Model O/U Bet</td>
+                                <td>Model Line Bet</td>
+                            </thead>
+                            <tbody>
+                                {% for result in wk.3 %}
+                                <tr>
+                                    <td>{{ result.team1Name }}</td>
+                                    <td>{% if selectedModel == "v2" %}
+                                        {{ result.expected_points_from_drives_t1 }}
+                                        {% else %} 
+                                        {{ result.team1CalculatedPoints }}
+                                        {% endif %}
+        
+                                    </td>
+                                    <td>
+                                        {% if result.gameCompleted %}
+                                        {{ result.team1ActualPoints }}
+                                        {% endif %}
+                                    </td>
+                                    <td>vs.</td>
+                                    <td>{{ result.team2Name }}</td>
+                                    <td>{% if selectedModel == "v2" %}
+                                        {{ result.expected_points_from_drives_t2 }}
+                                        {% else %} 
+                                        {{ result.team2CalculatedPoints }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if result.gameCompleted %}
+                                        {{ result.team2ActualPoints }}
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ result.calculatedTotal }}</td>
+                                    <td>{{ result.bookProvidedTotal }}</td>
+                                    <td>
+                                        {% if result.gameCompleted %}
+                                        {{ result.actualTotal }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="modelSummaryLine">
+                                        {{ result.team1Name }} 
+                                            {% if result.calculatedSpread > 0 %}
+                                            +{% endif %}{{ result.calculatedSpread }}</td>
+                                    <td class="modelSummaryLine">
+                                        {{ result.team1Name }} 
+                                            {% if result.bookProvidedSpread > 0 %}
+                                            +{% endif %}{{ result.bookProvidedSpread }}</td>
+                                    <td class="modelSummaryLine">
+                                        {% if result.gameCompleted%}
+                                        {{ result.team1Name }} 
+                                            {% if result.actualSpread > 0 %}
+                                            +{% endif %}{{result.actualSpread }}
+                                        {% endif %}
+                                    </td>
+                                    {% if result.gameCompleted %}
+                                    <td class="modelSummaryLine 
+                                        {% if result.overUnderBetIsCorrect == 'True' %}
+                                            correctBet
+                                        {% elif result.overUnderBetIsCorrect == 'None' or result.overUnderBetIsCorrect == 'Push' %}
+                                            noBet
+                                        {% else %}
+                                            wrongBet
+                                        {% endif %}
+                                        ">
+                                        {{result.overUnderBet}}
+                                    </td>
+                                    <td class="modelSummaryLine
+                                    {% if result.lineBetIsCorrect == 'True'%}
+                                        correctBet
+                                    {% elif result.lineBetIsCorrect == 'None' or result.lineBetIsCorrect == 'Push'%}
+                                        noBet
+                                    {% else %}
+                                        wrongBet
+                                    {% endif %}
+                                        ">
+                                        {{result.lineBet}}
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                                <tr>
+                                    <td colspan="13">
+                                    </td>
+                                    <td>{{ouRecord}}</td>
+                                    <td>{{lbRecord}}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
 
 
 
