@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.core import serializers
 import json
-from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure
 from django.db import models
 from nfl_db import businessLogic, crudLogic
 import datetime, time, requests, traceback
@@ -27,7 +27,7 @@ def getData(request):
 
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
-            print("Hit game stats endpoint")
+            #print("Hit game stats endpoint")
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = inputReq['week'].strip()
@@ -465,6 +465,49 @@ def getData(request):
             return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage})
     else: 
         return HttpResponse('unsuccessful')
+
+def getPlayers(request):
+    nflTeams = nflTeam.objects.all().order_by('abbreviation')
+
+    yearsOnPage = []
+    for y in range(2023, 2022, -1):
+        yearsOnPage.append(y)
+
+    if(request.method == 'GET'):
+        if 'teamName' in request.GET and 'season' in request.GET:
+                inputReq = request.GET
+                yearOfSeason = inputReq['season'].strip()
+                selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
+                teamId = selectedTeam.espnId
+                
+                if yearOfSeason == '2023':
+                    url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
+                    response = requests.get(url)
+                    responseData = response.json()
+                    rosterData = responseData['athletes']
+
+                    for subsection in rosterData:
+                        crudLogic.createPlayerAthletes(subsection, teamId)
+                        #crudLogic.createPlayerAthlete(subsection, teamId)
+
+
+                    playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
+
+                    playerTenuresLoaded = []
+                    for pl in playersLoaded:
+                        individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
+                        for ipt in individualPlayerTenures:
+                            playerTenuresLoaded.append(ipt)
+                    
+                    # print(playerTenuresLoaded)
+
+                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'selTeam': selectedTeam, 'players': playersLoaded, 'season': inputReq['season'], 'tenures': playerTenuresLoaded})
+
+        else:
+            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage})
+    else:
+        return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage})
+
 
 
 def loadModel(request, target):

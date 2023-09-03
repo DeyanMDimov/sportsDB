@@ -1,0 +1,91 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% load templateFilters%}
+{% block players %}
+    <div class = "container">
+        
+        <div>
+            Pull Players for :
+            <form method="GET">
+                <select name="season" id="season">
+                    {% for yr in years %}
+                    <option value="{{yr}}" 
+                    {%if yr|stringformat:"i" == season %}
+                            selected
+                        {% endif %} >{{yr}}</option>    
+                    {% endfor %} 
+                </select> 
+                 
+                <select name="teamName" id="teamName">
+                {% for team in teams %}
+                    <option value="{{ team.abbreviation }}"
+                    {%if selTeam.abbreviation == team.abbreviation %}
+                        selected
+                    {% endif %}
+                    > {{ team.abbreviation }}</option>
+                {% endfor %}
+                </select>
+                <br>
+                <button type="submit">Load!</button>
+            </form>
+        </div>
+        
+        {% if players %}
+        <div>
+            <h3> 
+                Roster for {{ selTeam.teamName }} in {{ season }}
+            </h3>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <td style="width:320px">Name</td>
+                        <td>Position</td>
+                        <td>Weight</td>
+                        <td>Height</td>
+                        <td>Rookie Year</td>
+                        <td>Espn ID</td>
+                <tbody>
+                    {% for player in players%}
+                    <tr>
+                        <td id="accordion-{{player.espnId}}">
+                            <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{player.espnId}}" aria-expanded="true" aria-controls="collapse{{player.espnId}}">
+                                {{player.name}}
+                            </button>
+                        </td>
+                        <td>{{player.get_playerPosition_display}}</td>
+                        <td>{{player.playerWeightPounds}} pounds</td>
+                        <td>{{player.playerHeightInches}} inches</td>
+                        <td>{{player.firstSeason}}</td>
+                        <td>{{player.espnId}}</td>
+                    </tr>
+                    <tr id="collapse{{player.espnId}}" class="collapse" aria-labelledby="accordion-{{player.espnId}}" data-parent="#accordion-{{player.espnId}}">
+                        <td colspan="3" class="modelSummaryContainer">
+                            Tenures for player {{player.espnId}}
+                            <table class="table-bordered" id="player_tenure">
+                                <thead>
+                                    <td>Team</td>
+                                    <td>Start Date</td>
+                                    <td>End Date</td>
+                                </thead>
+                                <tbody>
+                                    {% for tnr in tenures %}
+                                        {% if tnr.player == player%}
+                                        <tr>
+                                            <td>{{tnr.team.fullName}}</td>
+                                            <td>{{tnr.startDate|date:"m/d/Y"}}</td>
+                                            <td>{{tnr.endDate|date:"m/d/Y"}}</td>
+                                        </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        
+        {% endif %}
+
+    </div>
+{% endblock %}

@@ -1,7 +1,8 @@
 from nfl_db import models
-from nfl_db.models import nflMatch, teamMatchPerformance, nflTeam, driveOfPlay, playByPlay
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
 from django.db import IntegrityError
-import json, traceback
+from datetime import datetime
+import json, requests, traceback
 
 # nflTeam, 
 # nflMatch, 
@@ -1157,7 +1158,7 @@ def captureStatsFromDrives(drivesData, matchEspnId, teamId, opponentId, teamPerf
     drivePinnedInsideTen        = 0
     drivePinnedInsideFive       = 0
 
-    listOfOffensiveDrives = driveOfPlay.objects.filter(nflMatch__espnId =matchEspnId).filter(teamOnOffense__espnId = teamId)
+    listOfOffensiveDrives = driveOfPlay.objects.filter(nflMatch__espnId = matchEspnId).filter(teamOnOffense__espnId = teamId)
 
     for individualDrive in listOfOffensiveDrives:
         if individualDrive.reachedRedZone:
@@ -1169,7 +1170,7 @@ def captureStatsFromDrives(drivesData, matchEspnId, teamId, opponentId, teamPerf
             if individualDrive.startOfDriveYardLine <=5:
                 drivePinnedInsideFive += 1
     
-    listOfDefensiveDrives = driveOfPlay.objects.filter(nflMatch__espnId =matchEspnId).filter(teamOnOffense__espnId = opponentId)
+    listOfDefensiveDrives = driveOfPlay.objects.filter(nflMatch__espnId = matchEspnId).filter(teamOnOffense__espnId = opponentId)
     
     for individualDrive in listOfDefensiveDrives:
         if individualDrive.startOfDriveYardLine <=10:
@@ -1428,55 +1429,6 @@ def checkTeamFromRefUrl(refUrl):
         teamEspnId = teamEspnId[1]
     
     return teamEspnId
-    
-
-
-# def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSeason, seasonYear):
-#     if nflMatchObject == None:
-#         matchData = nflMatch.objects.create(
-#                         espnId = gameData['id'],
-#                         datePlayed = gameData['date'],
-#                         #homeTeam = nflTeam.objects.get(espnId=gameData['competitions'][0]['competitors'][0]['id']),
-#                         homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id'],
-#                         #awayTeam = nflTeam.objects.get(espnId=gameData['competitions'][0]['competitors'][1]['id']),
-#                         awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id'],
-#                         completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full"),
-#                         weekOfSeason = weekOfSeason,
-#                         yearOfSeason = seasonYear,
-#                         neutralStadium = gameData['competitions'][0]['neutralSite'],
-#                         playoffs= False,
-#                         indoorStadium = gameData['competitions'][0]['venue']['indoor'],
-                        
-#                     )
-#         homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
-#         awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
-#         matchData.homeTeam.add(models.nflTeam.objects.get(espnId=homeTeamEspnId))
-#         matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
-        
-#         if len(oddsData['items']) > 2:
-#             try:
-#                 matchData.overUnderLine= oddsData['items'][0]['overUnder']
-#                 matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
-#                 matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
-#                 matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
-#             except: 
-#                 pass
-        
-#         matchData.save()    
-#     else:
-#         matchData = nflMatchObject
-#         if len(oddsData['items']) > 2:
-#             try:
-#                 matchData.overUnderLine= oddsData['items'][0]['overUnder']
-#                 matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
-#                 matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
-#                 matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
-#             except Exception as e:
-#                 print(e)
-
-#             matchData.save()   
-
-#     return matchData
 
 def createTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, drivesData, seasonWeek, seasonYear):
     
@@ -1593,8 +1545,6 @@ def createTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId,
 
     captureStatsFromPlayByPlay(playByPlayData, drivesData, teamId, opponentId, teamPerf)
 
-
-
 def getExplosivePlays(playByPlayData, teamId):
 
     teamExplosivePlays = 0
@@ -1616,7 +1566,206 @@ def getExplosivePlays(playByPlayData, teamId):
     
     return teamExplosivePlays
 
+def createPlayerAthletes(rosterData, teamId):
+    print(str(teamId))
+    for athlete in rosterData['items']:
+        playerObj = None
+        try:
+            playerObj = player.objects.get(espnId = athlete['id'])
+        except:
+            pass
+        if playerObj == None:
+            playerObj = player.objects.create(
+                    espnId = athlete['id'],
+                    name = athlete['displayName'],
+                    firstSeason = getFirstSeasonYear(athlete['experience']['years']),
+                    team = nflTeam.objects.get(espnId = teamId),
+                    playerHeightInches = athlete['height'],
+                    playerWeightPounds = athlete['weight'],
+                    playerPosition = getAthletePosition(athlete['position']['abbreviation']),
+                    sideOfBall = getAthleteSideOfBall(athlete['position']['parent']['name'])
+                )
+            if athlete['experience']['years'] == 0:
+                playerTeamTenure.objects.create(
+                    player = playerObj,
+                    team = nflTeam.objects.get(espnId = teamId),
+                    startDate = datetime(2023, 9, 8)
+                )
+                print("Player tenure created for ROOKIE.")
+            print("Successfully loaded player " + str(playerObj.espnId))
+        else:
+            print("Player " + str(playerObj.espnId) + " already in system.")
+            playerObj.firstSeason = getFirstSeasonYear(athlete['experience']['years'])
+            playerObj.save()
+            
+            playerTenures = playerTeamTenure.objects.filter(player = playerObj)
+            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2023, playerTenures))
+            if athlete['experience']['years'] == 0:    
+                if len(list(currentSeasonTenures)) == 0:
+                    playerTeamTenure.objects.create(
+                        player = playerObj,
+                        team = nflTeam.objects.get(espnId = teamId),
+                        startDate = datetime(2023, 9, 8)
+                    )
+                    print()
+                    print("Player tenure created for rookie.")
+                    print()
+            else:
+               getPlayerTenures(playerObj)
+               
 
+def getPlayerTenures(playerObj):
+    yearToStart = playerObj.firstSeason
+    playerTenures = playerTeamTenure.objects.filter(player = playerObj)
+    latestPlayerTenure = None
+    playerName = playerObj.name
+    print()
+    print("Getting Tenures for " + playerObj.name)
+    print()
+    
+    if len(playerTenures) == 0:
+        try:
+            for yr in range(yearToStart, 2023):
+                seasonGameLogUrl = "http://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/"+str(playerObj.espnId)+"/gamelog?season="+str(yr)
+                response = requests.get(seasonGameLogUrl)
+                responseData = response.json()
 
+                if 'events' in responseData:
+                    gamesInSeason = responseData['events']
 
+                    gamesData = list(gamesInSeason.values())
 
+                    gamesAndDates = []
+                    for g in gamesData:
+                        dateOfGame = datetime.fromisoformat(g['gameDate'][0:10]).astimezone(datetime.now().tzinfo)
+                        gamesAndDates.append([dateOfGame, g])
+                    
+                    sortedGames = sorted(gamesAndDates, key=lambda x: x[0])            
+                    
+                    for i in range(0, len(sortedGames)):
+                        
+                        game = sortedGames[i][1]
+                        teamId = game['team']['id']
+                        if yr == yearToStart and i == 0:
+                            print("Processing first game of first tenure. Season: " + str(yr))
+                            if len(playerTenures) == 0:
+                                tenureStartDate = sortedGames[i][0]
+                                try:
+                                    playerTeamTenure.objects.create(
+                                        player = playerObj,
+                                        team = nflTeam.objects.get(espnId = teamId),
+                                        startDate = tenureStartDate,
+                                        endDate = tenureStartDate
+                                    )
+                                except Exception as e:
+                                    print("Exception: cannot find team for teamId: " + str(teamId) + " in year: " + str(yr))
+                                    raise Exception(e)
+                                
+                                latestPlayerTenure = playerTeamTenure.objects.get(player = playerObj)
+                            else:
+                                print()
+                                print("OOPSIE")
+                                print("Some tenure already exists.")
+                                print()
+                                print()
+                        else:
+                            #print("Processing game " + str(game['week']) + " of " + str(yr))
+                            if int(teamId) != latestPlayerTenure.team.espnId:
+                                if('eventNote' not in game):
+                                    try:
+                                        playerTeamTenure.objects.create(
+                                            player = playerObj,
+                                            team = nflTeam.objects.get(espnId = teamId),
+                                            startDate = sortedGames[i][0],
+                                            endDate = sortedGames[i][0]
+                                        )
+                                    except Exception as e:
+                                        print("Exception: cannot find team for teamId: " + str(teamId) + " in year: " + str(yr))
+                                        allTeams = nflTeam.objects.all().order_by('espnId')
+                                        for tm in allTeams:
+                                            print(tm.fullName + " - ID: " + str(tm.espnId))
+                                        raise Exception(e)
+                                
+                                    playerTenures = playerTeamTenure.objects.filter(player = playerObj).filter(team__espnId = teamId)
+                                    numberOfTenures = len(playerTenures)
+                                    latestPlayerTenure = playerTenures[numberOfTenures-1]
+                            else:
+                                latestPlayerTenure.endDate = sortedGames[i][0]
+                                latestPlayerTenure.save()
+                else:
+                    pass
+        except Exception as e :
+            print("Player - " + playerObj.name + " could not be loaded.")
+            print(e)
+    else: 
+        playerTenures.delete()
+        print()
+        print("DELETING PLAYER TENURES AND DOING IT AGAIN")
+        print()
+        getPlayerTenures(playerObj)
+
+def getAthletePosition(abbreviation):
+    if abbreviation == "QB":
+        return 1
+    elif abbreviation == "WR":
+        return 2
+    elif abbreviation == "TE":
+        return 3
+    elif abbreviation == "RB":
+        return 4
+    elif abbreviation == "FB":
+        return 5
+    elif abbreviation == "OT" or abbreviation == "C" or abbreviation == "G":
+        return 6
+    elif abbreviation == "DE" or abbreviation == "DT" :
+        return 7
+    elif abbreviation == "LB":
+        return 8
+    elif abbreviation == "CB":
+        return 9
+    elif abbreviation == "S":
+        return 10
+    elif abbreviation == "PK":
+        return 11
+    elif abbreviation == "P":
+        return 12
+    else:
+        return 13
+    
+def getAthleteSideOfBall(position):
+    if position == "Offense":
+        return 1
+    elif position == "Defense":
+        return 2
+    elif position == "Special Teams":
+        return 3
+    else:
+        return 4
+
+    # playerPositions = (
+                #     (1, "QB"),
+                #     (2, "WR"),
+                #     (3, "TE"),
+                #     (4, "RB"),
+                #     (5, "FB"),
+                #     (6, "O-Line"),
+                #     (7, "D-Line"),
+                #     (8, "LB"),
+                #     (9, "CB"),
+                #     (10, "S"),
+                #     (11, "K"),
+                #     (12, "P"),
+                #     (13, "Other")
+                # )
+
+def getFirstSeasonYear(yearsOfExperience):
+    numYears = int(yearsOfExperience)
+    currentYear = datetime.now().year
+
+    firstSeasonYear = 0
+
+    if numYears == 0:
+        firstSeasonYear = currentYear
+    else:
+        firstSeasonYear = currentYear-numYears+1
+    return firstSeasonYear

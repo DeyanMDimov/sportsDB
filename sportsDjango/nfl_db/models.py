@@ -12,9 +12,7 @@ class nflTeam(models.Model):
     abbreviation = models.CharField(max_length = 3, default = "-")
     startYear = models.SmallIntegerField(validators = [MinValueValidator(2002)], default = 2002)
     endYear = models.SmallIntegerField(null = True, blank = True)
-    espnId = models.SmallIntegerField(validators = [MinValueValidator(1), MaxValueValidator(34)], default = 1)
-
-    
+    espnId = models.SmallIntegerField(validators = [MinValueValidator(1), MaxValueValidator(34)], default = 1) 
 
 class nflMatch(models.Model):
     espnId                              = models.IntegerField(unique = True)
@@ -208,30 +206,6 @@ class teamMatchPerformance(models.Model):
             models.UniqueConstraint(fields=['matchEspnId', 'teamEspnId'], name="UniqueTeamsPerMatch")
         ]
 
-# class player(models.Model):
-#     name = models.CharField(max_length = 60, default = "-")
-#     firstSeason = models.SmallIntegerField(default = "2000")
-#     lastSeason = models.SmallIntegerField(null = True, blank = True)
-#     team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
-#     playerEspnId = models.BigIntegerField(default = 0)
-#     playerHeightInches = models.SmallIntegerField(default = 60)
-#     playerWeightPounds = models.SmallIntegerField(default = 100)
-#     playerPositions = (
-#         (1, "QB"),
-#         (2, "WR"),
-#         (3, "TE"),
-#         (4, "RB"),
-#         (5, "FB"),
-#         (6, "O-Line"),
-#         (7, "D-Line"),
-#         (8, "LB"),
-#         (9, "CB"),
-#         (10, "S"),
-#         (11, "K"),
-#         (12, "P")
-#     )
-#     playerPosition = models.SmallIntegerField(choices = playerPositions, default = 1)
-
 class driveOfPlay(models.Model):
     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
     teamOnOffense = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
@@ -267,10 +241,6 @@ class driveOfPlay(models.Model):
     numberOffensivePlays = models.SmallIntegerField(null = True, blank = True)
     timeElapsedInSeconds = models.SmallIntegerField(null = True, blank = True)
     reachedRedZone = models.BooleanField()
-
-    
-
-
 
 class playByPlay(models.Model):
     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
@@ -326,49 +296,104 @@ class playByPlay(models.Model):
     scoringPlay = models.BooleanField()
     offenseScored = models.BooleanField(null = True, blank = True)
     pointsScored = models.SmallIntegerField(null = True, blank = True)
-    
+
+class player(models.Model):
+    espnId = models.IntegerField(unique = True)
+    name = models.CharField(max_length = 60, default = "-")
+    firstSeason = models.SmallIntegerField(default = "2000")
+    lastSeason = models.SmallIntegerField(null = True, blank = True)
+    team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
+    playerHeightInches = models.SmallIntegerField(default = 60)
+    playerWeightPounds = models.SmallIntegerField(default = 100)
+    playerPositions = (
+        (1, "QB"),
+        (2, "WR"),
+        (3, "TE"),
+        (4, "RB"),
+        (5, "FB"),
+        (6, "O-Line"),
+        (7, "D-Line"),
+        (8, "LB"),
+        (9, "CB"),
+        (10, "S"),
+        (11, "K"),
+        (12, "P"),
+        (13, "Other")
+    )
+    playerPosition = models.SmallIntegerField(choices = playerPositions, default = 13)
+    starPlayer = models.BooleanField(default = False)
+    currentlyHavingBigImpact = models.BooleanField(default = False)
+    isStarter = models.BooleanField(default = False)
+    positionCategories = (
+        (1, "Offense"),
+        (2, "Defense"),
+        (3, "Special Teams"),
+        (4, "Undefined")
+    )
+    sideOfBall = models.SmallIntegerField(choices = positionCategories, default = 4)
+
+
+class playerTeamTenure(models.Model):
+    player = models.ForeignKey(player, on_delete = models.CASCADE)
+    team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
+    startDate = models.DateTimeField(null = True, blank = True)
+    endDate = models.DateTimeField(null = True, blank = True)
+
+class playerMatchPerformance(models.Model):
+    nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE, null = True, blank = True)
+    team = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+    player = models.ForeignKey(player, on_delete=models.CASCADE, null = True, blank = True)
+    playerPositions = (
+        (1, "QB"),
+        (2, "WR"),
+        (3, "TE"),
+        (4, "RB"),
+        (5, "FB"),
+        (6, "O-Line"),
+        (7, "D-Line"),
+        (8, "LB"),
+        (9, "CB"),
+        (10, "S")
+    )
+    position = models.SmallIntegerField(choices = playerPositions, default = 1)
+
+    class Meta:
+        abstract = True
+
+class playerMatchOffense(playerMatchPerformance, models.Model):
+    rushingYards = models.SmallIntegerField()
+    receivingYards = models.SmallIntegerField()
+    passingYards = models.SmallIntegerField()
+    rushingTDScored = models.PositiveSmallIntegerField()
+    receivingTDScored = models.PositiveSmallIntegerField()
+    passingTDScored = models.PositiveSmallIntegerField()
+
+class playerMatchDefense(playerMatchPerformance, models.Model):
+    tackles = models.SmallIntegerField()
+    tacklesForALoss = models.SmallIntegerField()
+    sacks = models.SmallIntegerField()
+    forcedFumbles = models.SmallIntegerField()
+    recoveredFumbles = models.SmallIntegerField()
+    interceptions = models.SmallIntegerField()
+
+class playerWeekStatus(models.Model):
+    player = models.ForeignKey(player, on_delete = models.CASCADE)
+    team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
+    weekOfSeason = models.SmallIntegerField(validators = [MinValueValidator(-4), MaxValueValidator(22)])
+    yearOfSeason = models.SmallIntegerField(validators = [MinValueValidator(2002)])
+    reportDate = models.DateField()
+    playerStatuses = (
+        (1, "Available"),
+        (2, "Questionable"),
+        (3, "Doubtful"),
+        (4, "Out"),
+        (5, "Out For Season"),
+        (6, "IR")
+    )
+    playerStatus = models.SmallIntegerField(choices = playerStatuses, default = 1)
 
 
 
-# class playerMatchOffense(models.Model):
-#     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
-#     team = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
-#     player = models.ManyToManyField(player, blank = True)
-#     playerPositions = (
-#         (1, "QB"),
-#         (2, "WR"),
-#         (3, "TE"),
-#         (4, "RB"),
-#         (5, "FB"),
-#         (6, "O-Line"),
-#         (7, "D-Line"),
-#         (8, "LB"),
-#         (9, "CB"),
-#         (10, "S")
-#     )
-#     position = models.SmallIntegerField(choices = playerPositions, default = 1)
-#     rushingYards = models.SmallIntegerField()
-#     receivingYards = models.SmallIntegerField()
-#     passingYards = models.SmallIntegerField()
-#     rushingTDScored = models.PositiveSmallIntegerField()
-#     receivingTDScored = models.PositiveSmallIntegerField()
-#     passingTDScored = models.PositiveSmallIntegerField()
-
-# class playerWeekStatus(models.Model):
-#     player = models.ForeignKey(player, on_delete = models.CASCADE)
-#     team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
-#     weekOfSeason = models.SmallIntegerField(validators = [MinValueValidator(-4), MaxValueValidator(22)])
-#     yearOfSeason = models.SmallIntegerField(validators = [MinValueValidator(2002)])
-#     reportDate = models.DateField()
-#     playerStatuses = (
-#         (1, "Available"),
-#         (2, "Questionable"),
-#         (3, "Doubtful"),
-#         (4, "Out"),
-#         (5, "Out For Season"),
-#         (6, "IR")
-#     )
-#     playerStatus = models.SmallIntegerField(choices = playerStatuses, default = 1)
 
 
 

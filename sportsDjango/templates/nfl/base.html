@@ -20,6 +20,7 @@
                     <li id="menu-item-weekly-summary" class="menu-item "><a href="/loadModelSummary" class="btn btn-link btn-outline-dark" role="button">Weekly Summary</a></li>
                     <li id="menu-item-yearly-summary" class="menu-item "><a href="/loadYearlySummary" class="btn btn-link btn-outline-dark" role="button">Yearly Summary</a></li>
                     <li id="all-team-stats" class="menu-item "><a href="/fullTeamStats" class="btn btn-link btn-outline-dark" role="button">Team Stats</a></li>
+                    <li id="player-page" class="menu-item "><a href="/players" class="btn btn-link btn-outline-dark" role="button">Players</a></li>
                     {% comment %} <li id="individual-stat" class="menu-item "><a href="/individualStat" class="btn btn-link btn-outline-dark" role="button">Individual Stat</a></li> {% endcomment %}
                     
                 </ul>
@@ -43,6 +44,9 @@
             {% endblock %}    
             
             {% block testPage %}
+            {% endblock %}   
+
+            {% block players %}
             {% endblock %}   
         </div>
         <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
