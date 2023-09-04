@@ -1582,9 +1582,18 @@ def createPlayerAthletes(rosterData, teamId):
                     team = nflTeam.objects.get(espnId = teamId),
                     playerHeightInches = athlete['height'],
                     playerWeightPounds = athlete['weight'],
-                    playerPosition = getAthletePosition(athlete['position']['abbreviation']),
-                    sideOfBall = getAthleteSideOfBall(athlete['position']['parent']['name'])
+                    playerPosition = getAthletePosition(athlete['position']['abbreviation']), 
+                    sideOfBall = getAthleteSideOfBall(athlete['position'])
                 )
+            # try: 
+            #     playerObj.sideOfBall = getAthleteSideOfBall(athlete['position']['parent']['name'])
+            #     playerObj.save()
+            # except KeyError as e:
+            #     if playerObj.playerPosition == "G" or playerObj.playerPosition == "OT" or playerObj.playerPosition == "WR" or playerObj.playerPosition == "RB" or playerObj.playerPosition == "QB":
+            #         playerObj.sideOfBall = 1
+            #         playerObj.save()
+            #     else:
+            #         raise Exception("parent not in athlete[position]")
             if athlete['experience']['years'] == 0:
                 playerTeamTenure.objects.create(
                     player = playerObj,
@@ -1698,11 +1707,7 @@ def getPlayerTenures(playerObj):
             print("Player - " + playerObj.name + " could not be loaded.")
             print(e)
     else: 
-        playerTenures.delete()
-        print()
-        print("DELETING PLAYER TENURES AND DOING IT AGAIN")
-        print()
-        getPlayerTenures(playerObj)
+        return
 
 def getAthletePosition(abbreviation):
     if abbreviation == "QB":
@@ -1732,16 +1737,25 @@ def getAthletePosition(abbreviation):
     else:
         return 13
     
-def getAthleteSideOfBall(position):
-    if position == "Offense":
-        return 1
-    elif position == "Defense":
-        return 2
-    elif position == "Special Teams":
-        return 3
+def getAthleteSideOfBall(positionData):
+    if 'parent' in positionData:
+        if positionData['parent']['name'] == "Offense":
+            return 1
+        elif positionData['parent']['name'] == "Defense":
+            return 2
+        elif positionData['parent']['name'] == "Special Teams":
+            return 3
+        else:
+            return 4
     else:
-        return 4
-
+        if getAthletePosition(positionData['abbreviation']) in range(1,7):
+            return 1
+        elif getAthletePosition(positionData['abbreviation']) in range(7,11):
+            return 2
+        elif getAthletePosition(positionData['abbreviation']) in range(11,13):
+            return 3
+        else:
+            return 4
     # playerPositions = (
                 #     (1, "QB"),
                 #     (2, "WR"),
