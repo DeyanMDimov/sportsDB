@@ -725,6 +725,8 @@ def loadModelYear(request):
     for nr in range(2, 11):
         numResultsSelect.append(nr)
 
+    topNumResults = 2
+
     modelsOnPage = []
     modelsOnPage.append(['v1', 'V1.0 (Avg Yds/Yds per Pt)'])
     modelsOnPage.append(['v2','V2.0 (Drives vs Drive Result)'])
@@ -937,9 +939,9 @@ def loadModelYear(request):
 
             return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel, 'seasonResults':seasonResults, 'ouWins': totalOverUnderWins, 'ouLosses': totalOverUnderLosses, 'lbWins': totalLineBetWins, 'lbLosses': totalLineBetLosses, 'yearOfSeason':yearOfSeason, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults})
         else: 
-            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage})
+            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults})
     else:
-        return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage})
+        return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults})
 
 def fullTeamStats(request):
 
