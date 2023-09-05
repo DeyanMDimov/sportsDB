@@ -913,6 +913,8 @@ def loadModelYear(request):
                             
                         modelWeekResults.append(individualModelResult)
 
+                    modelRmodelWeekResultsesults = businessLogic.setBetRankingsV1(modelWeekResults)
+
                     modelWeekResults.sort(key = lambda x: x.betRankScore, reverse = True)
 
                     topModelWeekResults = []

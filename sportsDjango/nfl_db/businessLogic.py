@@ -393,6 +393,22 @@ class individualV2ModelResult:
     lineBet = ""
     lineBetIsCorrect = "None"
 
+    t1_OffenseYardsPerGameRank = 0
+    t1_OffenseYardsPerPointRank = 0
+    t1_OffenseTotalPointsRank = 0
+    t1_DefenseYardsRank = 0
+    t1_DefenseYardsPerPointRank = 0
+    t1_DefenseTotalPointsRank = 0
+
+    t2_OffenseYardsPerGameRank = 0
+    t2_OffenseYardsPerPointRank = 0
+    t2_OffenseTotalPointsRank = 0
+    t2_DefenseYardsRank = 0
+    t2_DefenseYardsPerPointRank = 0
+    t2_DefenseTotalPointsRank = 0
+
+    betRankScore = 0
+
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
         self.team1Name = t1name
