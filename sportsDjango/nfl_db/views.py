@@ -421,13 +421,13 @@ def getData(request):
             businessLogic.resetAllMatchAssociationsForClearing()
             return render (request, 'nfl/pullData.html')
 
-        elif 'resetPerf' in request.GET:
-            resetMessage = businessLogic.resetAllPerformanceAssociationsForClearing()
-            return render(request, 'nfl/pullData.html', {"message": resetMessage})
+        # elif 'resetPerf' in request.GET:
+        #     resetMessage = businessLogic.resetAllPerformanceAssociationsForClearing()
+        #     return render(request, 'nfl/pullData.html', {"message": resetMessage})
         
-        elif 'deleteDrives' in request.GET:
-            deleteDrivesMessage = crudLogic.deleteDriveOfPlay()
-            return render(request, 'nfl/pullData.html', {"message": deleteDrivesMessage})
+        # elif 'deleteDrives' in request.GET:
+        #     deleteDrivesMessage = crudLogic.deleteDriveOfPlay()
+        #     return render(request, 'nfl/pullData.html', {"message": deleteDrivesMessage})
 
         elif 'teams' in request.GET:    
             #return render (request, 'nfl/nflhome.html')
@@ -748,8 +748,10 @@ def loadModelYear(request):
 
             totalOverUnderWins = 0
             totalOverUnderLosses = 0
+            totalOverUnderPushes = 0
             totalLineBetWins = 0
             totalLineBetLosses = 0
+            totalLineBetPushes = 0
 
             if calculcatingCurrentSeason:
                 for wk in range (2, weeksInSeason+1):

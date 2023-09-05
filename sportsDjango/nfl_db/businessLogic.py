@@ -767,7 +767,7 @@ def generateBettingModelHistV2(gameData):
     
 
     modelResult.calculateExpectedResult()
-
+    
     return modelResult
 
 def checkModelBets(bookOverUnder, bookLineHometeam, individualModelResult, team1_abr, team2_abr):
