@@ -178,6 +178,7 @@ def getData(request):
                     oddsUrl = gameData['competitions'][0]['odds']['$ref']
                     oddsResponse = requests.get(oddsUrl)
                     oddsData = oddsResponse.json()
+                    print(oddsUrl)
 
                     existingMatch = None
                     existingHomeTeamPerf = None
@@ -695,7 +696,10 @@ def loadModel(request, target):
 
                     lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
                 
-
+            modelResults = businessLogic.setBetRankingsV1(modelResults)
+            for m in modelResults:
+                print(m.team1Name + " vs. " + m.team2Name + " Bet Rank Score: " + str(m.betRankScore))
+               
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason,'weeks':weeksOnPage, 'years': yearsOnPage})
             else:
@@ -717,6 +721,10 @@ def loadModelYear(request):
     for y in range(2022, 2017, -1):
         yearsOnPage.append(y)
 
+    numResultsSelect = []
+    for nr in range(2, 11):
+        numResultsSelect.append(nr)
+
     modelsOnPage = []
     modelsOnPage.append(['v1', 'V1.0 (Avg Yds/Yds per Pt)'])
     modelsOnPage.append(['v2','V2.0 (Drives vs Drive Result)'])
@@ -729,6 +737,7 @@ def loadModelYear(request):
             selectedModel = inputReq['model']
             yearOfSeason = inputReq['season'].strip()
 
+            topNumResults = int(inputReq['topNumResults'].strip())
             calculcatingCurrentSeason = businessLogic.checkIfCurrentSeason(yearOfSeason)
 
             seasonResults = []
@@ -902,14 +911,20 @@ def loadModelYear(request):
                             
                         modelWeekResults.append(individualModelResult)
 
-                    overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelWeekResults)))
-                    overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelWeekResults)))
-                    overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', modelWeekResults)))
+                    modelWeekResults.sort(key = lambda x: x.betRankScore, reverse = True)
+
+                    topModelWeekResults = []
+                    for i in range(0, topNumResults):
+                        topModelWeekResults.append(modelWeekResults[i])
+
+                    overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', topModelWeekResults)))
+                    overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', topModelWeekResults)))
+                    overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', topModelWeekResults)))
                     overUnderRecord = str(overUnderCorrect) + " - " + str(overUnderWrong) + " - " + str(overUnderPush)
 
-                    lineBetCorrect = len(list(filter(lambda x: x.lineBetIsCorrect == "True", modelWeekResults)))
-                    lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", modelWeekResults)))
-                    lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", modelWeekResults)))
+                    lineBetCorrect = len(list(filter(lambda x: x.lineBetIsCorrect == "True", topModelWeekResults)))
+                    lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", topModelWeekResults)))
+                    lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", topModelWeekResults)))
                     lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
 
                     totalOverUnderWins += overUnderCorrect
@@ -918,9 +933,9 @@ def loadModelYear(request):
                     totalLineBetWins += lineBetCorrect
                     totalLineBetLosses += lineBetWrong
 
-                    seasonResults.append([wk, overUnderRecord, lineBetRecord, modelWeekResults])
+                    seasonResults.append([wk, overUnderRecord, lineBetRecord, topModelWeekResults])
 
-            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel, 'seasonResults':seasonResults, 'ouWins': totalOverUnderWins, 'ouLosses': totalOverUnderLosses, 'lbWins': totalLineBetWins, 'lbLosses': totalLineBetLosses, 'yearOfSeason':yearOfSeason})
+            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel, 'seasonResults':seasonResults, 'ouWins': totalOverUnderWins, 'ouLosses': totalOverUnderLosses, 'lbWins': totalLineBetWins, 'lbLosses': totalLineBetLosses, 'yearOfSeason':yearOfSeason, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults})
         else: 
             return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage})
     else:

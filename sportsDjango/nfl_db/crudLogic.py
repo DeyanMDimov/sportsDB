@@ -219,72 +219,91 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
 
         print("Oddsdata items count:" + str(len(oddsData['items'])))
         if len(oddsData['items']) > 2:
-            try:
-                spreadSet = False
-                overUnderSet = False
-                homeTeamMLSet = False
-                awayTeamMLSet = False
-                if 'spread' in oddsData['items'][0]:
-                    matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
-                else:
-                    for i in range(1, len(oddsData['items'])):
+            if seasonYear == 2023:
+                for i in range(1, len(oddsData['items'])):
+                    if oddsData[i]['provider']['name'] == "DraftKings":
                         if 'spread' in oddsData['items'][i]:
                             matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
-                            spreadSet = True
-                            break
-                        else: 
-                            pass
-                    if not spreadSet:
-                        print("No Spread Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        raise Exception("No spread data?")
-                
-                if 'overUnder' in oddsData['items'][0]:
-                    matchData.overUnderLine = oddsData['items'][0]['overUnder']
-                else:
-                    for i in range(1, len(oddsData['items'])):
+                        else:
+                            print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        
                         if 'overUnder' in oddsData['items'][i]:
                             matchData.overUnderLine = oddsData['items'][i]['overUnder']
-                            overUnderSet = True
-                            break
-                        else: 
-                            pass
-                    if not overUnderSet:
-                        print("No Over/Under Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        raise Exception("No over/under data?")
-                    
-                if 'homeTeamOdds' in oddsData['items'][0]:
-                    matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
-                else:
-                    for i in range(1, len(oddsData['items'])):
+                        else:
+                            print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        
                         if 'homeTeamOdds' in oddsData['items'][i]:
                             matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
-                            homeTeamMLSet = True
-                            break
-                        else: 
-                            pass
-                    if not homeTeamMLSet:
-                        print("No Home Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        raise Exception("No home team ML data?")
-                
-                if 'awayTeamOdds' in oddsData['items'][0]:
-                    matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
-                else:
-                    for i in range(1, len(oddsData['items'])):
-                        if 'awayTeamOdds' in oddsData['items'][i]:
+                        
+                        if 'awayTeamOdds' in oddsData['items'][0]:
                             matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
-                            awayTeamMLSet = True
-                            break
-                        else: 
-                            pass
-                    if not awayTeamMLSet:
-                        print("No Away Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        raise Exception("No away team ML data?")
+            else:
+                try:
+                    spreadSet = False
+                    overUnderSet = False
+                    homeTeamMLSet = False
+                    awayTeamMLSet = False
+                    if 'spread' in oddsData['items'][0]:
+                        matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'spread' in oddsData['items'][i]:
+                                matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
+                                spreadSet = True
+                                break
+                            else: 
+                                pass
+                        if not spreadSet:
+                            print("No Spread Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No spread data?")
+                    
+                    if 'overUnder' in oddsData['items'][0]:
+                        matchData.overUnderLine = oddsData['items'][0]['overUnder']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'overUnder' in oddsData['items'][i]:
+                                matchData.overUnderLine = oddsData['items'][i]['overUnder']
+                                overUnderSet = True
+                                break
+                            else: 
+                                pass
+                        if not overUnderSet:
+                            print("No Over/Under Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No over/under data?")
+                        
+                    if 'homeTeamOdds' in oddsData['items'][0]:
+                        matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'homeTeamOdds' in oddsData['items'][i]:
+                                matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
+                                homeTeamMLSet = True
+                                break
+                            else: 
+                                pass
+                        if not homeTeamMLSet:
+                            print("No Home Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No home team ML data?")
+                    
+                    if 'awayTeamOdds' in oddsData['items'][0]:
+                        matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'awayTeamOdds' in oddsData['items'][i]:
+                                matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+                                awayTeamMLSet = True
+                                break
+                            else: 
+                                pass
+                        if not awayTeamMLSet:
+                            print("No Away Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No away team ML data?")
 
-            except Exception as e:
-                tback = traceback.extract_tb(e.__traceback__)
-                problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
-                exceptionThrown = True
-                exceptions.append([problem_text, oddsData])
+                except Exception as e:
+                    tback = traceback.extract_tb(e.__traceback__)
+                    problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+                    exceptionThrown = True
+                    exceptions.append([problem_text, oddsData])
 
     if exceptionThrown:
         raise Exception(exceptions)

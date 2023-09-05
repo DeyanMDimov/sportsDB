@@ -32,12 +32,35 @@
                         
                         {% endfor %}
                     </select>
+
+                    Select top 
+                    <select name="topNumResults" id="topNumResults">
+                        {% for nr in nrSelect %}
+                        <option value = "{{nr}}"
+                            {% if nr == topNumResults %}
+                                selected
+                            {% endif %}
+                            >{{nr}}</option>
+                        {% endfor %}
+                    </select>
+                    results
                 <br>
                 <button type="submit">Load!</button>
             </form>
         </div>
         
         {% if seasonResults %}
+            
+            <br>
+            <h3>How are games ranked?</h3>
+            <p>
+                Absolute Value of ("Team 1 Ranked on Offense Yards Per Game" + "Team 1 Ranked on Offense Yards Per Point" - ("Team 2 Ranked on Defense Yards Per Game" + "Team 2 Ranked on Defense Yards Per Point")) <br>
+                +<br>
+                Absolute Value of ("Team 2 Ranked on Offense Yards Per Game" + "Team 2 Ranked on Offense Yards Per Point" - ("Team 1 Ranked on Defense Yards Per Game" + "Team 1 Ranked on Defense Yards Per Point")) <br> 
+
+                This result will be highest when the best offense faces the worst defense and when the worst offense faces the best defense. It highlights the biggest imbalances.
+            </p>
+            <br>
             <p>Here are the results for {{yearOfSeason}}</p>
         
             <table class="table-bordered" id="year-summary">

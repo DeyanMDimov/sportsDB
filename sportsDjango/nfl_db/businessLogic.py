@@ -48,6 +48,22 @@ class individualBettingModelResult:
     lineBet = ""
     lineBetIsCorrect = "None"
 
+    t1_OffenseYardsPerGameRank = 0
+    t1_OffenseYardsPerPointRank = 0
+    t1_OffenseTotalPointsRank = 0
+    t1_DefenseYardsRank = 0
+    t1_DefenseYardsPerPointRank = 0
+    t1_DefenseTotalPointsRank = 0
+
+    t2_OffenseYardsPerGameRank = 0
+    t2_OffenseYardsPerPointRank = 0
+    t2_OffenseTotalPointsRank = 0
+    t2_DefenseYardsRank = 0
+    t2_DefenseYardsPerPointRank = 0
+    t2_DefenseTotalPointsRank = 0
+
+    betRankScore = 0
+
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
         self.team1Name = t1name
@@ -212,7 +228,93 @@ def generateBettingModelHistV1(gameData):
     awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
     awayTeamName = awayTeamObject.abbreviation
 
-    return individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
+    modelResult = individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
+
+    return modelResult
+
+def setBetRankingsV1(v1_modelResults):
+    OffenseYardsPerGame = []
+    OffenseYardsPerPoint = []
+    #OffenseTotalPoints = []
+    DefenseYardsPerGame = []
+    DefenseYardsPerPoint = []
+    #DefenseTotalPoints = []
+    teams = []
+
+    teamsPlayingInWeek = len(v1_modelResults)*2
+
+    for ind_model_result in v1_modelResults:
+        OffenseYardsPerGame.append([ind_model_result.team1Name, ind_model_result.team1TotalOffensiveYardsPerGame]) 
+        OffenseYardsPerGame.append([ind_model_result.team2Name, ind_model_result.team2TotalOffensiveYardsPerGame])
+        #OffenseYardsPerGame[ind_model_result.team1Name] = ind_model_result.team1TotalOffensiveYardsPerGame
+        #OffenseYardsPerGame[ind_model_result.team2Name] = ind_model_result.team2TotalOffensiveYardsPerGame
+        OffenseYardsPerPoint.append([ind_model_result.team1Name, ind_model_result.team1TotalYardsPerPoint])
+        OffenseYardsPerPoint.append([ind_model_result.team2Name, ind_model_result.team2TotalYardsPerPoint])
+        #OffenseTotalPoints.append({ind_model_result.team1Name: ind_model_result.team1TotalOffensiveYardsPerGame}, {ind_model_result.team2Name: ind_model_result.team2TotalOffensiveYardsPerGame})
+        DefenseYardsPerGame.append([ind_model_result.team1Name, ind_model_result.team1TotalDefensiveYardsPerGame])
+        DefenseYardsPerGame.append([ind_model_result.team2Name, ind_model_result.team2TotalDefensiveYardsPerGame])
+        DefenseYardsPerPoint.append([ind_model_result.team1Name, ind_model_result.team1TotalDefensiveYardsPerPoint])
+        DefenseYardsPerPoint.append([ind_model_result.team2Name, ind_model_result.team2TotalDefensiveYardsPerPoint])
+        #DefenseTotalPoints.append({ind_model_result.team1Name: ind_model_result.team1TotalOffensiveYardsPerGame}, {ind_model_result.team2Name: ind_model_result.team2TotalOffensiveYardsPerGame})\
+        teams.append(ind_model_result.team1Name)
+        teams.append(ind_model_result.team2Name)
+
+
+    OffenseYardsPerGame.sort(key = lambda x: x[1], reverse = True)
+    OffenseYardsPerPoint.sort(key = lambda x: x[1])
+    DefenseYardsPerGame.sort(key = lambda x: x[1])
+    DefenseYardsPerPoint.sort(key = lambda x: x[1], reverse = True)
+
+    for i in range(0,teamsPlayingInWeek):
+        modelResultOYPG = list(filter(lambda x: x.team1Name == OffenseYardsPerGame[i][0] or x.team2Name == OffenseYardsPerGame[i][0], v1_modelResults))[0]
+        if modelResultOYPG.team1Name == OffenseYardsPerGame[i][0]:
+            modelResultOYPG.t1_OffenseYardsPerGameRank = i+1
+        elif modelResultOYPG.team2Name == OffenseYardsPerGame[i][0]:
+            modelResultOYPG.t2_OffenseYardsPerGameRank = i+1
+        
+        modelResultOYPP = list(filter(lambda x: x.team1Name == OffenseYardsPerPoint[i][0] or x.team2Name == OffenseYardsPerPoint[i][0], v1_modelResults))[0]
+        if modelResultOYPP.team1Name == OffenseYardsPerPoint[i][0]:
+            modelResultOYPP.t1_OffenseYardsPerPointRank = i+1
+        elif modelResultOYPP.team2Name == OffenseYardsPerPoint[i][0]:
+            modelResultOYPP.t2_OffenseYardsPerPointRank = i+1
+        
+        modelResultDYPG = list(filter(lambda x: x.team1Name == DefenseYardsPerGame[i][0] or x.team2Name == DefenseYardsPerGame[i][0], v1_modelResults))[0]
+        if modelResultDYPG.team1Name == DefenseYardsPerGame[i][0]:
+            modelResultDYPG.t1_DefenseYardsPerGameRank = i+1
+        elif modelResultDYPG.team2Name == DefenseYardsPerGame[i][0]:
+            modelResultDYPG.t2_DefenseYardsPerGameRank = i+1
+
+        modelResultDYPP = list(filter(lambda x: x.team1Name == DefenseYardsPerPoint[i][0] or x.team2Name == DefenseYardsPerPoint[i][0], v1_modelResults))[0]
+        if modelResultDYPP.team1Name == DefenseYardsPerPoint[i][0]:
+            modelResultDYPP.t1_DefenseYardsPerPointRank = i+1
+        elif modelResultDYPP.team2Name == DefenseYardsPerPoint[i][0]:
+            modelResultDYPP.t2_DefenseYardsPerPointRank = i+1
+
+    for mr in v1_modelResults:
+        mr.betRankScore = abs((mr.t1_OffenseYardsPerGameRank + mr.t1_OffenseYardsPerPointRank)-(mr.t2_DefenseYardsPerGameRank + mr.t2_DefenseYardsPerPointRank))+abs((mr.t2_OffenseYardsPerGameRank + mr.t2_OffenseYardsPerPointRank)-(mr.t1_DefenseYardsPerGameRank + mr.t1_DefenseYardsPerPointRank))
+
+    v1_modelResults.sort(key = lambda x: x.betRankScore, reverse = True)
+
+    for mr in v1_modelResults:
+        print()
+        print(mr.team1Name + " vs. " + mr.team2Name)
+        print(mr.team1Name + " Offense YPG Rank: " + str(mr.t1_OffenseYardsPerGameRank))
+        print(mr.team1Name + " Offense YPP Rank: " + str(mr.t1_OffenseYardsPerPointRank))
+        print(mr.team1Name + " Defense YPG Rank: " + str(mr.t1_DefenseYardsPerGameRank))
+        print(mr.team1Name + " Defense YPP Rank: " + str(mr.t1_DefenseYardsPerPointRank))
+        print(mr.team2Name + " Offense YPG Rank: " + str(mr.t2_OffenseYardsPerGameRank))
+        print(mr.team2Name + " Offense YPP Rank: " + str(mr.t2_OffenseYardsPerPointRank))
+        print(mr.team2Name + " Defense YPG Rank: " + str(mr.t2_DefenseYardsPerGameRank))
+        print(mr.team2Name + " Defense YPP Rank: " + str(mr.t2_DefenseYardsPerPointRank))
+        print("   " + mr.team1Name + " Offense Combined Rank: " + str(mr.t1_OffenseYardsPerGameRank + mr.t1_OffenseYardsPerPointRank))
+        print("   " + mr.team2Name + " Defense Combined Rank: " + str(mr.t2_DefenseYardsPerGameRank + mr.t2_DefenseYardsPerPointRank))
+        print()
+        print("   " + mr.team2Name + " Offense Combined Rank: " + str(mr.t2_OffenseYardsPerGameRank + mr.t2_OffenseYardsPerPointRank))
+        print("   " + mr.team1Name + " Defense Combined Rank: " + str(mr.t1_DefenseYardsPerGameRank + mr.t1_DefenseYardsPerPointRank))
+        print("Model Bet Rank Score = " + str(mr.betRankScore))
+        print()
+
+    return v1_modelResults
 
 class individualV2ModelResult:
     team1Name   =""
@@ -331,7 +433,6 @@ class individualV2ModelResult:
 
         self.calculatedSpread = self.expected_points_from_drives_t2 - self.expected_points_from_drives_t1
         self.calculatedTotal = self.expected_points_from_drives_t1 + self.expected_points_from_drives_t2
-
 
 def generateBettingModelV2(gameData, seasonWeek, seasonYear):
     
