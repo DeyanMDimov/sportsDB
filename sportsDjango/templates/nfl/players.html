@@ -24,6 +24,27 @@
                     {% endif %}
                     > {{ team.abbreviation }}</option>
                 {% endfor %}
+
+                </select>
+                <br>
+                <button type="submit">Load!</button>
+            </form>
+            <form method="GET">
+                Get All: 
+                <select name="position" id="position">
+                    <option value="1"> QB's </option>
+                    <option value="4"> RB's </option>
+                    <option value="5"> FB's </option>
+                    <option value="2"> WR's </option>
+                    <option value="3"> TE's </option>
+                    <option value="6"> OL's </option>
+                    <option value="7"> DL's </option>
+                    <option value="8"> LB's </option>
+                    <option value="9"> CB's </option>
+                    <option value="10"> S's </option>
+                    <option value="11"> P's </option>
+                    <option value="12"> K's </option>
+
                 </select>
                 <br>
                 <button type="submit">Load!</button>
@@ -79,13 +100,105 @@
                                     {% endfor %}
                                 </tbody>
                             </table>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-
+        {% endif %}
         
+        {% if allPlayers %}
+        <h3> 
+            All Players
+        </h3>
+        <table class="table table-bordered" id="player_table">
+            <thead>
+                <tr>
+                    <td style="width:320px">Name</td>
+                    <td>Team</td>
+                    <td>Position</td>
+                    <td>Rookie Year</td>
+                    <td>Espn ID</td>
+                    <td>Starter</td>
+                    <td>Star Player</td>
+                    <td>Significant Impact</td>
+                    <td></td>
+            <tbody>
+                {% for player in allPlayers%}
+                <tr id="{{player.espnId}}">
+                    <td id="accordion-{{player.espnId}}">
+                        <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{player.espnId}}" aria-expanded="true" aria-controls="collapse{{player.espnId}}">
+                            {{player.name}}
+                        </button>
+                    </td>
+                    <td>{{player.team.abbreviation}}</td>
+                    <td>{{player.get_playerPosition_display}}</td>
+                    <td>{{player.firstSeason}}</td>
+                    <td>{{player.espnId}}</td>
+                    <td><input type="checkbox" id="{{player.espnId}}-starter" name="{{player.espnId}}-starter" 
+                        {% if player.isStarter %} checked {% endif %} /></td>
+                    <td><input type="checkbox" id="{{player.espnId}}-starPlayer" name="{{player.espnId}}-starPlayer" 
+                        {% if player.starPlayer %} checked {% endif %} /></td>
+                    <td><input type="checkbox" id="{{player.espnId}}-bigImpact" name="{{player.espnId}}-bigImpact" 
+                        {% if player.currentlyHavingBigImpact %} checked {% endif %} /></td>
+                    <td><button class="btn btn-outline-dark save-btn" id="{{player.espnId}}_save">Save</button></td>
+                </tr>
+                {% comment %} <tr id="collapse{{player.espnId}}" class="collapse" aria-labelledby="accordion-{{player.espnId}}" data-parent="#accordion-{{player.espnId}}">
+                    <td colspan="3" class="modelSummaryContainer">
+                        Tenures for player {{player.espnId}}
+                        <table class="table-bordered" id="player_tenure">
+                            <thead>
+                                <td>Team</td>
+                                <td>Start Date</td>
+                                <td>End Date</td>
+                            </thead>
+                            <tbody>
+                                {% for tnr in tenures %}
+                                    {% if tnr.player == player%}
+                                    <tr>
+                                        <td>{{tnr.team.fullName}}</td>
+                                        <td>{{tnr.startDate|date:"m/d/Y"}}</td>
+                                        <td>{{tnr.endDate|date:"m/d/Y"}}</td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr> {% endcomment %}
+
+                {% endfor %}
+            </tbody>
+        </table>
         {% endif %}
 
     </div>
+    <script>
+        $("#player_table").on("click", ".save-btn", function () {
+            var url = "../ajax/playerSignificance/"  
+            var player_id = $(this).parents('tr').attr('id');  
+            
+            var is_star = $("#"+player_id+"-starPlayer")[0].checked;
+            
+            var big_impact = $("#"+player_id+"-bigImpact")[0].checked;
+
+            var starter = $("#"+player_id+"-starter")[0].checked;
+
+            $.ajax(
+                {                       
+                    url: url,           
+                    data: {
+                    'playerId': player_id,
+                    'isStar': is_star,
+                    'bigImpact': big_impact,
+                    'starter': starter
+                    },
+                    success: function () 
+                    {
+                        console.log(player_id + " saved.");
+                    }
+                });
+        });
+    </script>
 {% endblock %}

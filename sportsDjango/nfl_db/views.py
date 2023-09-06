@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 import json
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure
@@ -503,6 +503,14 @@ def getPlayers(request):
                     # print(playerTenuresLoaded)
 
                     return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'selTeam': selectedTeam, 'players': playersLoaded, 'season': inputReq['season'], 'tenures': playerTenuresLoaded})
+
+        elif 'position' in request.GET:
+            inputReq = request.GET
+            selectedPosition = inputReq['position'].strip()
+
+            playersLoaded = player.objects.filter(playerPosition = selectedPosition)
+
+            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'allPlayers': playersLoaded})
 
         else:
             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage})
@@ -1018,6 +1026,21 @@ def testPage(request):
         else:
             return render(request, 'nfl/testPage.html')
 
+def playerSignificance(request):
+    if(request.method == 'GET'):
+        print("GOT IT")
+        playerId = request.GET.get('playerId')
+        playerStar = request.GET.get('isStar')
+        playerContrib = request.GET.get('bigImpact')
+        playerStarter = request.GET.get('starter')
+
+        playerObj = player.objects.get(espnId = int(playerId))
+        playerObj.starPlayer = True if playerStar == 'true' else False
+        playerObj.currentlyHavingBigImpact = True if playerContrib == 'true' else False
+        playerObj.isStarter = True if playerStarter == 'true' else False
+        playerObj.save()
+
+        return JsonResponse({}, status="200")
 
 
 
