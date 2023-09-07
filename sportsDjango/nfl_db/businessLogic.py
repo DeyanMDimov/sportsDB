@@ -160,13 +160,21 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear):
 
     return individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
 
-def generateBettingModelHistV1(gameData):
+def generateBettingModelHistV1(gameData, week1 = False):
     homeTeamEspnId = gameData.homeTeamEspnId                    
     awayTeamEspnId = gameData.awayTeamEspnId
 
-    homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+    homeTeamPastGames = None
+    awayTeamPastGames = None
+    if week1:
+        getSeasonYear = gameData.yearOfSeason - 1
+        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
 
-    awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
+    else:
+        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
 
     homeTeamGamesPlayed = homeTeamPastGames.count()
     awayTeamGamesPlayed = awayTeamPastGames.count()
@@ -610,11 +618,17 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
 
     return modelResult
 
-def generateBettingModelHistV2(gameData):
+def generateBettingModelHistV2(gameData, week1 = False):
     
     homeTeamEspnId = gameData.homeTeamEspnId
     homeTeamObject = nflTeam.objects.get(espnId = homeTeamEspnId)
-    homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+    homeTeamPastGames = None
+    
+    if week1:
+        getSeasonYear = gameData.yearOfSeason - 1
+        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) 
+    else:
+        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
     
     homeTeamGamesPlayed = homeTeamPastGames.count()
 
@@ -684,7 +698,13 @@ def generateBettingModelHistV2(gameData):
 
     awayTeamEspnId = gameData.awayTeamEspnId
     awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
-    awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+    awayTeamPastGames = None
+
+    if week1:
+        getSeasonYear = gameData.yearOfSeason - 1
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
+    else:
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
     
     awayTeamGamesPlayed = awayTeamPastGames.count()
 
@@ -830,11 +850,15 @@ def checkModelBets(bookOverUnder, bookLineHometeam, individualModelResult, team1
             
     return individualModelResult
 
-def checkIfCurrentSeason(yearOfSeason):
+def checkIfCurrentSeason(yearOfSeason, weekOfSeason):
     currentYear = datetime.now().year
     currentMonth = datetime.now().month
-
-    if yearOfSeason == currentYear or (currentMonth >= 1 and currentMonth <= 2 and yearOfSeason + 1 == currentYear):
+    
+    print(weekOfSeason)
+    print(int(weekOfSeason))
+    if yearOfSeason == currentYear and int(weekOfSeason) == 1:
+        return False
+    elif yearOfSeason == currentYear or (currentMonth >= 1 and currentMonth <= 2 and yearOfSeason + 1 == currentYear):
         return True
     else:
         return False

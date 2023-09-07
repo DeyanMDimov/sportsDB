@@ -34,7 +34,7 @@
                                         >V2.0 (Drives vs Drive Result)</option>
                 </select>
                 <br>
-                <button type="submit">Load!</button>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
             </form>
         </div>
         <div id="modelResultContainer">
@@ -180,6 +180,11 @@
                             <td> Expected Red Zone Conversions </td>
                             <td> {{ result.expected_t1_RedZoneConv}}</td>
                             <td> {{ result.expected_t2_RedZoneConv}}</td>
+                        </tr>
+                        <tr>
+                            <td> Expected Points Based on Drives </td>
+                            <td> {{ result.expected_points_from_drives_t1}}</td>
+                            <td> {{ result.expected_points_from_drives_t2}}</td>
                         </tr>
                         {% endif %}
                     </tbody>

@@ -1585,6 +1585,37 @@ def getExplosivePlays(playByPlayData, teamId):
     
     return teamExplosivePlays
 
+def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
+    athletesAndAvailability = []
+    for athlete in rosterData['entries']:
+
+        playerObj = None
+        try:
+            playerObj = player.objects.get(espnId = athlete['playerId'])
+        except:
+                pass
+        if playerObj == None:
+            pass
+        else:
+            try:
+                playerWeekStatusObj = playerWeekStatus.objects.get(player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek)
+            except:
+                playerWeekStatusObj = playerWeekStatus.objects.create(
+                    player = playerObj,
+                    team = team,
+                    weekOfSeason = seasonWeek,
+                    yearOfSeason = seasonYear,
+                )
+                if athlete['didNotPlay'] == True or athlete['valid'] == False:
+                    playerWeekStatusObj.playerStatus = 4
+                    playerWeekStatusObj.save()
+            
+            athletesAndAvailability.append([playerObj, playerWeekStatusObj])
+    
+    return athletesAndAvailability
+
+                
+
 def createPlayerAthletes(rosterData, teamId):
     print(str(teamId))
     for athlete in rosterData['items']:

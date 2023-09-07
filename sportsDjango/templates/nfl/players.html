@@ -5,33 +5,37 @@
     <div class = "container">
         
         <div>
-            Pull Players for :
-            <form method="GET">
-                <select name="season" id="season">
-                    {% for yr in years %}
-                    <option value="{{yr}}" 
-                    {%if yr|stringformat:"i" == season %}
-                            selected
-                        {% endif %} >{{yr}}</option>    
-                    {% endfor %} 
-                </select> 
-                 
-                <select name="teamName" id="teamName">
-                {% for team in teams %}
-                    <option value="{{ team.abbreviation }}"
-                    {%if selTeam.abbreviation == team.abbreviation %}
-                        selected
-                    {% endif %}
-                    > {{ team.abbreviation }}</option>
-                {% endfor %}
-
-                </select>
-                <br>
-                <button type="submit">Load!</button>
-            </form>
-            <form method="GET">
+            
+            {% comment %} <form method="GET" class="p-3">
+                Pull Players for :
+                <div class="row g-2">
+                    <div class="mb-1 col-auto">
+                        <select name="season" id="season" class="form-control">
+                            {% for yr in years %}
+                            <option value="{{yr}}" 
+                            {%if yr|stringformat:"i" == season %}
+                                    selected
+                                {% endif %} >{{yr}}</option>    
+                            {% endfor %} 
+                        </select> 
+                    </div>
+                    <div class="mb-1 col-auto">
+                        <select name="teamName" id="teamName" class="form-control">
+                        {% for team in teams %}
+                            <option value="{{ team.abbreviation }}"
+                            {%if selTeam.abbreviation == team.abbreviation %}
+                                selected
+                            {% endif %}
+                            > {{ team.abbreviation }}</option>
+                        {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
+            </form> {% endcomment %}
+            <form method="GET" class="p-3">
                 Get All: 
-                <select name="position" id="position">
+                <select name="position" id="position" class="form-control">
                     <option value="1"> QB's </option>
                     <option value="4"> RB's </option>
                     <option value="5"> FB's </option>
@@ -46,11 +50,47 @@
                     <option value="12"> K's </option>
 
                 </select>
-                <br>
-                <button type="submit">Load!</button>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
+            </form>
+            <form method="GET" class="p-3">
+                Get player availability for 
+                <div class="row g-2">
+                    <div class="mb-1 col-2">
+                        Season: <select name="season" id="season" class="form-control">
+                            {% for yr in years %}
+                            <option value="{{yr}}" 
+                            {%if yr|stringformat:"i" == season %}
+                                    selected
+                                {% endif %} >{{yr}}</option>    
+                            {% endfor %} 
+                        </select> 
+                    </div>
+                    <div class="mb-1 col-2">
+                        Week: <select name="week" id="week" class="form-control">
+                            {% for wk in weeks %}
+                            <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-1 col-2">
+                        Team:
+                        <select name="team" id="team" class="form-control">
+                        {% for team in teams %}
+                            <option value="{{ team.abbreviation }}"
+                            {%if selTeam.abbreviation == team.abbreviation %}
+                                selected
+                            {% endif %}
+                            > {{ team.abbreviation }}</option>
+                        {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
             </form>
         </div>
-        
+        {% if responseMessage %}
+        <h2>{{responseMessage}}</h2>
+        {% endif %}
         {% if players %}
         <div>
             <h3> 
@@ -171,6 +211,66 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% endif %}
+
+        {% if athleteAvail %}
+        <h3> 
+            Player Availability
+        </h3>
+        <div class="container" style="overflow:scroll">
+            <table class="table table-bordered" id="player_table">
+                <thead>
+                    <tr>
+                        <td style="width:320px">Name</td>
+                        <td>Team</td>
+                        <td>Position</td>
+                        <td>Espn ID</td>
+                        <td>Starter</td>
+                        <td>Star Player</td>
+                        <td>Status</td>
+                        {% comment %} <td>1</td>
+                        <td>2</td>
+                        <td>3</td>
+                        <td>4</td>
+                        <td>5</td>
+                        <td>6</td>
+                        <td>7</td>
+                        <td>8</td>
+                        <td>9</td>
+                        <td>10</td>
+                        <td>11</td>
+                        <td>12</td>
+                        <td>13</td>
+                        <td>14</td>
+                        <td>15</td>
+                        <td>16</td>
+                        <td>17</td>
+                        <td>18</td> {% endcomment %}
+                <tbody>
+                    {% for player in athleteAvail%}
+                    <tr id="{{player.0.espnId}}">
+                        <td id="accordion-{{player.0.espnId}}">
+                            {% comment %} <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{player.espnId}}" aria-expanded="true" aria-controls="collapse{{player.espnId}}"> {% endcomment %}
+                                {{player.0.name}}
+                            {% comment %} </button> {% endcomment %}
+                        </td>
+                        <td>{{player.0.team.abbreviation}}</td>
+                        <td>{{player.0.get_playerPosition_display}}</td>
+                        <td>{{player.0.espnId}}</td>
+                        <td><input type="checkbox" id="{{player.0.espnId}}-starter" name="{{player.0.espnId}}-starter" 
+                            {% if player.0.isStarter %} checked {% endif %} /></td>
+                        <td><input type="checkbox" id="{{player.0.espnId}}-starPlayer" name="{{player.0.espnId}}-starPlayer" 
+                            {% if player.0.starPlayer %} checked {% endif %} /></td>
+                        {% comment %} <td><input type="checkbox" id="{{player.0.espnId}}-bigImpact" name="{{player.0.espnId}}-bigImpact" 
+                            {% if player.0.currentlyHavingBigImpact %} checked {% endif %} /></td> {% endcomment %}
+                        <td>{% if player.1.playerStatus == 1 %}✅{% else %}🚫{% endif %}</td>
+                    </tr>
+                    
+
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% endif %}
 
     </div>

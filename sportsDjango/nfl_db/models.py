@@ -206,6 +206,10 @@ class teamMatchPerformance(models.Model):
             models.UniqueConstraint(fields=['matchEspnId', 'teamEspnId'], name="UniqueTeamsPerMatch")
         ]
 
+class teamMatchRoster(models.Model):
+    nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
+    nflTeam = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+
 class driveOfPlay(models.Model):
     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
     teamOnOffense = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
@@ -332,7 +336,6 @@ class player(models.Model):
     )
     sideOfBall = models.SmallIntegerField(choices = positionCategories, default = 4)
 
-
 class playerTeamTenure(models.Model):
     player = models.ForeignKey(player, on_delete = models.CASCADE)
     team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
@@ -356,6 +359,7 @@ class playerMatchPerformance(models.Model):
         (10, "S")
     )
     position = models.SmallIntegerField(choices = playerPositions, default = 1)
+    starter = models.BooleanField(default = False)
 
     class Meta:
         abstract = True
@@ -381,7 +385,7 @@ class playerWeekStatus(models.Model):
     team = models.ForeignKey(nflTeam, on_delete = models.CASCADE, null = True, blank = True)
     weekOfSeason = models.SmallIntegerField(validators = [MinValueValidator(-4), MaxValueValidator(22)])
     yearOfSeason = models.SmallIntegerField(validators = [MinValueValidator(2002)])
-    reportDate = models.DateField()
+    reportDate = models.DateField(null = True, blank = True)
     playerStatuses = (
         (1, "Available"),
         (2, "Questionable"),
