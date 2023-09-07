@@ -27,13 +27,10 @@ def getData(request):
 
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
-            #print("Hit game stats endpoint")
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = inputReq['week'].strip()
            
-            print(inputReq['season'])
-            print(inputReq['week'])
             url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
             response = requests.get(url)
             data = response.json()
@@ -48,27 +45,35 @@ def getData(request):
                 dateOfGameFromApi = gameData['date']
                 dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
 
+                homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+                awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+                homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
+                awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
+                print()
+                print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
+
                 gameStatusUrl = gameData['competitions'][0]['status']['$ref']
                 gameStatusResponse = requests.get(gameStatusUrl)
                 gameStatus = gameStatusResponse.json()
 
-
                 gameCompleted = (gameStatus['type']['completed'] == True)
                 gameOvertime = ("OT" in gameStatus['type']['detail']) 
-
 
                 oddsUrl = gameData['competitions'][0]['odds']['$ref']
                 oddsResponse = requests.get(oddsUrl)
                 oddsData = oddsResponse.json()
 
                 existingMatch = None
-
+                existingHomeTeamPerf = None
+                existingAwayTeamPerf = None
+                
                 responseMessage = ""
 
                 try:
                     existingMatch = nflMatch.objects.get(espnId = matchEspnId)
-                except:
-                    pass
+                except Exception as e:
+                        print(e)
+                
                 
                 if datetime.datetime.now()<dateOfGame or gameCompleted == False:
                     print("updating scheduled match")
@@ -136,8 +141,6 @@ def getData(request):
                 time.sleep(2)
                 weekOfSeason = i
                 
-
-
                 url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
                 
                 if(weekOfSeason >= 19):
@@ -165,9 +168,9 @@ def getData(request):
                     awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
                     homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
                     awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
-                    
                     print()
                     print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
+
                     gameStatusUrl = gameData['competitions'][0]['status']['$ref']
                     gameStatusResponse = requests.get(gameStatusUrl)
                     gameStatus = gameStatusResponse.json()
@@ -178,7 +181,6 @@ def getData(request):
                     oddsUrl = gameData['competitions'][0]['odds']['$ref']
                     oddsResponse = requests.get(oddsUrl)
                     oddsData = oddsResponse.json()
-                    print(oddsUrl)
 
                     existingMatch = None
                     existingHomeTeamPerf = None
@@ -236,9 +238,9 @@ def getData(request):
                                 pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
                                 pagePlaysData = pagePlaysDataResponse.json()
                                 playByPlayOfGame.addJSON(pagePlaysData)
+                        
                         try:
                             matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
-
                         except Exception as e:
                             matchData = nflMatch.objects.get(espnId = matchEspnId)
                             print("There was an exception")
@@ -257,13 +259,6 @@ def getData(request):
 
                         try:
                             existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
-                            # print()
-                            # print("Team performance found for combination of data")
-                            # print("matchEspnId = " + str(matchEspnId))
-                            # print("homeTeamEspnId = " + str(homeTeamEspnId))
-                            # print("matchData.espnId = " + str(matchData.espnId))
-                            # print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
-                        
                         except Exception as e:
                             print()
                             print(e)
@@ -278,7 +273,6 @@ def getData(request):
                         
                         try:
                             crudLogic.createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
-                        
                         except Exception as e: 
                             print("Problem with creating home team Match performance")
                             game_exception = []
@@ -417,9 +411,9 @@ def getData(request):
             message = "Full " + str(yearOfSeason) + " season loaded."
             return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'message': message})
 
-        elif 'reset' in request.GET:
-            businessLogic.resetAllMatchAssociationsForClearing()
-            return render (request, 'nfl/pullData.html')
+        # elif 'reset' in request.GET:
+        #     businessLogic.resetAllMatchAssociationsForClearing()
+        #     return render (request, 'nfl/pullData.html')
 
         # elif 'resetPerf' in request.GET:
         #     resetMessage = businessLogic.resetAllPerformanceAssociationsForClearing()
@@ -489,7 +483,6 @@ def getPlayers(request):
 
                     for subsection in rosterData:
                         crudLogic.createPlayerAthletes(subsection, teamId)
-                        #crudLogic.createPlayerAthlete(subsection, teamId)
 
 
                     playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
@@ -508,7 +501,7 @@ def getPlayers(request):
             inputReq = request.GET
             selectedPosition = inputReq['position'].strip()
 
-            playersLoaded = player.objects.filter(playerPosition = selectedPosition)
+            playersLoaded = player.objects.filter(playerPosition = selectedPosition).order_by(player.team.abbreviation)
 
             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'allPlayers': playersLoaded})
 
@@ -516,8 +509,6 @@ def getPlayers(request):
             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage})
     else:
         return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage})
-
-
 
 def loadModel(request, target):
     weeksOnPage = []
@@ -529,7 +520,7 @@ def loadModel(request, target):
     weeksOnPage.append([22, "Super Bowl"])
 
     yearsOnPage = []
-    for y in range(2023, 2017, -1):
+    for y in range(2022, 2017, -1):
         yearsOnPage.append(y)
     
     inputReq = request.GET
