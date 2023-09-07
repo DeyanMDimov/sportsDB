@@ -604,9 +604,12 @@ def loadModel(request, target):
 
             calculcatingCurrentSeason = businessLogic.checkIfCurrentSeason(yearOfSeason, weekOfSeason)
             #weeksInSeason = 18 if int(yearOfSeason) >= 2021 else 17
+            
+            anyGamesCompleted = False
 
             modelResults = []
             if not calculcatingCurrentSeason:
+                
                 gamesInWeek = nflMatch.objects.filter(yearOfSeason = yearOfSeason).filter(weekOfSeason = int(weekOfSeason))
 
                 for match in gamesInWeek:
@@ -619,6 +622,7 @@ def loadModel(request, target):
                         gameEspnId = match.espnId
                         
                         if(match.completed):
+                            anyGamesCompleted = True
                             team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
                             team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
 
@@ -633,7 +637,13 @@ def loadModel(request, target):
                         
                             if match.overUnderLine != 0 and match.overUnderLine != None:
                                 individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
-                        
+                        else:
+                            if match.overUnderLine != 0 and match.overUnderLine != None:
+                                individualModelResult.bookProvidedTotal = match.overUnderLine
+                            if match.matchLineHomeTeam != None:
+                                individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
+
+
                         modelResults.append(individualModelResult)
                         
 
@@ -646,6 +656,7 @@ def loadModel(request, target):
                         gameEspnId = match.espnId
 
                         if(match.completed):
+                            anyGamesCompleted = True
                             team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
                             team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
                             #team1_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.homeTeamEspnId)
@@ -672,10 +683,15 @@ def loadModel(request, target):
 
                             if match.overUnderLine != 0 and match.overUnderLine != None:      
                                 individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
-                        
+                        else:
+                            if match.overUnderLine != 0 and match.overUnderLine != None:
+                                individualModelResult.bookProvidedTotal = match.overUnderLine
+                            if match.matchLineHomeTeam != None:
+                                individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
+                                
                         modelResults.append(individualModelResult)
-            else:
 
+            else:
                 url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
                 if(int(weekOfSeason) >= 19):
                     playoffWeekOfSeason = int(weekOfSeason) - 18
@@ -755,16 +771,15 @@ def loadModel(request, target):
 
                     #modelResults.append(individualModelResult)
 
-                overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
-                overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelResults)))
-                overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', modelResults)))
-                overUnderRecord = str(overUnderCorrect) + " - " + str(overUnderWrong) + " - " + str(overUnderPush)
+            overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
+            overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelResults)))
+            overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', modelResults)))
+            overUnderRecord = str(overUnderCorrect) + " - " + str(overUnderWrong) + " - " + str(overUnderPush)
 
-                lineBetCorrect = len(list(filter(lambda x: x.lineBetIsCorrect == "True", modelResults)))
-                lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", modelResults)))
-                lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", modelResults)))
-
-                lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
+            lineBetCorrect = len(list(filter(lambda x: x.lineBetIsCorrect == "True", modelResults)))
+            lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", modelResults)))
+            lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", modelResults)))
+            lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
                 
             modelResults = businessLogic.setBetRankingsV1(modelResults)
             for m in modelResults:
@@ -773,8 +788,7 @@ def loadModel(request, target):
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason,'weeks':weeksOnPage, 'years': yearsOnPage})
             else:
-                #print("passing stuff")
-                return render(request, 'nfl/modelSummary.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, 'weeks':weeksOnPage, 'years': yearsOnPage, 'ouRecord': overUnderRecord, 'lbRecord': lineBetRecord})
+                return render(request, 'nfl/modelSummary.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, 'weeks':weeksOnPage, 'years': yearsOnPage, 'anyCompleted': anyGamesCompleted, 'ouRecord': overUnderRecord, 'lbRecord': lineBetRecord})
         else: 
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html', {'weeks':weeksOnPage, 'years': yearsOnPage})

@@ -38,7 +38,7 @@
                                         >V2.0 (Drives vs Drive Result)</option>
                 </select>
                 <br>
-                <button type="submit" class="btn btn-default">Load!</button>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
             </form>
         </div>
         <div id="modelResultContainer">
@@ -70,8 +70,10 @@
                         <td>Model Line</td>
                         <td>Book Line</td>
                         <td>Result Line</td>
+                        {% if anyCompleted %}
                         <td>Model O/U Bet</td>
                         <td>Model Line Bet</td>
+                        {% endif %}
                     </thead>
                     <tbody>
                         {% for result in modelResults %}
@@ -150,12 +152,14 @@
                             {% endif %}
                         </tr>
                         {% endfor %}
+                        {% if anyCompleted %}
                         <tr>
                             <td colspan="13">
                             </td>
                             <td>{{ouRecord}}</td>
                             <td>{{lbRecord}}</td>
                         </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
