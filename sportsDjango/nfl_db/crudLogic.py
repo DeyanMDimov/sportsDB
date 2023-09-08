@@ -1645,8 +1645,43 @@ def getExplosivePlays(playByPlayData, teamId):
     
     return teamExplosivePlays
 
+def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekNum):
+    if len(seasonAvailability) == 0:
+        for playerRecord in weekAvailability:
+            seasonAvailability.append([playerRecord[0], [playerRecord[1]]])
+        
+        return seasonAvailability
+    else:
+        seasonAvailability.sort(key= lambda x: x[0].name)
+        
+        for player in weekAvailability:
+            playerRow = list(filter(lambda y: y[0] == player[0], seasonAvailability))
+           
+            if len(playerRow) != 0:
+                indexOfPlayer = seasonAvailability.index(playerRow[0])
+                seasonAvailability[indexOfPlayer][1].append(player[1])
+            else:
+                availabilityArray = []
+                for i in range(1, weekNum):
+                    availabilityArray.append("Not in Roster")
+                availabilityArray.append(player[1])
+                seasonAvailability.append([player[0], availabilityArray])
+        
+        for player in seasonAvailability:
+            if len(player[1]) != weekNum:
+                player[1].append("Not in Roster")
+
+                
+
+        return seasonAvailability
+            
+            
+        
+
+
 def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
     athletesAndAvailability = []
+    print(seasonWeek)
     for athlete in rosterData['entries']:
 
         playerObj = None

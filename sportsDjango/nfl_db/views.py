@@ -465,7 +465,7 @@ def getPlayers(request):
     nflTeams = nflTeam.objects.all().order_by('abbreviation')
 
     yearsOnPage = []
-    for y in range(2023, 2017, -1):
+    for y in range(2022, 2017, -1):
         yearsOnPage.append(y)
 
     weeksOnPage = []
@@ -519,35 +519,42 @@ def getPlayers(request):
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = int(inputReq['week'].strip())
             if weekOfSeason == 100:
-                # athleteAvailabilitySeason = []
-                # for wk in range (1, 19):
-                #     if 'team' in inputReq:
-                #         selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
-                #         teamId = selectedTeam.espnId
-                #         selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
-                #         if(len(selectedMatchQuerySet) == 0):
-                #             selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
-                #             if(len(selectedMatchQuerySet) == 0):
-                #                 responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
-                #                 return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
+                print("We Get here")
+                athleteAvailabilitySeason = []
+                for wk in range (1, 19):
+                    if 'team' in inputReq:
+                        selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
+                        teamId = selectedTeam.espnId
+                        selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
+                        if(len(selectedMatchQuerySet) == 0):
+                            selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
+                            if(len(selectedMatchQuerySet) == 0):
+                                #responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
+                                for plRec in athleteAvailabilitySeason:
+                                    plRec[1].append("Bye")
+                                continue
                         
-                #         selectedMatch = selectedMatchQuerySet[0]
-                #         matchId = selectedMatch.espnId
+                        selectedMatch = selectedMatchQuerySet[0]
+                        matchId = selectedMatch.espnId
                         
-                #         gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
-                #         gameRosterResponse = requests.get(gameRosterUrl)
-                #         print(gameRosterUrl)
-                #         gameRosterData = gameRosterResponse.json()
+                        gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
+                        gameRosterResponse = requests.get(gameRosterUrl)
+                        print(gameRosterUrl)
+                        gameRosterData = gameRosterResponse.json()
 
-                #         athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
+                        
+                        
+                        athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, wk)
+                        athleteAvailabilitySeason = crudLogic.organizeRosterAvailabilityArrays(athleteAvailabilitySeason, athleteAvailability, wk)
 
 
-                #         return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability})
                     
-                #     else:
-                #         return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})
-                responseMessage = "Loading the full season is not implemented right now."
-                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
+                    else:
+                        return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})
+                
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvailSeason': athleteAvailabilitySeason, 'selTeam': inputReq['team']})
+                # responseMessage = "Loading the full season is not implemented right now."
+                # return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
             else:
                 if 'team' in inputReq:
                     selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
@@ -688,7 +695,7 @@ def loadModel(request, target):
                                 individualModelResult.bookProvidedTotal = match.overUnderLine
                             if match.matchLineHomeTeam != None:
                                 individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
-                                
+
                         modelResults.append(individualModelResult)
 
             else:

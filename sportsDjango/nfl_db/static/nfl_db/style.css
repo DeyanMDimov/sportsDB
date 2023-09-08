@@ -148,3 +148,7 @@
   textarea{
     resize: both;
   }
+
+  .weekAvailTableCell{
+    width: 60px;
+  }

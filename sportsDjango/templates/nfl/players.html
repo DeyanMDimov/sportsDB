@@ -272,7 +272,69 @@
             </table>
         </div>
         {% endif %}
+        
+        {% if athleteAvailSeason %}
+        <h3> 
+            Player Availability for {{yearOfSeason}}
+        </h3>
+        <div class="container" style="overflow:scroll">
+            <table class="table table-bordered" id="player_table">
+                <thead>
+                    <tr>
+                        <td style="width:320px">Name</td>
+                        <td>Team</td>
+                        <td>Position</td>
+                        <td>Espn ID</td>
+                        <td>Starter</td>
+                        <td>Star Player</td>
+                        <td class="weekAvailTableCell">1</td>
+                        <td class="weekAvailTableCell">2</td>
+                        <td class="weekAvailTableCell">3</td>
+                        <td class="weekAvailTableCell">4</td>
+                        <td class="weekAvailTableCell">5</td>
+                        <td class="weekAvailTableCell">6</td>
+                        <td class="weekAvailTableCell">7</td>
+                        <td class="weekAvailTableCell">8</td>
+                        <td class="weekAvailTableCell">9</td>
+                        <td class="weekAvailTableCell">10</td>
+                        <td class="weekAvailTableCell">11</td>
+                        <td class="weekAvailTableCell">12</td>
+                        <td class="weekAvailTableCell">13</td>
+                        <td class="weekAvailTableCell">14</td>
+                        <td class="weekAvailTableCell">15</td>
+                        <td class="weekAvailTableCell">16</td>
+                        <td class="weekAvailTableCell">17</td>
+                        <td class="weekAvailTableCell">18</td> 
+                <tbody>
+                    {% for player in athleteAvailSeason%}
+                    <tr id="{{player.0.espnId}}">
+                        <td id="accordion-{{player.0.espnId}}">
+                            {% comment %} <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{player.espnId}}" aria-expanded="true" aria-controls="collapse{{player.espnId}}"> {% endcomment %}
+                                {{player.0.name}}
+                            {% comment %} </button> {% endcomment %}
+                        </td>
+                        <td>{{selTeam}}</td>
+                        <td>{{player.0.get_playerPosition_display}}</td>
+                        <td>{{player.0.espnId}}</td>
+                        <td><input type="checkbox" id="{{player.0.espnId}}-starter" name="{{player.0.espnId}}-starter" 
+                            {% if player.0.isStarter %} checked {% endif %} /></td>
+                        <td><input type="checkbox" id="{{player.0.espnId}}-starPlayer" name="{{player.0.espnId}}-starPlayer" 
+                            {% if player.0.starPlayer %} checked {% endif %} /></td>
+                        {% comment %} <td><input type="checkbox" id="{{player.0.espnId}}-bigImpact" name="{{player.0.espnId}}-bigImpact" 
+                            {% if player.0.currentlyHavingBigImpact %} checked {% endif %} /></td> {% endcomment %}
+                        {% for playerStatus in player.1 %}
+                        <td>{% if playerStatus == "Bye" %}Bye{% elif playerStatus == "Not in Roster" %}Not in Roster{% elif playerStatus.playerStatus == 1%}✅{% else %}🚫{% endif %}</td>
+                        {% comment %} <td>{% if playerStatus == "Bye" %}{{playerStatus}}{% else %}{{playerStatus.playerStatus}}{% endif %}</td> {% endcomment %}
 
+                        {% endfor %}
+                    </tr>
+                    
+
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
     </div>
     <script>
         $("#player_table").on("click", ".save-btn", function () {
