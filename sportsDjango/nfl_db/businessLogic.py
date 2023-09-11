@@ -850,7 +850,7 @@ def checkModelBets(bookOverUnder, bookLineHometeam, individualModelResult, team1
             
     return individualModelResult
 
-def checkIfCurrentSeason(yearOfSeason, weekOfSeason):
+def checkIfCurrentSeason(yearOfSeason, weekOfSeason = 0):
     currentYear = datetime.now().year
     currentMonth = datetime.now().month
     
