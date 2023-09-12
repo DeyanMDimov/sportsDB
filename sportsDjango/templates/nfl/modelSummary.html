@@ -1,5 +1,6 @@
 {% extends 'nfl/base.html'%}
 {% load static %}
+{% load bootstrap_icons %}
 {% block loadModel %}
     <div class = "container">
         
@@ -55,8 +56,9 @@
                 </ol>
             </p>
             <div id="modelSummary">
-                <table class="table-bordered" id="modelSummary">
+                <table class="table-bordered border-secondary-subtle" id="modelSummary">
                     <thead>
+                        <td></td>
                         <td>Home Team</td>
                         <td>Model Score</td>
                         <td>Actual Score</td>
@@ -79,6 +81,7 @@
                         {% for result in modelResults %}
                             {% if result.previousWeekNotFinished %}
                             <tr>
+                                <td>{% bs_icon 'caret-right-fill'%}</td>
                                 <td>{{ result.team1Name }}</td>
                                 <td></td>
                                 <td></td>
@@ -96,7 +99,13 @@
                                 <td class="modelSummaryLine"></td> {% endcomment %}
                             </tr>
                             {% else %}
-                            <tr>
+
+                            <tr id="accordion-{{result.team1Name}}{{result.team2Name}}">
+                                <td class="accordion">
+                                    <button class="accordion-button collapsed" type="button" data-toggle="collapse" data-target="#collapse-{{result.team1Name}}{{result.team2Name}}" aria-expanded="true" aria-controls="collapse-{{result.team1Name}}{{result.team2Name}}">
+                                       
+                                    </button>
+                                </td>
                                 <td>{{ result.team1Name }}</td>
                                 <td>{% if selectedModel == "v2" %}
                                     {{ result.expected_points_from_drives_t1 }}
@@ -170,11 +179,17 @@
                                 </td>
                                 {% endif %}
                             </tr>
+                            <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}" data-parent="#accordion-{{result.team1Name}}{{result.team2Name}}">
+                                <td colspan="14">
+                                    Something Here
+                                </td>
+                            </tr>
+                            
                             {% endif %}
                         {% endfor %}
                         {% if anyCompleted %}
                         <tr>
-                            <td colspan="13">
+                            <td colspan="14">
                             </td>
                             <td>{{ouRecord}}</td>
                             <td>{{lbRecord}}</td>
