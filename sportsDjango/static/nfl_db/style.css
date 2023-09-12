@@ -1,5 +1,11 @@
+body {
+  font: 16px/1.5em "Overpass", "Open Sans", Helvetica, sans-serif;
+  color: #333;
+  font-weight: 300;
+}
+
 .container{ 
-  max-width:1000px;
+  max-width:1150px;
 }
 
 .nav-menu .menu-item{
@@ -10,7 +16,7 @@
     padding-inline-start: 0px;
 }
 
-#modelSummary tr td, #year-summary tr td{
+#modelSummary tr td{
     text-align: center;
 }
 
@@ -18,12 +24,29 @@
     font-size:16px;
 }
 
-#modelSummary thead td, #year-summary thead td{
+#modelSummary thead td{
     padding: 0 5px;
 }
 
 .modelSummaryLine {
     width: 100px;
+}
+
+#year-summary td{
+  padding-left: 20px;
+}
+
+.modelSummaryContainer{
+  padding: 0px !important
+}
+
+#year_modelSummary{
+  font-size:14px;
+}
+
+#year_modelSummary thead td{
+  padding: 0px;
+  text-align:center;
 }
 
 .correctBet { 
@@ -41,14 +64,21 @@
 }
 
 .accordion {
-  --bs-accordion-btn-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
-  --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+  --bs-accordion-btn-icon:        url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+  --bs-accordion-btn-icon-transform: rotate(-90deg);
+  --bs-accordion-btn-padding-y: 0.5rem;
+  --bs-accordion-btn-padding-x: 0.5rem;
+  /* --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e"); */
 }
 
-  textarea{
-    resize: both;
-  }
 
-  .weekAvailTableCell{
-    width: 60px;
-  }
+
+textarea{
+  resize: both;
+}
+
+.weekAvailTableCell{
+  width: 60px;
+}
+
+ 
