@@ -1671,8 +1671,6 @@ def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekN
             if len(player[1]) != weekNum:
                 player[1].append("Not in Roster")
 
-                
-
         return seasonAvailability
             
             

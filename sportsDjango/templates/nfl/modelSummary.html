@@ -77,80 +77,100 @@
                     </thead>
                     <tbody>
                         {% for result in modelResults %}
-                        <tr>
-                            <td>{{ result.team1Name }}</td>
-                            <td>{% if selectedModel == "v2" %}
-                                {{ result.expected_points_from_drives_t1 }}
-                                {% else %} 
-                                {{ result.team1CalculatedPoints }}
-                                {% endif %}
+                            {% if result.previousWeekNotFinished %}
+                            <tr>
+                                <td>{{ result.team1Name }}</td>
+                                <td></td>
+                                <td></td>
+                                <td>vs.</td>
+                                <td>{{ result.team2Name }}</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td>{{ result.bookProvidedTotal }}</td>
+                                <td></td>
+                                <td class="modelSummaryLine">Prev. Week</td>
+                                <td class="modelSummaryLine">Game </td>
+                                <td class="modelSummaryLine">Not Finished</td>
+                                {% comment %} <td class="modelSummaryLine"></td>
+                                <td class="modelSummaryLine"></td> {% endcomment %}
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td>{{ result.team1Name }}</td>
+                                <td>{% if selectedModel == "v2" %}
+                                    {{ result.expected_points_from_drives_t1 }}
+                                    {% else %} 
+                                    {{ result.team1CalculatedPoints }}
+                                    {% endif %}
 
-                            </td>
-                            <td>
+                                </td>
+                                <td>
+                                    {% if result.gameCompleted %}
+                                    {{ result.team1ActualPoints }}
+                                    {% endif %}
+                                </td>
+                                <td>vs.</td>
+                                <td>{{ result.team2Name }}</td>
+                                <td>{% if selectedModel == "v2" %}
+                                    {{ result.expected_points_from_drives_t2 }}
+                                    {% else %} 
+                                    {{ result.team2CalculatedPoints }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if result.gameCompleted %}
+                                    {{ result.team2ActualPoints }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ result.calculatedTotal }}</td>
+                                <td>{{ result.bookProvidedTotal }}</td>
+                                <td>
+                                    {% if result.gameCompleted %}
+                                    {{ result.actualTotal }}
+                                    {% endif %}
+                                </td>
+                                <td class="modelSummaryLine">
+                                    {{ result.team1Name }} 
+                                        {% if result.calculatedSpread > 0 %}
+                                        +{% endif %}{{ result.calculatedSpread }}</td>
+                                <td class="modelSummaryLine">
+                                    {{ result.team1Name }} 
+                                        {% if result.bookProvidedSpread > 0 %}
+                                        +{% endif %}{{ result.bookProvidedSpread }}</td>
+                                <td class="modelSummaryLine">
+                                    {% if result.gameCompleted%}
+                                    {{ result.team1Name }} 
+                                        {% if result.actualSpread > 0 %}
+                                        +{% endif %}{{result.actualSpread }}
+                                    {% endif %}
+                                </td>
                                 {% if result.gameCompleted %}
-                                {{ result.team1ActualPoints }}
-                                {% endif %}
-                            </td>
-                            <td>vs.</td>
-                            <td>{{ result.team2Name }}</td>
-                            <td>{% if selectedModel == "v2" %}
-                                {{ result.expected_points_from_drives_t2 }}
-                                {% else %} 
-                                {{ result.team2CalculatedPoints }}
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if result.gameCompleted %}
-                                {{ result.team2ActualPoints }}
-                                {% endif %}
-                            </td>
-                            <td>{{ result.calculatedTotal }}</td>
-                            <td>{{ result.bookProvidedTotal }}</td>
-                            <td>
-                                {% if result.gameCompleted %}
-                                {{ result.actualTotal }}
-                                {% endif %}
-                            </td>
-                            <td class="modelSummaryLine">
-                                {{ result.team1Name }} 
-                                    {% if result.calculatedSpread > 0 %}
-                                    +{% endif %}{{ result.calculatedSpread }}</td>
-                            <td class="modelSummaryLine">
-                                {{ result.team1Name }} 
-                                    {% if result.bookProvidedSpread > 0 %}
-                                    +{% endif %}{{ result.bookProvidedSpread }}</td>
-                            <td class="modelSummaryLine">
-                                {% if result.gameCompleted%}
-                                {{ result.team1Name }} 
-                                    {% if result.actualSpread > 0 %}
-                                    +{% endif %}{{result.actualSpread }}
-                                {% endif %}
-                            </td>
-                            {% if result.gameCompleted %}
-                            <td class="modelSummaryLine 
-                                {% if result.overUnderBetIsCorrect == 'True' %}
+                                <td class="modelSummaryLine 
+                                    {% if result.overUnderBetIsCorrect == 'True' %}
+                                        correctBet
+                                    {% elif result.overUnderBetIsCorrect == 'None' or result.overUnderBetIsCorrect == 'Push' %}
+                                        noBet
+                                    {% else %}
+                                        wrongBet
+                                    {% endif %}
+                                    ">
+                                    {{result.overUnderBet}}
+                                </td>
+                                <td class="modelSummaryLine
+                                {% if result.lineBetIsCorrect == 'True'%}
                                     correctBet
-                                {% elif result.overUnderBetIsCorrect == 'None' or result.overUnderBetIsCorrect == 'Push' %}
+                                {% elif result.lineBetIsCorrect == 'None' or result.lineBetIsCorrect == 'Push'%}
                                     noBet
                                 {% else %}
                                     wrongBet
                                 {% endif %}
-                                ">
-                                {{result.overUnderBet}}
-                            </td>
-                            <td class="modelSummaryLine
-                            {% if result.lineBetIsCorrect == 'True'%}
-                                correctBet
-                            {% elif result.lineBetIsCorrect == 'None' or result.lineBetIsCorrect == 'Push'%}
-                                noBet
-                            {% else %}
-                                wrongBet
+                                    ">
+                                    {{result.lineBet}}
+                                </td>
+                                {% endif %}
+                            </tr>
                             {% endif %}
-                                ">
-                                {{result.lineBet}}
-                            </td>
-                            {% endif %}
-                        </tr>
                         {% endfor %}
                         {% if anyCompleted %}
                         <tr>

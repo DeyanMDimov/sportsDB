@@ -64,6 +64,8 @@ class individualBettingModelResult:
 
     betRankScore = 0
 
+    previousWeekNotFinished = False
+
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
         self.team1Name = t1name
@@ -84,15 +86,27 @@ class individualBettingModelResult:
         self.team2ExpectedYardsPerGame  = round((self.team2TotalOffensiveYardsPerGame + self.team1TotalDefensiveYardsPerGame)/2, 2)
         self.team2ExpectedYardsPerPoint = round((self.team2TotalYardsPerPoint + self.team1TotalDefensiveYardsPerPoint)/2, 2)
 
-        self.team1CalculatedPoints = round(self.team1ExpectedYardsPerGame/self.team1ExpectedYardsPerPoint, 0)
-        self.team2CalculatedPoints = round(self.team2ExpectedYardsPerGame/self.team2ExpectedYardsPerPoint, 0)
+        if self.team1ExpectedYardsPerPoint != 0 and self.team2ExpectedYardsPerPoint != 0:
+            self.team1CalculatedPoints = round(self.team1ExpectedYardsPerGame/self.team1ExpectedYardsPerPoint, 0)
+            self.team2CalculatedPoints = round(self.team2ExpectedYardsPerGame/self.team2ExpectedYardsPerPoint, 0)
+        else:
+            self.team1CalculatedPoints = 0
+            self.team2CalculatedPoints = 0
 
         self.calculatedSpread = self.team2CalculatedPoints - self.team1CalculatedPoints
         self.calculatedTotal = self.team1CalculatedPoints + self.team2CalculatedPoints
 
+    
+
 def generateBettingModelV1(gameData, seasonWeek, seasonYear):
     homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']                    
     awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+
+    homeTeamObject = nflTeam.objects.get(espnId = homeTeamEspnId)
+    homeTeamName = homeTeamObject.abbreviation
+
+    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
+    awayTeamName = awayTeamObject.abbreviation
 
     homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = seasonWeek, yearOfSeason = seasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = seasonWeek, yearOfSeason = seasonYear, completed = True)
 
@@ -101,6 +115,15 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear):
     homeTeamGamesPlayed = homeTeamPastGames.count()
     awayTeamGamesPlayed = awayTeamPastGames.count()
 
+    homeTeamLastWeeksGame = homeTeamPastGames.filter(weekOfSeason = seasonWeek - 1)
+    awayTeamLastWeeksGame = awayTeamPastGames.filter(weekOfSeason = seasonWeek - 1)
+
+    if seasonWeek != 1 and (len(homeTeamLastWeeksGame) == 0 or len(awayTeamLastWeeksGame) == 0):
+        modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+        modelResult.previousWeekNotFinished = True
+        return modelResult
+        
+
     homeTeamTotalOffenseYards = 0
     homeTeamTotalPoints = 0
 
@@ -151,33 +174,44 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear):
     team2TotalYardsPerPoint             = awayTeamTotalOffenseYards/awayTeamTotalPoints
     team2TotalDefensiveYardsPerGame     = awayTeamTotalYardsAllowed/awayTeamGamesPlayed
     team2TotalDefensiveYardsPerPoint    = awayTeamTotalYardsAllowed/awayTeamTotalPointsAllowed
-
-    homeTeamObject = nflTeam.objects.get(espnId = homeTeamEspnId)
-    homeTeamName = homeTeamObject.abbreviation
-
-    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
-    awayTeamName = awayTeamObject.abbreviation
 
     return individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
 
 def generateBettingModelHistV1(gameData, week1 = False):
     homeTeamEspnId = gameData.homeTeamEspnId                    
     awayTeamEspnId = gameData.awayTeamEspnId
+    
+    homeTeamObject = nflTeam.objects.get(espnId = homeTeamEspnId)
+    homeTeamName = homeTeamObject.abbreviation
 
-    homeTeamPastGames = None
-    awayTeamPastGames = None
-    if week1:
-        getSeasonYear = gameData.yearOfSeason - 1
-        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
+    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
+    awayTeamName = awayTeamObject.abbreviation
 
-        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
-    else:
-        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+    homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
 
-        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+    awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
 
     homeTeamGamesPlayed = homeTeamPastGames.count()
     awayTeamGamesPlayed = awayTeamPastGames.count()
+
+    if homeTeamGamesPlayed == 0:
+        getSeasonYear = gameData.yearOfSeason - 1
+        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
+
+        homeTeamGamesPlayed = homeTeamPastGames.count()
+
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
+
+        awayTeamGamesPlayed = awayTeamPastGames.count()
+        
+    homeTeamLastWeeksGame = homeTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
+    awayTeamLastWeeksGame = awayTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
+
+    if gameData.weekOfSeason != 1 and (len(homeTeamLastWeeksGame) == 0 or len(awayTeamLastWeeksGame) == 0):
+        modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+        modelResult.previousWeekNotFinished = True
+        return modelResult
+    
 
     homeTeamTotalOffenseYards = 0
     homeTeamTotalPoints = 0
@@ -197,7 +231,34 @@ def generateBettingModelHistV1(gameData, week1 = False):
             homeTeamTotalPoints         += homeTeamPastMatch.awayTeamPoints
             homeTeamTotalYardsAllowed   += homeTeamPastMatch.awayTeamYardsAllowed
             homeTeamTotalPointsAllowed  += homeTeamPastMatch.awayTeamPointsAllowed
-           
+
+    if homeTeamTotalPoints == 0 or homeTeamTotalPointsAllowed == 0:
+        homeTeamPrevSeasonGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15, yearOfSeason = gameData.yearOfSeason - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15, yearOfSeason = gameData.yearOfSeason - 1, completed = True)
+
+        homeTeamPastGamesGathered = list(homeTeamPastGames)
+        homeTeamPastGames = []
+        for game in homeTeamPastGamesGathered:
+            homeTeamPastGames.append(game)
+        
+        for prevSeasonGame in homeTeamPrevSeasonGames:
+            homeTeamPastGames.append(prevSeasonGame)
+
+        homeTeamGamesPlayed = len(homeTeamPastGames)
+
+        for homeTeamPastMatch in homeTeamPastGames:
+            if int(homeTeamEspnId) == int(homeTeamPastMatch.homeTeamEspnId):
+                homeTeamTotalOffenseYards   += homeTeamPastMatch.homeTeamTotalYards
+                homeTeamTotalPoints         += homeTeamPastMatch.homeTeamPoints
+                homeTeamTotalYardsAllowed   += homeTeamPastMatch.homeTeamYardsAllowed
+                homeTeamTotalPointsAllowed  += homeTeamPastMatch.homeTeamPointsAllowed
+                
+            else:
+                homeTeamTotalOffenseYards   += homeTeamPastMatch.awayTeamTotalYards
+                homeTeamTotalPoints         += homeTeamPastMatch.awayTeamPoints
+                homeTeamTotalYardsAllowed   += homeTeamPastMatch.awayTeamYardsAllowed
+                homeTeamTotalPointsAllowed  += homeTeamPastMatch.awayTeamPointsAllowed
+
+
 
     awayTeamTotalOffenseYards = 0
     awayTeamTotalPoints = 0
@@ -218,27 +279,54 @@ def generateBettingModelHistV1(gameData, week1 = False):
             awayTeamTotalPoints         += awayTeamPastMatch.awayTeamPoints
             awayTeamTotalYardsAllowed   += awayTeamPastMatch.awayTeamYardsAllowed
             awayTeamTotalPointsAllowed  += awayTeamPastMatch.awayTeamPointsAllowed
-       
 
-    team1TotalOffensiveYardsPerGame     = homeTeamTotalOffenseYards/homeTeamGamesPlayed
-    team1TotalYardsPerPoint             = homeTeamTotalOffenseYards/homeTeamTotalPoints
-    team1TotalDefensiveYardsPerGame     = homeTeamTotalYardsAllowed/homeTeamGamesPlayed
-    team1TotalDefensiveYardsPerPoint    = homeTeamTotalYardsAllowed/homeTeamTotalPointsAllowed
+    if awayTeamTotalPoints == 0 or awayTeamTotalPointsAllowed == 0:
+        awayTeamPrevSeasonGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15,yearOfSeason = gameData.yearOfSeason - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15,yearOfSeason = gameData.yearOfSeason - 1, completed = True)
+        
+        awayTeamPastGamesGathered = list(awayTeamPastGames)
+        awayTeamPastGames = []
 
-    team2TotalOffensiveYardsPerGame     = awayTeamTotalOffenseYards/awayTeamGamesPlayed
-    team2TotalYardsPerPoint             = awayTeamTotalOffenseYards/awayTeamTotalPoints
-    team2TotalDefensiveYardsPerGame     = awayTeamTotalYardsAllowed/awayTeamGamesPlayed
-    team2TotalDefensiveYardsPerPoint    = awayTeamTotalYardsAllowed/awayTeamTotalPointsAllowed
+        for game in awayTeamPastGamesGathered:
+            awayTeamPastGames.append(game)
+        
+        for prevSeasonGame in awayTeamPrevSeasonGames:
+            awayTeamPastGames.append(prevSeasonGame)
 
-    homeTeamObject = nflTeam.objects.get(espnId = homeTeamEspnId)
-    homeTeamName = homeTeamObject.abbreviation
+        awayTeamGamesPlayed = len(awayTeamPastGames)
 
-    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
-    awayTeamName = awayTeamObject.abbreviation
+        for awayTeamPastMatch in awayTeamPastGames:
+            if int(awayTeamEspnId) == int(awayTeamPastMatch.homeTeamEspnId):
+                awayTeamTotalOffenseYards   += awayTeamPastMatch.homeTeamTotalYards
+                awayTeamTotalPoints         += awayTeamPastMatch.homeTeamPoints
+                awayTeamTotalYardsAllowed   += awayTeamPastMatch.homeTeamYardsAllowed
+                awayTeamTotalPointsAllowed  += awayTeamPastMatch.homeTeamPointsAllowed
+    
+            else:
+                awayTeamTotalOffenseYards   += awayTeamPastMatch.awayTeamTotalYards
+                awayTeamTotalPoints         += awayTeamPastMatch.awayTeamPoints
+                awayTeamTotalYardsAllowed   += awayTeamPastMatch.awayTeamYardsAllowed
+                awayTeamTotalPointsAllowed  += awayTeamPastMatch.awayTeamPointsAllowed
 
-    modelResult = individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
 
-    return modelResult
+    try:
+        team1TotalOffensiveYardsPerGame     = homeTeamTotalOffenseYards/homeTeamGamesPlayed
+        team1TotalYardsPerPoint             = homeTeamTotalOffenseYards/homeTeamTotalPoints
+        team1TotalDefensiveYardsPerGame     = homeTeamTotalYardsAllowed/homeTeamGamesPlayed
+        team1TotalDefensiveYardsPerPoint    = homeTeamTotalYardsAllowed/homeTeamTotalPointsAllowed
+
+        team2TotalOffensiveYardsPerGame     = awayTeamTotalOffenseYards/awayTeamGamesPlayed
+        team2TotalYardsPerPoint             = awayTeamTotalOffenseYards/awayTeamTotalPoints
+        team2TotalDefensiveYardsPerGame     = awayTeamTotalYardsAllowed/awayTeamGamesPlayed
+        team2TotalDefensiveYardsPerPoint    = awayTeamTotalYardsAllowed/awayTeamTotalPointsAllowed
+
+        modelResult = individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
+
+        return modelResult
+    except ZeroDivisionError as e:
+        modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+        modelResult.emptyModel = True
+        return modelResult
+
 
 def setBetRankingsV1(v1_modelResults):
     OffenseYardsPerGame = []
@@ -466,6 +554,30 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
     
     homeTeamGamesPlayed = homeTeamPastGames.count()
 
+    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
+    awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = seasonWeek, yearOfSeason = seasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = seasonWeek, yearOfSeason = seasonYear, completed = True)
+    
+    awayTeamGamesPlayed = awayTeamPastGames.count()
+
+    if(homeTeamGamesPlayed == 0):
+        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__gte = 13, yearOfSeason = seasonYear - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__gte = 13, yearOfSeason = seasonYear - 1, completed = True)
+
+        homeTeamGamesPlayed = homeTeamPastGames.count()
+
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = seasonYear - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = seasonYear - 1, completed = True)
+
+        awayTeamGamesPlayed = awayTeamPastGames.count()
+
+    homeTeamLastWeeksGame = homeTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
+    awayTeamLastWeeksGame = awayTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
+
+    if gameData.weekOfSeason != 1 and (len(homeTeamLastWeeksGame) == 0 or len(awayTeamLastWeeksGame) == 0):
+        modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+        modelResult.previousWeekNotFinished = True
+        return modelResult
+
+
     homeTeamTotalOffenseYards = 0
     homeTeamTotalPoints = 0
 
@@ -512,29 +624,49 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
         ht_opponentRedZoneDrivesConverted = ht_opponentRedZoneDrives.filter(driveResult = 1)
         homeTeamOpponentRedZoneConv.append(len(ht_opponentRedZoneDrivesConverted))
 
+    if homeTeamTotalPoints == 0 or homeTeamTotalPointsAllowed == 0:
+        homeTeamPrevSeasonGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15, yearOfSeason = gameData.yearOfSeason - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15, yearOfSeason = gameData.yearOfSeason - 1, completed = True)
+
+        homeTeamPastGamesGathered = list(homeTeamPastGames)
+        homeTeamPastGames = []
+        for game in homeTeamPastGamesGathered:
+            homeTeamPastGames.append(game)
         
-    avg_ht_OffenseDrives = round(sum(homeTeamOffensiveDriveCountArray)/len(homeTeamOffensiveDriveCountArray), 2)
-    avg_ht_DrivesRedZone = round(sum(homeTeamDriveRedZone)/len(homeTeamDriveRedZone), 2)
-    avg_ht_RedZoneConv = round(sum(homeTeamRedZoneConv)/len(homeTeamRedZoneConv), 2)
-    avg_ht_OpponentDrives = round(sum(homeTeamOpponentDriveCountArray)/len(homeTeamOpponentDriveCountArray), 2)
-    avg_ht_OpponentDrivesRedZone = round(sum(homeTeamOpponentDriveRedZone)/len(homeTeamOpponentDriveRedZone), 2)
-    avg_ht_OpponentRedZoneConv = round(sum(homeTeamOpponentRedZoneConv)/len(homeTeamOpponentRedZoneConv), 2)
+        for prevSeasonGame in homeTeamPrevSeasonGames:
+            homeTeamPastGames.append(prevSeasonGame)
 
+        homeTeamGamesPlayed = len(homeTeamPastGames)
 
-    team1TotalOffensiveYardsPerGame     = homeTeamTotalOffenseYards/homeTeamGamesPlayed
-    team1TotalYardsPerPoint             = homeTeamTotalOffenseYards/homeTeamTotalPoints
-    team1TotalDefensiveYardsPerGame     = homeTeamTotalYardsAllowed/homeTeamGamesPlayed
-    team1TotalDefensiveYardsPerPoint    = homeTeamTotalYardsAllowed/homeTeamTotalPointsAllowed
+        for homeTeamPastMatch in homeTeamPastGames:
+            if int(homeTeamEspnId) == int(homeTeamPastMatch.homeTeamEspnId):
+                homeTeamTotalOffenseYards   += homeTeamPastMatch.homeTeamTotalYards
+                homeTeamTotalPoints         += homeTeamPastMatch.homeTeamPoints
+                homeTeamTotalYardsAllowed   += homeTeamPastMatch.homeTeamYardsAllowed
+                homeTeamTotalPointsAllowed  += homeTeamPastMatch.homeTeamPointsAllowed
+                
+            else:
+                homeTeamTotalOffenseYards   += homeTeamPastMatch.awayTeamTotalYards
+                homeTeamTotalPoints         += homeTeamPastMatch.awayTeamPoints
+                homeTeamTotalYardsAllowed   += homeTeamPastMatch.awayTeamYardsAllowed
+                homeTeamTotalPointsAllowed  += homeTeamPastMatch.awayTeamPointsAllowed
 
-    
+            ht_offensiveDrivesInGame = driveOfPlay.objects.filter(nflMatch = homeTeamPastMatch, teamOnOffense = homeTeamObject)
+            homeTeamOffensiveDriveCountArray.append(len(ht_offensiveDrivesInGame))
 
+            ht_redZoneDrives = ht_offensiveDrivesInGame.filter(reachedRedZone = True)
+            homeTeamDriveRedZone.append(len(ht_redZoneDrives))
 
+            ht_redZoneDrivesConverted = ht_redZoneDrives.filter(driveResult = 1)
+            homeTeamRedZoneConv.append(len(ht_redZoneDrivesConverted))
 
-    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
-    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
-    awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = seasonWeek, yearOfSeason = seasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = seasonWeek, yearOfSeason = seasonYear, completed = True)
-    
-    awayTeamGamesPlayed = awayTeamPastGames.count()
+            ht_opponentDrivesInGame = driveOfPlay.objects.filter(nflMatch = homeTeamPastMatch).exclude(teamOnOffense = homeTeamObject)
+            homeTeamOpponentDriveCountArray.append(len(ht_opponentDrivesInGame))
+
+            ht_opponentRedZoneDrives = ht_opponentDrivesInGame.filter(reachedRedZone = True)
+            homeTeamOpponentDriveRedZone.append(len(ht_opponentRedZoneDrives))
+
+            ht_opponentRedZoneDrivesConverted = ht_opponentRedZoneDrives.filter(driveResult = 1)
+            homeTeamOpponentRedZoneConv.append(len(ht_opponentRedZoneDrivesConverted))
 
     awayTeamTotalOffenseYards = 0
     awayTeamTotalPoints = 0
@@ -582,6 +714,66 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
         at_opponentRedZoneDrivesConverted = at_opponentRedZoneDrives.filter(driveResult = 1)
         awayTeamOpponentRedZoneConv.append(len(at_opponentRedZoneDrivesConverted))
 
+    if awayTeamTotalPoints == 0 or awayTeamTotalPointsAllowed == 0:
+        awayTeamPrevSeasonGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15,yearOfSeason = gameData.yearOfSeason - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15,yearOfSeason = gameData.yearOfSeason - 1, completed = True)
+        
+        awayTeamPastGamesGathered = list(awayTeamPastGames)
+        awayTeamPastGames = []
+
+        for game in awayTeamPastGamesGathered:
+            awayTeamPastGames.append(game)
+        
+        for prevSeasonGame in awayTeamPrevSeasonGames:
+            awayTeamPastGames.append(prevSeasonGame)
+
+        awayTeamGamesPlayed = len(awayTeamPastGames)
+
+        for awayTeamPastMatch in awayTeamPastGames:
+            if int(awayTeamEspnId) == int(awayTeamPastMatch.homeTeamEspnId):
+                awayTeamTotalOffenseYards   += awayTeamPastMatch.homeTeamTotalYards
+                awayTeamTotalPoints         += awayTeamPastMatch.homeTeamPoints
+                awayTeamTotalYardsAllowed   += awayTeamPastMatch.homeTeamYardsAllowed
+                awayTeamTotalPointsAllowed  += awayTeamPastMatch.homeTeamPointsAllowed
+    
+            else:
+                awayTeamTotalOffenseYards   += awayTeamPastMatch.awayTeamTotalYards
+                awayTeamTotalPoints         += awayTeamPastMatch.awayTeamPoints
+                awayTeamTotalYardsAllowed   += awayTeamPastMatch.awayTeamYardsAllowed
+                awayTeamTotalPointsAllowed  += awayTeamPastMatch.awayTeamPointsAllowed
+            
+            at_offensiveDrivesInGame = driveOfPlay.objects.filter(nflMatch = awayTeamPastMatch, teamOnOffense = awayTeamObject)
+            awayTeamOffensiveDriveCountArray.append(len(at_offensiveDrivesInGame))
+
+            at_redZoneDrives = at_offensiveDrivesInGame.filter(reachedRedZone = True)
+            awayTeamDriveRedZone.append(len(at_redZoneDrives))
+
+            at_redZoneDrivesConverted = at_redZoneDrives.filter(driveResult = 1)
+            awayTeamRedZoneConv.append(len(at_redZoneDrivesConverted))
+
+
+            at_opponentDrivesInGame = driveOfPlay.objects.filter(nflMatch = awayTeamPastMatch).exclude(teamOnOffense = awayTeamObject)
+            awayTeamOpponentDriveCountArray.append(len(at_opponentDrivesInGame))
+
+            at_opponentRedZoneDrives = at_opponentDrivesInGame.filter(reachedRedZone = True)
+            awayTeamOpponentDriveRedZone.append(len(at_opponentRedZoneDrives))
+
+            at_opponentRedZoneDrivesConverted = at_opponentRedZoneDrives.filter(driveResult = 1)
+            awayTeamOpponentRedZoneConv.append(len(at_opponentRedZoneDrivesConverted))
+    # try:
+    avg_ht_OffenseDrives = round(sum(homeTeamOffensiveDriveCountArray)/len(homeTeamOffensiveDriveCountArray), 2)
+    avg_ht_DrivesRedZone = round(sum(homeTeamDriveRedZone)/len(homeTeamDriveRedZone), 2)
+    avg_ht_RedZoneConv = round(sum(homeTeamRedZoneConv)/len(homeTeamRedZoneConv), 2)
+    avg_ht_OpponentDrives = round(sum(homeTeamOpponentDriveCountArray)/len(homeTeamOpponentDriveCountArray), 2)
+    avg_ht_OpponentDrivesRedZone = round(sum(homeTeamOpponentDriveRedZone)/len(homeTeamOpponentDriveRedZone), 2)
+    avg_ht_OpponentRedZoneConv = round(sum(homeTeamOpponentRedZoneConv)/len(homeTeamOpponentRedZoneConv), 2)
+
+
+    team1TotalOffensiveYardsPerGame     = homeTeamTotalOffenseYards/homeTeamGamesPlayed
+    team1TotalYardsPerPoint             = homeTeamTotalOffenseYards/homeTeamTotalPoints
+    team1TotalDefensiveYardsPerGame     = homeTeamTotalYardsAllowed/homeTeamGamesPlayed
+    team1TotalDefensiveYardsPerPoint    = homeTeamTotalYardsAllowed/homeTeamTotalPointsAllowed
+
+
     avg_at_OffenseDrives = round(sum(awayTeamOffensiveDriveCountArray)/len(awayTeamOffensiveDriveCountArray), 2)
     avg_at_DrivesRedZone = round(sum(awayTeamDriveRedZone)/len(awayTeamDriveRedZone), 2)
     avg_at_RedZoneConv = round(sum(awayTeamRedZoneConv)/len(awayTeamRedZoneConv), 2)
@@ -593,6 +785,11 @@ def generateBettingModelV2(gameData, seasonWeek, seasonYear):
     team2TotalYardsPerPoint             = awayTeamTotalOffenseYards/awayTeamTotalPoints
     team2TotalDefensiveYardsPerGame     = awayTeamTotalYardsAllowed/awayTeamGamesPlayed
     team2TotalDefensiveYardsPerPoint    = awayTeamTotalYardsAllowed/awayTeamTotalPointsAllowed
+    
+    # except ZeroDivisionError as e:
+    #     modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+    #     modelResult.emptyModel = True
+    #     return modelResult
     
    
 
@@ -622,15 +819,35 @@ def generateBettingModelHistV2(gameData, week1 = False):
     
     homeTeamEspnId = gameData.homeTeamEspnId
     homeTeamObject = nflTeam.objects.get(espnId = homeTeamEspnId)
+    homeTeamName = homeTeamObject.abbreviation
     homeTeamPastGames = None
     
+    awayTeamEspnId = gameData.awayTeamEspnId
+    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
+    awayTeamName = awayTeamObject.abbreviation
+    awayTeamPastGames = None
+
     if week1:
         getSeasonYear = gameData.yearOfSeason - 1
         homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) 
+
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
     else:
         homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
-    
+
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+        
     homeTeamGamesPlayed = homeTeamPastGames.count()
+    awayTeamGamesPlayed = awayTeamPastGames.count()
+    
+    homeTeamLastWeeksGame = homeTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
+    awayTeamLastWeeksGame = awayTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
+
+    if gameData.weekOfSeason != 1 and (len(homeTeamLastWeeksGame) == 0 or len(awayTeamLastWeeksGame) == 0):
+        modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+        modelResult.previousWeekNotFinished = True
+        return modelResult
+    
 
     homeTeamTotalOffenseYards = 0
     homeTeamTotalPoints = 0
@@ -645,7 +862,7 @@ def generateBettingModelHistV2(gameData, week1 = False):
     homeTeamOpponentDriveRedZone = []
     homeTeamOpponentRedZoneConv = []
 
-    homeTeamName = homeTeamObject.abbreviation
+    
     
     for homeTeamPastMatch in homeTeamPastGames:
         if int(homeTeamEspnId) == int(homeTeamPastMatch.homeTeamEspnId):
@@ -678,6 +895,50 @@ def generateBettingModelHistV2(gameData, week1 = False):
         ht_opponentRedZoneDrivesConverted = ht_opponentRedZoneDrives.filter(driveResult = 1)
         homeTeamOpponentRedZoneConv.append(len(ht_opponentRedZoneDrivesConverted))
 
+    if homeTeamTotalPoints == 0 or homeTeamTotalPointsAllowed == 0:
+        homeTeamPrevSeasonGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15, yearOfSeason = gameData.yearOfSeason - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15, yearOfSeason = gameData.yearOfSeason - 1, completed = True)
+
+        homeTeamPastGamesGathered = list(homeTeamPastGames)
+        homeTeamPastGames = []
+        for game in homeTeamPastGamesGathered:
+            homeTeamPastGames.append(game)
+        
+        for prevSeasonGame in homeTeamPrevSeasonGames:
+            homeTeamPastGames.append(prevSeasonGame)
+
+        homeTeamGamesPlayed = len(homeTeamPastGames)
+
+        for homeTeamPastMatch in homeTeamPastGames:
+            if int(homeTeamEspnId) == int(homeTeamPastMatch.homeTeamEspnId):
+                homeTeamTotalOffenseYards   += homeTeamPastMatch.homeTeamTotalYards
+                homeTeamTotalPoints         += homeTeamPastMatch.homeTeamPoints
+                homeTeamTotalYardsAllowed   += homeTeamPastMatch.homeTeamYardsAllowed
+                homeTeamTotalPointsAllowed  += homeTeamPastMatch.homeTeamPointsAllowed
+                
+            else:
+                homeTeamTotalOffenseYards   += homeTeamPastMatch.awayTeamTotalYards
+                homeTeamTotalPoints         += homeTeamPastMatch.awayTeamPoints
+                homeTeamTotalYardsAllowed   += homeTeamPastMatch.awayTeamYardsAllowed
+                homeTeamTotalPointsAllowed  += homeTeamPastMatch.awayTeamPointsAllowed
+
+            ht_offensiveDrivesInGame = driveOfPlay.objects.filter(nflMatch = homeTeamPastMatch, teamOnOffense = homeTeamObject)
+            homeTeamOffensiveDriveCountArray.append(len(ht_offensiveDrivesInGame))
+
+            ht_redZoneDrives = ht_offensiveDrivesInGame.filter(reachedRedZone = True)
+            homeTeamDriveRedZone.append(len(ht_redZoneDrives))
+
+            ht_redZoneDrivesConverted = ht_redZoneDrives.filter(driveResult = 1)
+            homeTeamRedZoneConv.append(len(ht_redZoneDrivesConverted))
+
+            ht_opponentDrivesInGame = driveOfPlay.objects.filter(nflMatch = homeTeamPastMatch).exclude(teamOnOffense = homeTeamObject)
+            homeTeamOpponentDriveCountArray.append(len(ht_opponentDrivesInGame))
+
+            ht_opponentRedZoneDrives = ht_opponentDrivesInGame.filter(reachedRedZone = True)
+            homeTeamOpponentDriveRedZone.append(len(ht_opponentRedZoneDrives))
+
+            ht_opponentRedZoneDrivesConverted = ht_opponentRedZoneDrives.filter(driveResult = 1)
+            homeTeamOpponentRedZoneConv.append(len(ht_opponentRedZoneDrivesConverted))
+
         
     avg_ht_OffenseDrives = round(sum(homeTeamOffensiveDriveCountArray)/len(homeTeamOffensiveDriveCountArray), 2)
     avg_ht_DrivesRedZone = round(sum(homeTeamDriveRedZone)/len(homeTeamDriveRedZone), 2)
@@ -696,24 +957,13 @@ def generateBettingModelHistV2(gameData, week1 = False):
 
 
 
-    awayTeamEspnId = gameData.awayTeamEspnId
-    awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
-    awayTeamPastGames = None
-
-    if week1:
-        getSeasonYear = gameData.yearOfSeason - 1
-        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, yearOfSeason = getSeasonYear, completed = True)
-    else:
-        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
-    
-    awayTeamGamesPlayed = awayTeamPastGames.count()
+   
 
     awayTeamTotalOffenseYards = 0
     awayTeamTotalPoints = 0
 
     awayTeamTotalYardsAllowed = 0
     awayTeamTotalPointsAllowed = 0
-    awayTeamName = awayTeamObject.abbreviation
     
     awayTeamOffensiveDriveCountArray = []
     awayTeamDriveRedZone = []
@@ -754,6 +1004,52 @@ def generateBettingModelHistV2(gameData, week1 = False):
         at_opponentRedZoneDrivesConverted = at_opponentRedZoneDrives.filter(driveResult = 1)
         awayTeamOpponentRedZoneConv.append(len(at_opponentRedZoneDrivesConverted))
 
+    if awayTeamTotalPoints == 0 or awayTeamTotalPointsAllowed == 0:
+        awayTeamPrevSeasonGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15,yearOfSeason = gameData.yearOfSeason - 1, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = 19, weekOfSeason__gte = 15,yearOfSeason = gameData.yearOfSeason - 1, completed = True)
+        
+        awayTeamPastGamesGathered = list(awayTeamPastGames)
+        awayTeamPastGames = []
+
+        for game in awayTeamPastGamesGathered:
+            awayTeamPastGames.append(game)
+        
+        for prevSeasonGame in awayTeamPrevSeasonGames:
+            awayTeamPastGames.append(prevSeasonGame)
+
+        awayTeamGamesPlayed = len(awayTeamPastGames)
+
+        for awayTeamPastMatch in awayTeamPastGames:
+            if int(awayTeamEspnId) == int(awayTeamPastMatch.homeTeamEspnId):
+                awayTeamTotalOffenseYards   += awayTeamPastMatch.homeTeamTotalYards
+                awayTeamTotalPoints         += awayTeamPastMatch.homeTeamPoints
+                awayTeamTotalYardsAllowed   += awayTeamPastMatch.homeTeamYardsAllowed
+                awayTeamTotalPointsAllowed  += awayTeamPastMatch.homeTeamPointsAllowed
+    
+            else:
+                awayTeamTotalOffenseYards   += awayTeamPastMatch.awayTeamTotalYards
+                awayTeamTotalPoints         += awayTeamPastMatch.awayTeamPoints
+                awayTeamTotalYardsAllowed   += awayTeamPastMatch.awayTeamYardsAllowed
+                awayTeamTotalPointsAllowed  += awayTeamPastMatch.awayTeamPointsAllowed
+            
+            at_offensiveDrivesInGame = driveOfPlay.objects.filter(nflMatch = awayTeamPastMatch, teamOnOffense = awayTeamObject)
+            awayTeamOffensiveDriveCountArray.append(len(at_offensiveDrivesInGame))
+
+            at_redZoneDrives = at_offensiveDrivesInGame.filter(reachedRedZone = True)
+            awayTeamDriveRedZone.append(len(at_redZoneDrives))
+
+            at_redZoneDrivesConverted = at_redZoneDrives.filter(driveResult = 1)
+            awayTeamRedZoneConv.append(len(at_redZoneDrivesConverted))
+
+
+            at_opponentDrivesInGame = driveOfPlay.objects.filter(nflMatch = awayTeamPastMatch).exclude(teamOnOffense = awayTeamObject)
+            awayTeamOpponentDriveCountArray.append(len(at_opponentDrivesInGame))
+
+            at_opponentRedZoneDrives = at_opponentDrivesInGame.filter(reachedRedZone = True)
+            awayTeamOpponentDriveRedZone.append(len(at_opponentRedZoneDrives))
+
+            at_opponentRedZoneDrivesConverted = at_opponentRedZoneDrives.filter(driveResult = 1)
+            awayTeamOpponentRedZoneConv.append(len(at_opponentRedZoneDrivesConverted))
+
     avg_at_OffenseDrives = round(sum(awayTeamOffensiveDriveCountArray)/len(awayTeamOffensiveDriveCountArray), 2)
     avg_at_DrivesRedZone = round(sum(awayTeamDriveRedZone)/len(awayTeamDriveRedZone), 2)
     avg_at_RedZoneConv = round(sum(awayTeamRedZoneConv)/len(awayTeamRedZoneConv), 2)
@@ -765,8 +1061,6 @@ def generateBettingModelHistV2(gameData, week1 = False):
     team2TotalYardsPerPoint             = awayTeamTotalOffenseYards/awayTeamTotalPoints
     team2TotalDefensiveYardsPerGame     = awayTeamTotalYardsAllowed/awayTeamGamesPlayed
     team2TotalDefensiveYardsPerPoint    = awayTeamTotalYardsAllowed/awayTeamTotalPointsAllowed
-    
-   
 
     modelResult = individualV2ModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
 

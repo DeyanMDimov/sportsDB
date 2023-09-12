@@ -552,7 +552,7 @@ def getPlayers(request):
                     else:
                         return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})
                 
-                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvailSeason': athleteAvailabilitySeason, 'selTeam': inputReq['team']})
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvailSeason': athleteAvailabilitySeason, 'sel_Team': inputReq['team']})
                 # responseMessage = "Loading the full season is not implemented right now."
                 # return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
             else:
@@ -1006,9 +1006,7 @@ def loadModelYear(request):
                             
                         modelWeekResults.append(individualModelResult)
 
-                    modelRmodelWeekResultsesults = businessLogic.setBetRankingsV1(modelWeekResults)
-
-                    modelWeekResults.sort(key = lambda x: x.betRankScore, reverse = True)
+                    modelWeekResults = businessLogic.setBetRankingsV1(modelWeekResults)
 
                     topModelWeekResults = []
                     for i in range(0, topNumResults):
