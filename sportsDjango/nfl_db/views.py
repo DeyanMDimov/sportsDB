@@ -620,12 +620,15 @@ def loadModel(request, target):
                 gamesInWeek = nflMatch.objects.filter(yearOfSeason = yearOfSeason).filter(weekOfSeason = int(weekOfSeason))
 
                 for match in gamesInWeek:
-                    if selectedModel == "v1":
-                        if int(weekOfSeason) == 1:
-                            individualModelResult = businessLogic.generateBettingModelHistV1(match, week1 = True)
-                        else:
+                    if selectedModel == "v1" or selectedModel == "v1.5":
+                        # if int(weekOfSeason) == 1:
+                        #     individualModelResult = businessLogic.generateBettingModelHistV1(match, week1 = True)
+                        # else:
+                        #     individualModelResult = businessLogic.generateBettingModelHistV1(match)
+                        if selectedModel == "v1":
                             individualModelResult = businessLogic.generateBettingModelHistV1(match)
-
+                        else:
+                            individualModelResult = businessLogic.generateBettingModelHistV1(match, 8)
                         gameEspnId = match.espnId
                         
                         if(match.completed):
@@ -820,6 +823,7 @@ def loadModelYear(request):
 
     modelsOnPage = []
     modelsOnPage.append(['v1', 'V1.0 (Avg Yds/Yds per Pt)'])
+    modelsOnPage.append(['v1.5', 'V1.5 (V1 with Moving Avg.)'])
     modelsOnPage.append(['v2','V2.0 (Drives vs Drive Result)'])
     
     inputReq = request.GET
@@ -947,8 +951,11 @@ def loadModelYear(request):
                         
                         completed = True
 
-                        if selectedModel == "v1":
-                            individualModelResult = businessLogic.generateBettingModelHistV1(match)
+                        if selectedModel == "v1" or selectedModel == "v1.5":
+                            if selectedModel == "v1.5":
+                                individualModelResult = businessLogic.generateBettingModelHistV1(match, 5)
+                            else:
+                                individualModelResult = businessLogic.generateBettingModelHistV1(match)
 
                             gameEspnId = match.espnId
 

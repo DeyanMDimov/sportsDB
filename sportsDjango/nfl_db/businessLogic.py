@@ -100,7 +100,7 @@ class individualBettingModelResult:
 
     
 
-def generateBettingModelV1(gameData, seasonWeek, seasonYear):
+def generateBettingModelV1(gameData, seasonWeek, seasonYear, movingAverageWeeks = 0):
     homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']                    
     awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
 
@@ -120,10 +120,22 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear):
     homeTeamLastWeeksGame = homeTeamPastGames.filter(weekOfSeason = seasonWeek - 1)
     awayTeamLastWeeksGame = awayTeamPastGames.filter(weekOfSeason = seasonWeek - 1)
 
-    if seasonWeek != 1 and (len(homeTeamLastWeeksGame) == 0 or len(awayTeamLastWeeksGame) == 0):
-        modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
-        modelResult.previousWeekNotFinished = True
-        return modelResult
+    if seasonWeek != 1 and len(homeTeamLastWeeksGame) == 0:
+        
+        if len(nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason = seasonWeek - 1, yearOfSeason = seasonYear, completed = False)) == 0 and len(nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason = seasonWeek - 1, yearOfSeason = seasonYear, completed = False)) == 0:
+            pass
+        else:
+            modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+            modelResult.previousWeekNotFinished = True
+            return modelResult
+        
+    if seasonWeek != 1 and len(awayTeamLastWeeksGame) == 0:
+        if len(nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason = seasonWeek - 1, yearOfSeason = seasonYear, completed = False)) == 0 and len(nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason = seasonWeek - 1, yearOfSeason = seasonYear, completed = False)) == 0:
+                pass
+        else:
+            modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+            modelResult.previousWeekNotFinished = True
+            return modelResult
         
 
     homeTeamTotalOffenseYards = 0
@@ -179,7 +191,7 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear):
 
     return individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
 
-def generateBettingModelHistV1(gameData, week1 = False):
+def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
     homeTeamEspnId = gameData.homeTeamEspnId                    
     awayTeamEspnId = gameData.awayTeamEspnId
     
@@ -189,9 +201,30 @@ def generateBettingModelHistV1(gameData, week1 = False):
     awayTeamObject = nflTeam.objects.get(espnId = awayTeamEspnId)
     awayTeamName = awayTeamObject.abbreviation
 
-    homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+    if movingAverageWeeks != 0:
+        if movingAverageWeeks > gameData.weekOfSeason:
+            lastWeekOfPreviousSeason = 18 if gameData.yearOfSeason - 1 >= 2021 else 17
+            homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
+                                nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
+                                nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lte = lastWeekOfPreviousSeason, weekOfSeason__gte = lastWeekOfPreviousSeason + (gameData.weekOfSeason - movingAverageWeeks), yearOfSeason = gameData.yearOfSeason - 1, completed = True) | \
+                                nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lte = lastWeekOfPreviousSeason, weekOfSeason__gte = lastWeekOfPreviousSeason + (gameData.weekOfSeason - movingAverageWeeks), yearOfSeason = gameData.yearOfSeason - 1, completed = True)
 
-    awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+            awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
+                                nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
+                                nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lte = lastWeekOfPreviousSeason, weekOfSeason__gte = lastWeekOfPreviousSeason + (gameData.weekOfSeason - movingAverageWeeks), yearOfSeason = gameData.yearOfSeason - 1, completed = True) | \
+                                nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lte = lastWeekOfPreviousSeason, weekOfSeason__gte = lastWeekOfPreviousSeason + (gameData.weekOfSeason - movingAverageWeeks), yearOfSeason = gameData.yearOfSeason - 1, completed = True)
+
+        else:
+            homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
+                                nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True)
+
+            awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
+                                nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True)
+
+    else:
+        homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
+
+        awayTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True) | nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, yearOfSeason = gameData.yearOfSeason, completed = True)
 
     homeTeamGamesPlayed = homeTeamPastGames.count()
     awayTeamGamesPlayed = awayTeamPastGames.count()
@@ -209,10 +242,22 @@ def generateBettingModelHistV1(gameData, week1 = False):
     homeTeamLastWeeksGame = homeTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
     awayTeamLastWeeksGame = awayTeamPastGames.filter(weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason)
 
-    if gameData.weekOfSeason != 1 and (len(homeTeamLastWeeksGame) == 0 or len(awayTeamLastWeeksGame) == 0):
-        modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
-        modelResult.previousWeekNotFinished = True
-        return modelResult
+    if gameData.weekOfSeason != 1 and len(homeTeamLastWeeksGame) == 0:
+        
+        if len(nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason, completed = False)) == 0 and len(nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason, completed = False)) == 0:
+            pass
+        else:
+            modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+            modelResult.previousWeekNotFinished = True
+            return modelResult
+        
+    if gameData.weekOfSeason != 1 and len(awayTeamLastWeeksGame) == 0:
+        if len(nflMatch.objects.filter(homeTeamEspnId = awayTeamEspnId, weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason, completed = False)) == 0 and len(nflMatch.objects.filter(awayTeamEspnId = awayTeamEspnId, weekOfSeason = gameData.weekOfSeason - 1, yearOfSeason = gameData.yearOfSeason, completed = False)) == 0:
+                pass
+        else:
+            modelResult = individualBettingModelResult(homeTeamName, 0, 0, 0, 0, awayTeamName, 0, 0, 0, 0)
+            modelResult.previousWeekNotFinished = True
+            return modelResult
     
 
     homeTeamTotalOffenseYards = 0
