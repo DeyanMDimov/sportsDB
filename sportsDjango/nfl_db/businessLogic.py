@@ -66,6 +66,8 @@ class individualBettingModelResult:
 
     previousWeekNotFinished = False
 
+    matchModelDetails = None
+
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
         self.team1Name = t1name
@@ -410,6 +412,11 @@ def setBetRankingsV1(v1_modelResults):
         print("Model Bet Rank Score = " + str(mr.betRankScore))
         print()
 
+        homeTeamRankDetails = [mr.team1Name, mr.t1_OffenseYardsPerGameRank, mr.t1_OffenseYardsPerPointRank, mr.t1_DefenseYardsPerGameRank, mr.t1_DefenseYardsPerPointRank]
+        awayTeamRankDetails = [mr.team2Name, mr.t2_OffenseYardsPerGameRank, mr.t2_OffenseYardsPerPointRank, mr.t2_DefenseYardsPerGameRank, mr.t2_DefenseYardsPerPointRank]
+        mr.matchModelDetails = matchModelDetails(homeTeamRankDetails, awayTeamRankDetails)
+
+
     return v1_modelResults
 
 class individualV2ModelResult:
@@ -504,6 +511,10 @@ class individualV2ModelResult:
     t2_DefenseTotalPointsRank = 0
 
     betRankScore = 0
+
+    previousWeekNotFinished = False
+
+    matchModelDetails = None
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
@@ -1157,27 +1168,33 @@ def checkIfCurrentSeason(yearOfSeason, weekOfSeason = 0):
     else:
         return False
 
-def resetAllMatchAssociationsForClearing():
-    for match in models.nflMatch.objects.all():
-        match.homeTeam.clear()
-        match.awayTeam.clear()
-    
-    for teamPerf in models.teamMatchPerformance.objects.all():
-        teamPerf.nflMatch.clear()
-        teamPerf.team.clear()
-        teamPerf.opponent.clear()
+class matchModelDetails: 
+    homeTeamName:str
+    #homeTeamEspnId:int
+    homeTeamOffenseYdsPerPntRank:int
+    homeTeamOffenseYdsPerGmRank:int
+    homeTeamDefenseYdsPerPntRank:int
+    homeTeamDefenseYdsPerGmRank:int
+    awayTeamName:str
+    #awayTeamEspnId:int
+    awayTeamOffenseYdsPerPntRank:int
+    awayTeamOffenseYdsPerGmRank:int
+    awayTeamDefenseYdsPerPntRank:int
+    awayTeamDefenseYdsPerGmRank:int
+    betRankScore:int
 
-    deleteMatchMessage = models.nflMatch.objects.all().delete()
-    deletePerfMessage = models.teamMatchPerformance.objects.all().delete()
+    significantPlayersOut = []
 
-    return ('Objects deleted. Matches - ', deleteMatchMessage, '; Performances - ', deletePerfMessage)
-
-def resetAllPerformanceAssociationsForClearing():
-    for teamPerf in models.teamMatchPerformance.objects.all():
-        teamPerf.nflMatch.clear()
-        teamPerf.team.clear()
-        teamPerf.opponent.clear()
-    
-    deletePerfMessage = models.teamMatchPerformance.objects.all().delete()
-
-    return('Performances deleted - ', deletePerfMessage)
+    def __init__(self, homeTeamArray, awayTeamArray):
+        self.homeTeamName = homeTeamArray[0]
+        #self.homeTeamEspnId = homeTeamArray[1]
+        self.homeTeamOffenseYdsPerPntRank = homeTeamArray[1]
+        self.homeTeamOffenseYdsPerGmRank = homeTeamArray[2]
+        self.homeTeamDefenseYdsPerPntRank = homeTeamArray[3]
+        self.homeTeamDefenseYdsPerGmRank = homeTeamArray[4]
+        self.awayTeamName = awayTeamArray[0]
+        #self.awayTeamEspnId = awayTeamArray[1]
+        self.awayTeamOffenseYdsPerPntRank = awayTeamArray[1]
+        self.awayTeamOffenseYdsPerGmRank = awayTeamArray[2]
+        self.awayTeamDefenseYdsPerPntRank = awayTeamArray[3]
+        self.awayTeamDefenseYdsPerGmRank = awayTeamArray[4]

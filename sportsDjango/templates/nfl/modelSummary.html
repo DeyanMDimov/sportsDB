@@ -81,7 +81,7 @@
                         {% for result in modelResults %}
                             {% if result.previousWeekNotFinished %}
                             <tr>
-                                <td>{% bs_icon 'caret-right-fill'%}</td>
+                                <td style="width:39px"></td>
                                 <td>{{ result.team1Name }}</td>
                                 <td></td>
                                 <td></td>
@@ -180,8 +180,87 @@
                                 {% endif %}
                             </tr>
                             <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}" data-parent="#accordion-{{result.team1Name}}{{result.team2Name}}">
-                                <td colspan="14">
-                                    Something Here
+                                <td colspan="8">
+                                    <table style="font-size:0.9em" class="table text-start">
+                                        <tbody>
+                                            <tr>
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    {{result.team1Name}}
+                                                </td>
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    {{result.team2Name}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row">
+                                                    Offense Yds/Point Rank:
+                                                </th>
+                                                <td>
+                                                    {{result.matchModelDetails.homeTeamOffenseYdsPerPntRank}}
+                                                </td>
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    {{result.matchModelDetails.awayTeamOffenseYdsPerPntRank}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row">
+                                                    Offense Yds/Game Rank:
+                                                </th>
+                                                <td>
+                                                    {{result.matchModelDetails.homeTeamOffenseYdsPerGmRank}}
+                                                </td>
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    {{result.matchModelDetails.awayTeamOffenseYdsPerGmRank}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row">
+                                                    Defense Yds/Point Rank:
+                                                </th>
+                                                <td>
+                                                    {{result.matchModelDetails.homeTeamDefenseYdsPerPntRank}}
+                                                </td>
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    {{result.matchModelDetails.awayTeamDefenseYdsPerPntRank}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row">
+                                                    Defense Yds/Game Rank:
+                                                </th>
+                                                <td>
+                                                    {{result.matchModelDetails.homeTeamDefenseYdsPerGmRank}}
+                                                </td>
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    {{result.matchModelDetails.awayTeamDefenseYdsPerGmRank}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row">
+                                                    Bet Rank Score
+                                                </th>
+                                                <td colspan="3">
+                                                    {{result.betRankScore}}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+
+
+                                </td>
+                                <td colspan="8">
                                 </td>
                             </tr>
                             

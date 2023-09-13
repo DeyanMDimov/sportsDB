@@ -1926,3 +1926,28 @@ def getFirstSeasonYear(yearsOfExperience):
     else:
         firstSeasonYear = currentYear-numYears+1
     return firstSeasonYear
+
+def resetAllMatchAssociationsForClearing():
+    for match in models.nflMatch.objects.all():
+        match.homeTeam.clear()
+        match.awayTeam.clear()
+    
+    for teamPerf in models.teamMatchPerformance.objects.all():
+        teamPerf.nflMatch.clear()
+        teamPerf.team.clear()
+        teamPerf.opponent.clear()
+
+    deleteMatchMessage = models.nflMatch.objects.all().delete()
+    deletePerfMessage = models.teamMatchPerformance.objects.all().delete()
+
+    return ('Objects deleted. Matches - ', deleteMatchMessage, '; Performances - ', deletePerfMessage)
+
+def resetAllPerformanceAssociationsForClearing():
+    for teamPerf in models.teamMatchPerformance.objects.all():
+        teamPerf.nflMatch.clear()
+        teamPerf.team.clear()
+        teamPerf.opponent.clear()
+    
+    deletePerfMessage = models.teamMatchPerformance.objects.all().delete()
+
+    return('Performances deleted - ', deletePerfMessage)

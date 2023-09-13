@@ -412,11 +412,11 @@ def getData(request):
             return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'message': message})
 
         # elif 'reset' in request.GET:
-        #     businessLogic.resetAllMatchAssociationsForClearing()
+        #     crudLogic.resetAllMatchAssociationsForClearing()
         #     return render (request, 'nfl/pullData.html')
 
         # elif 'resetPerf' in request.GET:
-        #     resetMessage = businessLogic.resetAllPerformanceAssociationsForClearing()
+        #     resetMessage = crudLogic.resetAllPerformanceAssociationsForClearing()
         #     return render(request, 'nfl/pullData.html', {"message": resetMessage})
         
         # elif 'deleteDrives' in request.GET:
@@ -1021,16 +1021,23 @@ def loadModelYear(request):
                     lineBetWrong = len(list(filter(lambda x: x.lineBetIsCorrect == "False", topModelWeekResults)))
                     lineBetPush = len(list(filter(lambda x: x.lineBetIsCorrect == "Push", topModelWeekResults)))
                     lineBetRecord = str(lineBetCorrect) + " - " + str(lineBetWrong) + " - " + str(lineBetPush)
+                    
 
                     totalOverUnderWins += overUnderCorrect
                     totalOverUnderLosses += overUnderWrong
+                    totalOverUnderPushes += overUnderPush
 
                     totalLineBetWins += lineBetCorrect
                     totalLineBetLosses += lineBetWrong
+                    totalLineBetPushes += lineBetPush
 
                     seasonResults.append([wk, overUnderRecord, lineBetRecord, topModelWeekResults])
 
-            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel, 'seasonResults':seasonResults, 'ouWins': totalOverUnderWins, 'ouLosses': totalOverUnderLosses, 'lbWins': totalLineBetWins, 'lbLosses': totalLineBetLosses, 'yearOfSeason':yearOfSeason, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults})
+            totalOverUnderRecord = str(totalOverUnderWins) + " - " + str(totalOverUnderLosses) + " - " + str(totalOverUnderPushes)
+            totalLineBetRecord = str(totalLineBetWins) + " - " + str(totalLineBetLosses) + " - " + str(totalLineBetPushes)
+
+
+            return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'selectedModel': selectedModel, 'seasonResults':seasonResults, 'ouRecord': totalOverUnderRecord, 'lineBetRecord': totalLineBetRecord, 'yearOfSeason':yearOfSeason, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults})
         else: 
             return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults})
     else:
