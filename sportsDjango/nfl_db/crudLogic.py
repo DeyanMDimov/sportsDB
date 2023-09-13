@@ -645,10 +645,12 @@ def deleteNflMatchesByYear(yearOfSeason):
 
 
 
-def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamStats, matchEspnId, teamId, opponentId, playByPlayData, playByPlayObj, drivesData, seasonWeek, seasonYear):
+def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamStats, matchEspnId, teamId, opponentId, opponentStats, playByPlayData, playByPlayObj, drivesData, seasonWeek, seasonYear):
     exceptions = [] 
 
     mappedTeamStats = teamStatsJsonMap(teamStats)
+
+    mappedOpponentStats = teamStatsJsonMap(opponentStats)
     
     if existingTeamPerformance == None:
         teamPerf = teamMatchPerformance.objects.create(
@@ -685,8 +687,8 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             #-----offense-rushing
             rushingAttempts             = mappedTeamStats['rushing']['rushingAttempts'],
             rushingYards                = mappedTeamStats['rushing']['rushingYards'],
-            stuffsTaken                 = mappedTeamStats['rushing']['stuffs'],
-            stuffYardsLost              = mappedTeamStats['rushing']['stuffYardsLost'],
+            stuffsTaken                 = mappedOpponentStats['defensive']['stuffs'],
+            stuffYardsLost              = mappedOpponentStats['defensive']['stuffYards'],
             #rushingPlaysTenPlus         = 
             twoPtRushConversions        = mappedTeamStats['rushing']['twoPointRushConvs'],
             twoPtRushAttempts           = mappedTeamStats['rushing']['twoPtRushAttempts'],
@@ -785,6 +787,12 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         else:
             teamPerf.blockedFieldGoalTouchdowns = 0
 
+        if 'QBHits' in mappedOpponentStats['defensive']:
+            teamPerf.qbHitsTaken = mappedOpponentStats['defensive']['QBHits']
+        else:
+            teamPerf.qbHitsTaken = 0
+        
+
 
         if associatedTeamObject.espnId == nflMatchInstance.homeTeamEspnId:
             teamPerf.totalPointsAllowed             = nflMatchInstance.awayTeamPoints
@@ -846,8 +854,8 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         #-----offense-rushing
         existingTeamPerformance.rushingAttempts             = mappedTeamStats['rushing']['rushingAttempts']
         existingTeamPerformance.rushingYards                = mappedTeamStats['rushing']['rushingYards']
-        existingTeamPerformance.stuffsTaken                 = mappedTeamStats['rushing']['stuffs']
-        existingTeamPerformance.stuffYardsLost              = mappedTeamStats['rushing']['stuffYardsLost']
+        existingTeamPerformance.stuffsTaken                 = mappedOpponentStats['defensive']['stuffs']
+        existingTeamPerformance.stuffYardsLost              = mappedOpponentStats['defensive']['stuffYards']
         #rushingPlaysTenPlus         = 
         existingTeamPerformance.twoPtRushConversions        = mappedTeamStats['rushing']['twoPointRushConvs']
         existingTeamPerformance.twoPtRushAttempts           = mappedTeamStats['rushing']['twoPtRushAttempts']
@@ -945,6 +953,14 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             existingTeamPerformance.blockedFieldGoalTouchdowns  = mappedTeamStats['defensive']['blockedFieldGoalTouchdowns']
         else:
             existingTeamPerformance.blockedFieldGoalTouchdowns = 0
+        
+        if 'QBHits' in mappedOpponentStats['defensive']:
+            existingTeamPerformance.qbHitsTaken = mappedOpponentStats['defensive']['QBHits']
+        else:
+            existingTeamPerformance.qbHitsTaken = 0
+        
+        
+        
 
 
         if associatedTeamObject.espnId == nflMatchInstance.homeTeamEspnId:

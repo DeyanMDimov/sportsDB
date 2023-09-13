@@ -138,7 +138,7 @@ def getData(request):
             exceptionCollection = []
 
             while i <= endWeek:
-                time.sleep(2)
+                time.sleep(1)
                 weekOfSeason = i
                 
                 url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
@@ -272,7 +272,7 @@ def getData(request):
                         
                         
                         try:
-                            crudLogic.createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
+                            crudLogic.createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, awayTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
                         except Exception as e: 
                             print("Problem with creating home team Match performance")
                             game_exception = []
@@ -283,7 +283,7 @@ def getData(request):
                             exceptionCollection.append(game_exception)
 
                         try:
-                            crudLogic.createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
+                            crudLogic.createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, homeTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
 
                         except Exception as e:
                             print("Problem with creating away team Match performance")
