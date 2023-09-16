@@ -47,11 +47,19 @@
                     Select top 
                     <select name="topNumResults" id="topNumResults">
                         {% for nr in nrSelect %}
+                        {% if nr == 20 %} 
+                        <option value = "{{nr}}"
+                            {% if nr == topNumResults %}
+                                selected
+                            {% endif %}
+                            >ALL</option>
+                        {% else %}
                         <option value = "{{nr}}"
                             {% if nr == topNumResults %}
                                 selected
                             {% endif %}
                             >{{nr}}</option>
+                        {% endif %}
                         {% endfor %}
                     </select>
                     results

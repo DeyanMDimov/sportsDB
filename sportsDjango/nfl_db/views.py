@@ -614,24 +614,18 @@ def loadModel(request, target):
             selectedModel = inputReq['model']
             selectedLen = int(inputReq['movingavg'])
 
-            # calculcatingCurrentSeason = businessLogic.checkIfCurrentSeason(yearOfSeason, weekOfSeason)
-            # weeksInSeason = 18 if int(yearOfSeason) >= 2021 else 17
             
             anyGamesCompleted = False
 
             modelResults = []
-            # if not calculcatingCurrentSeason:
-                
+
             gamesInWeek = nflMatch.objects.filter(yearOfSeason = yearOfSeason).filter(weekOfSeason = int(weekOfSeason))
 
             # if len(gamesInWeek) == 0:
                 
             for match in gamesInWeek:
                 if selectedModel == "v1" or selectedModel == "v1.5":
-                    # if int(weekOfSeason) == 1:
-                    #     individualModelResult = businessLogic.generateBettingModelHistV1(match, week1 = True)
-                    # else:
-                    #     individualModelResult = businessLogic.generateBettingModelHistV1(match)
+                    
                     if selectedModel == "v1":
                         individualModelResult = businessLogic.generateBettingModelHistV1(match)
                     else:
@@ -677,9 +671,6 @@ def loadModel(request, target):
                         team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
                         team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
                         
-                        #team1_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.homeTeamEspnId)
-                        #team2_performance = teamMatchPerformance.objects.get(matchEspnId = gameEspnId, teamEspnId = match.awayTeamEspnId)    
-                        
                         team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team1)
                         team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team2)
 
@@ -710,86 +701,6 @@ def loadModel(request, target):
 
                     modelResults.append(individualModelResult)
 
-            # else:
-                # url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
-                # if(int(weekOfSeason) >= 19):
-                #     playoffWeekOfSeason = int(weekOfSeason) - 18
-                #     url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/3/weeks/'+str(playoffWeekOfSeason)+'/events')
-                
-                # response = requests.get(url)
-                # data = response.json()
-                # gameLinks = data['items']
-                
-                # for link in gameLinks:
-                    
-                #     gameDataResponse = requests.get(link['$ref'])
-                #     gameData = gameDataResponse.json()
-                #     completed = (gameData['competitions'][0]['boxscoreSource']['state'] == "full" and gameData['competitions'][0]['liveAvailable'] == False )
-
-                #     if selectedModel == "v1":
-                #         individualModelResult = businessLogic.generateBettingModelV1(gameData, weekOfSeason, yearOfSeason)
-
-                #         gameEspnId = gameData['id']
-                #         match = nflMatch.objects.get(espnId = gameEspnId)
-
-                #         if(completed):
-                #             team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
-                #             team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
-
-                #             #print("Game ID: ", gameEspnId)
-                #             if match.awayTeamPoints != None:     
-                #                 individualModelResult.team1ActualYards = match.homeTeamTotalYards
-                #                 individualModelResult.team2ActualYards = match.awayTeamTotalYards
-                #                 individualModelResult.team1ActualPoints = match.homeTeamPoints
-                #                 individualModelResult.team2ActualPoints = match.awayTeamPoints
-                #                 individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
-                #                 individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
-                #                 individualModelResult.gameCompleted = True
-                        
-                #             if match.overUnderLine != 0 and match.overUnderLine != None:
-                #                 individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
-                        
-
-                #     elif(selectedModel == "v2"):
-                #         individualModelResult = businessLogic.generateBettingModelV2(gameData, weekOfSeason, yearOfSeason)
-
-                #         gameEspnId = gameData['id']
-                #         match = nflMatch.objects.get(espnId = gameEspnId)
-                        
-
-                #         if(completed):
-                #             team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
-                #             team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)    
-                #             team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team1)
-                #             team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = team2)
-
-                #             if match.awayTeamPoints != None:     
-                #                 individualModelResult.team1ActualYards = match.homeTeamTotalYards
-                #                 individualModelResult.team1ActualPoints = match.homeTeamPoints
-                #                 individualModelResult.actual_t1_OffenseDrives = len(team1_drives)
-                #                 individualModelResult.actual_t1_DrivesRedZone = len(team1_drives.filter(reachedRedZone = True))
-                #                 individualModelResult.actual_t1_RedZoneConv = len(team1_drives.filter(driveResult = 1))
-                                
-                                
-                #                 individualModelResult.team2ActualYards = match.awayTeamTotalYards
-                #                 individualModelResult.team2ActualPoints = match.awayTeamPoints
-                #                 individualModelResult.actual_t2_OffenseDrives = len(team2_drives)
-                #                 individualModelResult.actual_t2_DrivesRedZone = len(team2_drives.filter(reachedRedZone = True))
-                #                 individualModelResult.actual_t2_RedZoneConv = len(team2_drives.filter(driveResult = 1))
-                                
-                                
-                #                 individualModelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
-                #                 individualModelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
-                #                 individualModelResult.gameCompleted = True
-
-                #             if match.overUnderLine != 0 and match.overUnderLine != None:      
-                #                 individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
-                        
-                            
-                            
-
-                    #modelResults.append(individualModelResult)
-
             overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
             overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelResults)))
             overUnderPush = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'Push', modelResults)))
@@ -804,6 +715,8 @@ def loadModel(request, target):
             for m in modelResults:
                 print(m.team1Name + " vs. " + m.team2Name + " Bet Rank Score: " + str(m.betRankScore))
                
+
+            print(selectedModel)
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason,'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions, 'sel_ma': selectedLen})
             else:
@@ -825,10 +738,13 @@ def loadModelYear(request):
         yearsOnPage.append(y)
 
     numResultsSelect = []
+    numResultsSelect.append(20)
     for nr in range(2, 11):
         numResultsSelect.append(nr)
+    
+    
 
-    topNumResults = 2
+    topNumResults = 20
 
     modelsOnPage = []
     modelsOnPage.append(['v1', 'V1.0 (Avg Yds/Yds per Pt)'])
@@ -1031,8 +947,12 @@ def loadModelYear(request):
                 modelWeekResults = businessLogic.setBetRankingsV1(modelWeekResults)
 
                 topModelWeekResults = []
-                for i in range(0, topNumResults):
-                    topModelWeekResults.append(modelWeekResults[i])
+                if topNumResults == 20:
+                    for modelRslt in modelWeekResults:
+                        topModelWeekResults.append(modelRslt)
+                else:
+                    for i in range(0, topNumResults):
+                        topModelWeekResults.append(modelWeekResults[i])
 
                 overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', topModelWeekResults)))
                 overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', topModelWeekResults)))
