@@ -439,23 +439,23 @@ def setBetRankingsV1(v1_modelResults):
     v1_modelResults.sort(key = lambda x: x.betRankScore, reverse = True)
 
     for mr in v1_modelResults:
-        print()
-        print(mr.team1Name + " vs. " + mr.team2Name)
-        print(mr.team1Name + " Offense YPG Rank: " + str(mr.t1_OffenseYardsPerGameRank))
-        print(mr.team1Name + " Offense YPP Rank: " + str(mr.t1_OffenseYardsPerPointRank))
-        print(mr.team1Name + " Defense YPG Rank: " + str(mr.t1_DefenseYardsPerGameRank))
-        print(mr.team1Name + " Defense YPP Rank: " + str(mr.t1_DefenseYardsPerPointRank))
-        print(mr.team2Name + " Offense YPG Rank: " + str(mr.t2_OffenseYardsPerGameRank))
-        print(mr.team2Name + " Offense YPP Rank: " + str(mr.t2_OffenseYardsPerPointRank))
-        print(mr.team2Name + " Defense YPG Rank: " + str(mr.t2_DefenseYardsPerGameRank))
-        print(mr.team2Name + " Defense YPP Rank: " + str(mr.t2_DefenseYardsPerPointRank))
-        print("   " + mr.team1Name + " Offense Combined Rank: " + str(mr.t1_OffenseYardsPerGameRank + mr.t1_OffenseYardsPerPointRank))
-        print("   " + mr.team2Name + " Defense Combined Rank: " + str(mr.t2_DefenseYardsPerGameRank + mr.t2_DefenseYardsPerPointRank))
-        print()
-        print("   " + mr.team2Name + " Offense Combined Rank: " + str(mr.t2_OffenseYardsPerGameRank + mr.t2_OffenseYardsPerPointRank))
-        print("   " + mr.team1Name + " Defense Combined Rank: " + str(mr.t1_DefenseYardsPerGameRank + mr.t1_DefenseYardsPerPointRank))
-        print("Model Bet Rank Score = " + str(mr.betRankScore))
-        print()
+        # print()
+        # print(mr.team1Name + " vs. " + mr.team2Name)
+        # print(mr.team1Name + " Offense YPG Rank: " + str(mr.t1_OffenseYardsPerGameRank))
+        # print(mr.team1Name + " Offense YPP Rank: " + str(mr.t1_OffenseYardsPerPointRank))
+        # print(mr.team1Name + " Defense YPG Rank: " + str(mr.t1_DefenseYardsPerGameRank))
+        # print(mr.team1Name + " Defense YPP Rank: " + str(mr.t1_DefenseYardsPerPointRank))
+        # print(mr.team2Name + " Offense YPG Rank: " + str(mr.t2_OffenseYardsPerGameRank))
+        # print(mr.team2Name + " Offense YPP Rank: " + str(mr.t2_OffenseYardsPerPointRank))
+        # print(mr.team2Name + " Defense YPG Rank: " + str(mr.t2_DefenseYardsPerGameRank))
+        # print(mr.team2Name + " Defense YPP Rank: " + str(mr.t2_DefenseYardsPerPointRank))
+        # print("   " + mr.team1Name + " Offense Combined Rank: " + str(mr.t1_OffenseYardsPerGameRank + mr.t1_OffenseYardsPerPointRank))
+        # print("   " + mr.team2Name + " Defense Combined Rank: " + str(mr.t2_DefenseYardsPerGameRank + mr.t2_DefenseYardsPerPointRank))
+        # print()
+        # print("   " + mr.team2Name + " Offense Combined Rank: " + str(mr.t2_OffenseYardsPerGameRank + mr.t2_OffenseYardsPerPointRank))
+        # print("   " + mr.team1Name + " Defense Combined Rank: " + str(mr.t1_DefenseYardsPerGameRank + mr.t1_DefenseYardsPerPointRank))
+        # print("Model Bet Rank Score = " + str(mr.betRankScore))
+        # print()
 
         homeTeamRankDetails = [mr.team1Name, mr.t1_OffenseYardsPerGameRank, mr.t1_OffenseYardsPerPointRank, mr.t1_DefenseYardsPerGameRank, mr.t1_DefenseYardsPerPointRank]
         awayTeamRankDetails = [mr.team2Name, mr.t2_OffenseYardsPerGameRank, mr.t2_OffenseYardsPerPointRank, mr.t2_DefenseYardsPerGameRank, mr.t2_DefenseYardsPerPointRank]
@@ -1200,17 +1200,23 @@ def checkModelBets(bookOverUnder, bookLineHometeam, individualModelResult, team1
             
     return individualModelResult
 
-def checkIfCurrentSeason(yearOfSeason, weekOfSeason = 0):
+def checkIfCurrentSeason(yearOfSeason:int, weekOfSeason = 0):
     currentYear = datetime.now().year
     currentMonth = datetime.now().month
     
-    print(weekOfSeason)
-    print(int(weekOfSeason))
+    print(currentYear == yearOfSeason)
+    print(int(currentYear) == int(yearOfSeason))
+   
     if yearOfSeason == currentYear and int(weekOfSeason) == 1:
+        print("Returning current year is false")
         return False
+    
     elif yearOfSeason == currentYear or (currentMonth >= 1 and currentMonth <= 2 and yearOfSeason + 1 == currentYear):
+        print("Returning current year is true")
         return True
+
     else:
+        print("yearOfSeason: " + str(yearOfSeason + "  ; currentYear: " + str(currentYear)))
         return False
 
 class matchModelDetails: 

@@ -106,7 +106,7 @@
                 </select>
                 <br>
                 <br>
-                <button type="submit">Load!</button>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
             </form>
             <br>
             <form method="GET">
@@ -118,13 +118,16 @@
             <h4>{{ message }}</h4>
             {% if exceptions %}
                 {% for ex in exceptions%}
-                    <div class="pull_data_exception accordion">
-                        <input type="checkbox" name="collapse" id="handle{{ex.3}}" checked="checked">
-                        <h5 class="handle">
-                            <label for="handle{{ex.3}}">{{ex.0}}</label>
-                        </h5>
+                    <div class="pull_data_exception accordion" id="accordion{{ex.3}}">
+                        <button class="collapsed" type="button" data-toggle="collapse" data-target="#collapse{{ex.3}}" aria-expanded="true" aria-controls="collapse{{ex.3}}">
+                                       
+                        
+                            <h5>
+                                {{ex.0}}
+                            </h5>
+                        </button>
                         <p>{{ex.1}}</p>
-                        <div class="content collapsible-content">
+                        <div id="collapse{{ex.3}}" class="collapse" aria-labelledby="accordion{{ex.3}}" data-parent="#accordion{{ex.3}}">
                             <pre>{{ex.2 | pprint}}</pre>
                         </div>
                     </div>

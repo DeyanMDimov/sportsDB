@@ -43,6 +43,16 @@
                                         >V2.0 (Drives vs Drive Result)</option>
                 </select>
                 <br>
+                <div id="form_avg_length_select">
+                    Length:
+                    <select name="movingavg" id="movingavg">
+                        {% for ma in ma_Len %}
+                        <option value="{{ma}}" {% if ma == sel_ma %} selected {% endif %}>{{ma}}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                    
+
                 <button type="submit" class="btn btn-outline-primary">Load!</button>
             </form>
         </div>
@@ -181,10 +191,14 @@
                                     ">
                                     {{result.lineBet}}
                                 </td>
+                                {% elif anyCompleted %}
+                                <td></td>
+                                <td></td>
+                                    
                                 {% endif %}
                             </tr>
                             <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}" data-parent="#accordion-{{result.team1Name}}{{result.team2Name}}">
-                                <td colspan="8">
+                                <td colspan="6">
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
                                             <tr>
@@ -261,10 +275,47 @@
                                             </tr>
                                         </tbody>
                                     </table>
-
-
                                 </td>
-                                <td colspan="8">
+                                <td colspan="4">
+                                    <table style="font-size:0.9em" class="table text-start">
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="4">
+                                                    Key Injuries
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="2">
+                                                    {{result.team1Name}}
+                                                </td>
+                                                
+                                                <td colspan="2">
+                                                    {{result.team2Name}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                            <tr>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                            <tr>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                            <tr>
+                                               
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </td>
                             </tr>
                             
@@ -282,96 +333,19 @@
                 </table>
             </div>
             {% endif %}
-            {% comment %} {% for result in modelResults %}
-            <div class="individiualModelResult">
-                {% if gameCompleted %}
-                <table class="table table-bordered">
-                    <tbody>
-                        <tr>
-                            <td style="width: 200px"> Team Name </td>
-                            <td style="width: 440px" colspan="2"> {{ result.team1Name}}</td>
-                            <td colspan="2"> {{ result.team2Name}}</td>
-                        </tr>
-                        <tr>
-                            <td> OFF Yds/Game </td>
-                            <td colspan="2"> {{ result.team1TotalOffensiveYardsPerGame}}</td>
-                            <td colspan="2"> {{ result.team2TotalOffensiveYardsPerGame}}</td>
-                        </tr>
-                        <tr>
-                            <td> OFF Yds/Point </td>
-                            <td colspan="2"> {{ result.team1TotalYardsPerPoint}}</td>
-                            <td colspan="2"> {{ result.team2TotalYardsPerPoint}}</td>
-                        </tr>
-                        <tr>
-                            <td> DEF Yds/Game </td>
-                            <td colspan="2"> {{ result.team1TotalDefensiveYardsPerGame}}</td>
-                            <td colspan="2"> {{ result.team2TotalDefensiveYardsPerGame}}</td>
-                        </tr>
-                        <tr>
-                            <td> DEF Yds/Point </td>
-                            <td colspan="2"> {{ result.team1TotalDefensiveYardsPerPoint}}</td>
-                            <td colspan="2"> {{ result.team2TotalDefensiveYardsPerPoint}}</td>
-                        </tr>
-                        <tr>
-                            <td> Expected Yards Gained</td>
-                            <td style="width: 220px"> {{ result.team1ExpectedYardsPerGame}}</td>
-                            <td style="width: 220px">Actual:  {{ result.team1ActualYards}} </td>
-                            <td style="width: 220px"> {{ result.team2ExpectedYardsPerGame}}</td>
-                            <td> Actual: {{ result.team2ActualYards}} </td>
-                        </tr>
-                        <tr>
-                            <td> Expected Score </td>
-                            <td style="width: 220px"> {{ result.team1CalculatedPoints}}</td>
-                            <td style="width: 220px">Actual:  {{ result.team1ActualPoints }} </td>
-                            <td style="width: 220px"> {{ result.team2CalculatedPoints}}</td>
-                            <td> Actual: {{ result.team2ActualPoints }} </td>
-                        </tr>
-                    </tbody>
-                </table> 
-                {% else %}
-                <table class="table table-bordered">
-                    <tbody>
-                        <tr>
-                            <td style="width: 200px"> Team Name </td>
-                            <td style="width: 440px"> {{ result.team1Name}}</td>
-                            <td> {{ result.team2Name}}</td>
-                        </tr>
-                        <tr>
-                            <td> OFF Yds/Game </td>
-                            <td> {{ result.team1TotalOffensiveYardsPerGame}}</td>
-                            <td> {{ result.team2TotalOffensiveYardsPerGame}}</td>
-                        </tr>
-                        <tr>
-                            <td> OFF Yds/Point </td>
-                            <td> {{ result.team1TotalYardsPerPoint}}</td>
-                            <td> {{ result.team2TotalYardsPerPoint}}</td>
-                        </tr>
-                        <tr>
-                            <td> DEF Yds/Game </td>
-                            <td> {{ result.team1TotalDefensiveYardsPerGame}}</td>
-                            <td> {{ result.team2TotalDefensiveYardsPerGame}}</td>
-                        </tr>
-                        <tr>
-                            <td> DEF Yds/Point </td>
-                            <td> {{ result.team1TotalDefensiveYardsPerPoint}}</td>
-                            <td> {{ result.team2TotalDefensiveYardsPerPoint}}</td>
-                        </tr>
-                        <tr>
-                            <td> Expected Yards Gained</td>
-                            <td> {{ result.team1ExpectedYardsPerGame}}</td>
-                            <td> {{ result.team2ExpectedYardsPerGame}}</td>
-                        </tr>
-                        <tr>
-                            <td> Expected Score </td>
-                            <td> {{ result.team1CalculatedPoints}}</td>
-                            <td> {{ result.team2CalculatedPoints}}</td>
-                        </tr>
-                    </tbody>
-                </table> 
-                {% endif %}
-            </div>
-            {% endfor %}
-            {% endif %} {% endcomment %}
+            <script>
+                    $('form').on("change", "#model", function(){
+       
+                        if ($('#model')[0].value == "v1.5")
+                        {
+                            $('#form_avg_length_select').css("visibility", "visible")
+                        }
+                        else
+                        {
+                            $('#form_avg_length_select').css("visibility", "hidden")
+                        }                 
+                    });
+            </script>
         </div>
 
     </div>
