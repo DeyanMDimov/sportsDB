@@ -32,6 +32,17 @@
                         
                         {% endfor %}
                     </select>
+                    
+
+                    <div id="form_avg_length_select" {% if selectedModel != "v1.5"%} style="visibility:hidden" {% endif %}>
+                        Length:
+                        <select name="movingavg" id="movingavg">
+                            {% for ma in ma_Len %}
+                            <option value="{{ma}}" {% if ma == sel_ma %} selected {% endif %}>{{ma}}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
 
                     Select top 
                     <select name="topNumResults" id="topNumResults">
@@ -260,4 +271,17 @@
         {% endif %}
 
     </div>
+    <script>
+        $('form').on("change", "#model", function(){
+
+            if ($('#model')[0].value == "v1.5")
+            {
+                $('#form_avg_length_select').css("visibility", "visible")
+            }
+            else
+            {
+                $('#form_avg_length_select').css("visibility", "hidden")
+            }                 
+        });
+    </script>
 {% endblock %}
