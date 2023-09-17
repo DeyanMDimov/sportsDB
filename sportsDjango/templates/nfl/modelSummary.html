@@ -61,14 +61,38 @@
             
             <h2>Summary for Week {{weekOfSeason}} in {{yearOfSeason}}</h2>
 
-            <p>Description: 
+            
+            <div id="model-desc" class="accordion">
+                
+                <button id="accordion-model-desc" class="accordion-button collapsed" type="button" data-toggle="collapse" data-target="#collapse-model-desc" aria-expanded="true" aria-controls="collapse-model-desc">
+                    Model Description
+                </button>
+            </div>
+            <div id="collapse-model-desc" class="collapse" aria-labelledby="accordion-model-desc" data-parent="#accordion-model-desc">
+                {% if selectedModel == "v1" %}
                 <ol>
                     <li>Average the team's offensive yards per game with opponents defensive yards allowed per game.</li>
                     <li>Average the team's offensive yards per point with the opponents defensive yards per point allowed.</li>
                     <li>Divide the result from Step 1 (expected offensive yards in the game) by the result from Step 2 (expected yards per point).</li>
                     <li>Result from Step 3 is your expected score.</li>
+                    <li>If it's game 1 of season, look at average of all regular season games from previous year. </li>
+                    <li>If it's not game 1 of season, take the average of all the games that happened this season.</li>
                 </ol>
-            </p>
+                {% elif selectedModel == "v1.5" %}
+                <ol>
+                    <li>Take the average number for the following stats, from the last <i>x</i> games. Length determines the number of games.</li>
+                    <li>This will look at last season's results as well if it's early in the season.</li>
+                    <li>Average the team's offensive yards per game with opponents defensive yards allowed per game.</li>
+                    <li>Average the team's offensive yards per point with the opponents defensive yards per point allowed.</li>
+                    <li>Divide the result from Step 1 (expected offensive yards in the game) by the result from Step 2 (expected yards per point).</li>
+                    <li>Result from Step 3 is your expected score.</li>
+                </ol>
+                {% else %}
+                <ol>
+                    <li>Look at the average number of drives a team gets.</li>
+                </ol>
+                {% endif %}
+            </div>
             <div id="modelSummary">
                 <table class="table-bordered border-secondary-subtle" id="modelSummary">
                     <thead>
