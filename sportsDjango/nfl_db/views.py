@@ -202,6 +202,7 @@ def getData(request):
                         print(e)                        
                     
                     if datetime.datetime.now()<dateOfGame or gameCompleted==False:
+                        print("YEP")
                         crudLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
                     else:
                         homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
