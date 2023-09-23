@@ -7,56 +7,72 @@
         <div>
             Plug data into model for:
             <form method="GET">
-                <select name="season" id="season">
-                    {% for yr in years %}
-                    <option value="{{yr}}" 
-                        {%if yr|stringformat:"i" == yearOfSeason %}
-                            selected
-                        {% endif %} >{{yr}}</option>
-                    {% endfor %}
-                   
-                </select> 
-                - 
-                
-                Week: 
-                <select name="week" id="week">
-                    {% for wk in weeks %}
-                    <option value="{{wk.0}}"
-                        {%if wk.0|stringformat:"i" == weekOfSeason %}
-                            selected
-                        {% endif %}
-                        > {{ wk.1 }}</option>
-                    {% endfor %}
-                </select>
-
-                Model:
-                <select name="model" id="model">
-                    <option value="v1">V1.0 (Avg Yds/Yds per Pt)</option>
-                    <option value="v1.5"  
-                    {% if selectedModel == "v1.5" %}
-                    selected
-                    {% endif %}>V1.5 (V1 with Moving Avg.)</option> 
-                    <option value="v2"
-                    {% if selectedModel == "v2" %}
-                        selected
-                    {% endif %}
-                                        >V2.0 (Drives vs Drive Result)</option>
-                </select>
-                <br>
-                <div id="form_avg_length_select" {% if selectedModel != "v1.5"%} style="visibility:hidden" {% endif %}>
-                    Length:
-                    <select name="movingavg" id="movingavg">
-                        {% for ma in ma_Len %}
-                        <option value="{{ma}}" {% if ma == sel_ma %} selected {% endif %}>{{ma}}</option>
-                        {% endfor %}
-                    </select>
+                <div class="row g-1 mt-3 mb-3">
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="season" id="select_season" aria-label="Floating label">
+                                {% for yr in years %}
+                                <option value="{{yr}}" 
+                                    {%if yr|stringformat:"i" == season %}
+                                        selected
+                                    {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_season">Season</label>
+                        </div>
+                    </div> 
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="week" id="select_week" aria-label="Floating label">
+                                {% for wk in weeks %}
+                                    <option value="{{wk.0}}"
+                                    {%if wk.0|stringformat:"i" == weekOfSeason %}
+                                        selected
+                                    {% endif %}
+                                    > 
+                                        {{ wk.1 }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_s_week">Week</label>
+                        </div>
+                    </div>
+                    <div class="col-3">    
+                        <div class="form-floating">
+                            <select class="form-select" name="model" id="model" aria-label="Floating label">
+                                <option value="v1">V1.0 (Avg Yds/Yds per Pt)</option>
+                                <option value="v1.5"  
+                                {% if selectedModel == "v1.5" %}
+                                selected
+                                {% endif %}>
+                                    V1.5 (V1 with Moving Avg.)
+                                </option> 
+                                <option value="v2"
+                                {% if selectedModel == "v2" %}
+                                    selected
+                                {% endif %}>
+                                    V2.0 (Drives vs Drive Result)
+                                </option>
+                            </select>
+                            <label for="select_s_week">Model</label>
+                        </div>
+                    </div>
+                    <div class="col-2" id="form_avg_length_select" {% if selectedModel != "v1.5"%} style="visibility:hidden" {% endif %}>   
+                        <div class="form-floating">
+                            <select class="form-select" name="movingavg" id="movingavg" aria-label="Floating label">
+                                {% for ma in ma_Len %}
+                                <option value="{{ma}}" {% if ma == sel_ma %} selected {% endif %}>{{ma}}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_s_week">Moving Avg. Length</label>
+                        </div>
+                    </div>
                 </div>
-                    
-
                 <button type="submit" class="btn btn-outline-primary">Load!</button>
+                    
             </form>
         </div>
-        <div id="modelResultContainer">
+        <div id="modelResultContainer" class="mt-4">
             {% if modelResults %}
             
             <h2>Summary for Week {{weekOfSeason}} in {{yearOfSeason}}</h2>

@@ -18,108 +18,61 @@
         </form> {% endcomment %}
         
        
-        {% comment %} <div>
-            Load data for Season: 
-            <form method="GET">
-                <select name="season" id="season">
-                    <option value="2022">2022</option>
-                    <option value="2021">2021</option>
-                    <option value="2020">2020</option>
-                    <option value="2019">2019</option>
-                    <option value="2018">2018</option>
-                    <option value="2017">2017</option>
-                    <option value="2016">2016</option>
-                </select> 
-                and Week: 
-                <select name="week" id="week">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10</option>
-                    <option value="11">11</option>
-                    <option value="12">12</option>
-                    <option value="13">13</option>
-                    <option value="14">14</option>
-                    <option value="15">15</option>
-                    <option value="16">16</option>
-                    <option value="17">17</option>
-                    <option value="18">18</option>
-                </select>
-                <br>
-                <button type="submit">Load!</button>
-            </form>
-        </div> {% endcomment %}
+        
         <br>
         <div>
             <form method="GET">
-                Load data for Season: 
-                <select name="season" id="season">
-                    {% for yr in years %}
-                    <option value="{{yr}}" 
-                        {%if yr == sel_year %}
-                            selected
-                        {% endif %} >{{yr}}</option>
-                    {% endfor %}
-                   
-                </select> 
-                - 
+                Load data for:
+                <div class="row g-1 mt-2 mb-2">
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="season" id="select_season" aria-label="Floating label">
+                                {% for yr in years %}
+                                <option value="{{yr}}" 
+                                    {%if yr|stringformat:"i" == season %}
+                                        selected
+                                    {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_season">Season</label>
+                        </div>
+                    </div>
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="startWeek" id="select_s_week" aria-label="Floating label">
+                                {% for wk in weeks %}
+                                    <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_s_week">Start Week</label>
+                        </div>
+                    </div>
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="endWeek" id="select_e_week" aria-label="Floating label">
+                                {% for wk in weeks %}
+                                    <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_e_week">End Week</label>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">Load!</button>
                 
-                Week: 
-                <select name="startWeek" id="week">
-                    {% for wk in weeks %}
-                    <option value="{{wk.0}}"> {{ wk.1 }}</option>
-                    {% endfor %}
-                </select>
-                 through Week: 
-                <select name="endWeek" id="week">
-                    {% for wk in weeks %}
-                    <option value="{{wk.0}}">{{wk.1}}</option>
-                    {% endfor %}
-                    {% comment %} <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10</option>
-                    <option value="11">11</option>
-                    <option value="12">12</option>
-                    <option value="13">13</option>
-                    <option value="14">14</option>
-                    <option value="15">15</option>
-                    <option value="16">16</option>
-                    <option value="17">17</option>
-                    <option value="18">18</option>
-                    <option value="19">Wildcard Weekend</option>
-                    <option value="20">Divisional Round</option>
-                    <option value="21">Conference Championship</option>
-                    <option value="23">Super Bowl</option> {% endcomment %}
-                </select>
-                <br>
-                <br>
-                <button type="submit" class="btn btn-outline-primary">Load!</button>
             </form>
             <br>
-            <form method="GET">
+            {% comment %} <form method="GET">
                 <input type="hidden" name="deleteDrives" value ="allDrives">
                 <button type="submit" disabled>Delete All Drives</button>
-            </form>
+            </form> {% endcomment %}
         </div>
         <div>
             <h4>{{ message }}</h4>
             {% if exceptions %}
                 {% for ex in exceptions%}
                     <div class="pull_data_exception accordion" id="accordion{{ex.3}}">
-                        <button class="collapsed" type="button" data-toggle="collapse" data-target="#collapse{{ex.3}}" aria-expanded="true" aria-controls="collapse{{ex.3}}">
+                        <button class="collapsed btn btn-block" type="button" data-toggle="collapse" data-target="#collapse{{ex.3}}" aria-expanded="true" aria-controls="collapse{{ex.3}}" style="margin-left:0px">
                                        
                         
                             <h5>

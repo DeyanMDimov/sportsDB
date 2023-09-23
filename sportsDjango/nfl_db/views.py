@@ -22,15 +22,23 @@ def getData(request):
     weeksOnPage.append([22, "Super Bowl"])
 
     yearsOnPage = []
-    for y in range(2023, 2015, -1):
+    for y in range(2023, 2012, -1):
         yearsOnPage.append(y)
+    
+    pageDictionary = {}
+    pageDictionary['weeks'] = weeksOnPage
+    pageDictionary['years'] = yearsOnPage
+
 
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = inputReq['week'].strip()
-           
+
+            pageDictionary['sel_year'] = yearOfSeason
+            pageDictionary['start_week'] = weekOfSeason
+            
             url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
             response = requests.get(url)
             data = response.json()
@@ -113,12 +121,12 @@ def getData(request):
                         businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
                         businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
 
-                        responseMessage = "Successfully pulled in Week " + str(weekOfSeason) + " for " + str(yearOfSeason)
+                        pageDictionary['responseMessage'] = "Successfully pulled in Week " + str(weekOfSeason) + " for " + str(yearOfSeason)
                     except Exception as e: 
                         businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
                         businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
 
-            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'message': responseMessage})
+            return render (request, 'nfl/pullData.html', pageDictionary)
 
         elif 'espnGameId' in request.GET:
             print("Hit single game endpoint")
@@ -135,6 +143,10 @@ def getData(request):
 
             i = startWeek
 
+            pageDictionary['sel_year'] = yearOfSeason
+            pageDictionary['start_week'] = startWeek
+            pageDictionary['end_week'] = endWeek
+
             exceptionCollection = []
 
             while i <= endWeek:
@@ -146,10 +158,7 @@ def getData(request):
                 if(weekOfSeason >= 19):
                     playoffWeekOfSeason = weekOfSeason - 18
                     url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/3/weeks/'+str(playoffWeekOfSeason)+'/events')
-                # elif(yearOfSeason >= 2010):
-                #     if(weekOfSeason >= 18):
-                #         playoffWeekOfSeason = weekOfSeason - 17
-                #         url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/3/weeks/'+playoffWeekOfSeason+'/events')
+                
                 
                 response = requests.get(url)
                 data = response.json()
@@ -304,11 +313,13 @@ def getData(request):
                 message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
             else:
                 message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
+            pageDictionary['message'] = message
+           
             if len(exceptionCollection) > 0:
+                pageDictionary['exceptions'] = exceptionCollection
                 print("There were exceptions.")
-                return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'sel_year': yearOfSeason, 'message': message, 'exceptions': exceptionCollection})
-            else:
-                return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'sel_year': yearOfSeason, 'message': message})
+            
+            return render (request, 'nfl/pullData.html', pageDictionary)
 
         elif 'season' in request.GET and 'full' in request.GET:
             
@@ -454,11 +465,12 @@ def getData(request):
                 print(team_data)
                 teamNames.append(team_data.fullName)
             
+            pageDictionary['teamNames'] = teamNames
 
 
-            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'teamNames': teamNames})
+            return render (request, 'nfl/pullData.html', pageDictionary)
         else:
-            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage})
+            return render (request, 'nfl/pullData.html', pageDictionary)
     else: 
         return HttpResponse('unsuccessful')
 
@@ -477,6 +489,11 @@ def getPlayers(request):
     # weeksOnPage.append([20, "Divisional Round"])
     # weeksOnPage.append([21, "Conference Championship"])
     # weeksOnPage.append([22, "Super Bowl"])
+
+    pageDictionary = {}
+    pageDictionary['weeks'] = weeksOnPage
+    pageDictionary['years'] = yearsOnPage
+    pageDictionary['teams'] = nflTeams
 
     if(request.method == 'GET'):
         if 'teamName' in request.GET and 'season' in request.GET:
@@ -511,7 +528,7 @@ def getPlayers(request):
             inputReq = request.GET
             selectedPosition = inputReq['position'].strip()
 
-            playersLoaded = player.objects.filter(playerPosition = selectedPosition).order_by(player.team.abbreviation)
+            playersLoaded = sorted(player.objects.filter(playerPosition = selectedPosition), key = lambda x: x.team.abbreviation)
 
             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'allPlayers': playersLoaded})
 
@@ -530,7 +547,7 @@ def getPlayers(request):
                         if(len(selectedMatchQuerySet) == 0):
                             selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
                             if(len(selectedMatchQuerySet) == 0):
-                                #responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
+                                
                                 for plRec in athleteAvailabilitySeason:
                                     plRec[1].append("Bye")
                                 continue
@@ -551,11 +568,10 @@ def getPlayers(request):
 
                     
                     else:
-                        return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})
+                        return render(request, 'nfl/players.html', pageDictionary)
                 
                 return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvailSeason': athleteAvailabilitySeason, 'sel_Team': inputReq['team']})
-                # responseMessage = "Loading the full season is not implemented right now."
-                # return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
+                
             else:
                 if 'team' in inputReq:
                     selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
@@ -580,12 +596,11 @@ def getPlayers(request):
 
                     return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability})
                 
-                else:
-                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})
-        else:
-            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})
-    else:
-        return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})
+                
+        
+    return render(request, 'nfl/players.html', pageDictionary)
+
+
 
 def loadModel(request, target):
     weeksOnPage = []

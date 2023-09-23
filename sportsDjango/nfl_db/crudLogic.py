@@ -451,20 +451,20 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
 
     return matchData
 
-def updateNflMatch():
-    pass
+# def updateNflMatch():
+#     pass
 
-def updateNflMatchOdds():
-    pass
+# def updateNflMatchOdds():
+#     pass
 
-def deleteNflMatchesId(matchId):
-    pass
+# def deleteNflMatchesId(matchId):
+#     pass
 
-def deleteNflMatchesByWeek(yearOfSeason, weekOfSeason):
-    pass
+# def deleteNflMatchesByWeek(yearOfSeason, weekOfSeason):
+#     pass
 
-def deleteNflMatchesByYear(yearOfSeason):
-    pass
+# def deleteNflMatchesByYear(yearOfSeason):
+#     pass
 
 
 
@@ -833,8 +833,8 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             exceptions.append([problem_text, jsonObject])
             raise Exception(exceptions)
 
-def deleteTeamMatchPerformance ():
-    pass
+# def deleteTeamMatchPerformance ():
+#     pass
 
 class playByPlayData:
     playByPlayPages = []
@@ -1267,11 +1267,11 @@ def createPlayByPlay (individualPlay, driveEspnId):
         except:
             pass
     
-def updatePlayByPlay ():
-    pass
+# def updatePlayByPlay ():
+#     pass
 
-def deletePlayByPlay ():
-    pass
+# def deletePlayByPlay ():
+#     pass
 
 def setPlayType(inputType):
     

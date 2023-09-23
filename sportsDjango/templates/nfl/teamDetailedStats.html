@@ -7,26 +7,39 @@
         <div>
             Get Detailed Stats for :
             <form method="GET">
-                <select name="season" id="season">
-                    {% for yr in years %}
-                    <option value="{{yr}}" 
-                        {%if yr|stringformat:"i" == season %}
-                            selected
-                        {% endif %} >{{yr}}</option>
-                    {% endfor %}
-                   
-                </select> 
-                 
-                <select name="teamName" id="week">
-                   
-                {% for team in teams %}
-                    <option value="{{ team.abbreviation }}"> {{ team.abbreviation }}</option>
-                {% endfor %}
-                </select>
+                <div class="row g-1 mt-3">
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="season" id="select_season" aria-label="Floating label">
+                                {% for yr in years %}
+                                <option value="{{yr}}" 
+                                    {%if yr|stringformat:"i" == season %}
+                                        selected
+                                    {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_season">Season:</label>
+                        </div>
+                    </div>
+
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="teamName" id="select_team" aria-label="Floating label">
+                                {% for team in teams %}
+                                    <option value="{{ team.abbreviation }}"
+                                        {%if team.abbreviation == teamName %} selected {% endif %}> {{ team.abbreviation }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_team">Team:</label>
+                        </div>
+                    </div>
+                </div>
+
                 <br>
-                <button type="submit">Load!</button>
+                <button type="submit" class="btn btn-success">Load!</button>
             </form>
         </div>
+        <br>
         
         {% if teamPerf %}
         <div>

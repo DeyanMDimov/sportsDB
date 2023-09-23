@@ -1140,6 +1140,8 @@ def generateBettingModelHistV2(gameData, week1 = False):
     
     return modelResult
 
+
+
 def checkModelBets(bookOverUnder, bookLineHometeam, individualModelResult, team1_abr, team2_abr):
     if bookOverUnder != 0 and bookOverUnder != None:
         individualModelResult.bookProvidedSpread = bookLineHometeam
