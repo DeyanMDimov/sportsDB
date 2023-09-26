@@ -684,8 +684,8 @@ def loadModel(request, target):
                         if match.matchLineHomeTeam != None:
                             individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
                     
-                    individualModelResult.homeTeamInjuries = list(homeTeamInjuries)
-                    individualModelResult.awayTeamInjuries = list(awayTeamInjuries)
+                    individualModelResult.homeTeamInjuries = sorted(homeTeamInjuries, key= lambda x: x.playerStatus) 
+                    individualModelResult.awayTeamInjuries = sorted(awayTeamInjuries, key= lambda x: x.playerStatus) 
                     modelResults.append(individualModelResult)
                     
 
@@ -730,8 +730,8 @@ def loadModel(request, target):
                         if match.matchLineHomeTeam != None:
                             individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
 
-                    individualModelResult.homeTeamInjuries = list(homeTeamInjuries)
-                    individualModelResult.awayTeamInjuries = list(awayTeamInjuries)
+                    individualModelResult.homeTeamInjuries = sorted(homeTeamInjuries, key= lambda x: x.playerStatus)
+                    individualModelResult.awayTeamInjuries = sorted(awayTeamInjuries, key= lambda x: x.playerStatus)
 
                     modelResults.append(individualModelResult)
                 

@@ -316,9 +316,7 @@
                                         </tbody>
                                     </table>
                                 </td>
-                                <td colspan="4">
-                                </td>
-                                <td colspan="6">
+                                <td colspan="8">
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
                                             <tr>
@@ -336,14 +334,35 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td>
+                                                <td style="width: 325px">
                                                     <table class="injury_table" style="text-align:left">
                                                         <tbody>
                                                             {% for injury in result.homeTeamInjuries %}
-                                                            <tr>
-                                                                <td>{{injury.player.name}}</td>
-                                                                <td></td>
-                                                            </tr>
+                                                                {% if injury.player.get_playerPosition_display == "QB" or injury.player.get_playerPosition_display == "O-Line" %}
+                                                                    <tr>
+                                                                        <td class="injury_player_name">
+                                                                            {{injury.player.name}}
+                                                                        </td>
+                                                                        <td class="injury_player_pos">
+                                                                            {% if injury.player.get_playerPosition_display == "O-Line" %} 
+                                                                                OL
+                                                                            {% elif injury.player.get_playerPosition_display == "D-Line" %} 
+                                                                                DL
+                                                                            {% else %}
+                                                                                {{injury.player.get_playerPosition_display}}
+                                                                            {% endif %}
+                                                                        </td>
+                                                                        <td class="injury_player_status">
+                                                                            {% if injury.get_playerStatus_display == "Questionable" %} 
+                                                                                Qstnble
+                                                                            {% elif injury.get_playerStatus_display == "Doubtful" %}
+                                                                                Doubt
+                                                                            {% else %}
+                                                                                {{injury.get_playerStatus_display}}
+                                                                            {% endif %}
+                                                                        </td>    
+                                                                    </tr>
+                                                                {% endif %}
                                                             {% endfor %}
                                                         </tbody>
                                                     </table>
@@ -352,10 +371,31 @@
                                                     <table class="injury_table" style="text-align:left">
                                                         <tbody>
                                                             {% for injury in result.awayTeamInjuries %}
-                                                            <tr>
-                                                                <td>{{injury.player.name}}</td>
-                                                                <td></td>
-                                                            </tr>
+                                                                {% if injury.player.get_playerPosition_display == "QB" or injury.player.get_playerPosition_display == "O-Line" %}
+                                                                    <tr>
+                                                                        <td class="injury_player_name">
+                                                                            {{injury.player.name}}
+                                                                        </td>
+                                                                        <td class="injury_player_pos">
+                                                                            {% if injury.player.get_playerPosition_display == "O-Line" %} 
+                                                                                OL
+                                                                            {% elif injury.player.get_playerPosition_display == "D-Line" %} 
+                                                                                DL
+                                                                            {% else %}
+                                                                                {{injury.player.get_playerPosition_display}}
+                                                                            {% endif %}
+                                                                        </td>
+                                                                        <td class="injury_player_status">
+                                                                            {% if injury.get_playerStatus_display == "Questionable" %} 
+                                                                                Qstnble
+                                                                            {% elif injury.get_playerStatus_display == "Doubtful" %}
+                                                                                Doubt
+                                                                            {% else %}
+                                                                                {{injury.get_playerStatus_display}}
+                                                                            {% endif %}
+                                                                        </td>    
+                                                                    </tr>
+                                                                {% endif %}
                                                             {% endfor %}
                                                         </tbody>
                                                     </table>
