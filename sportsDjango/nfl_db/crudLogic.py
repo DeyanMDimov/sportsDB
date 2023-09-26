@@ -1603,24 +1603,19 @@ def getCurrentWeekAthletesStatus(teamId):
                     thisPlayerWeekStatus.team = nflTeam.objects.get(espnId = teamId)
                     thisPlayerWeekStatus.reportDate = currentDate
                     if 'injuries' in athlete:
-                        if teamId == 1:
-                            print(athlete['injuries'])
-                            print("Len Athlete[injuries]: " + str(len(athlete['injuries'])))
                         if len(athlete['injuries']) != 0:
                             if teamId == 1:
-                                print("There's a status in injuries: " + athlete['injuries']['status'])
-                        if 'status' in athlete['injuries']:
-                            #print("there's a status in Injuries for player")
-                            if teamId == 1:
-                                print("There's a status in injuries: " + athlete['injuries']['status'])
-                            if athlete['injuries']['status'] == "Injured Reserve":
-                                thisPlayerWeekStatus.playerStatus = 6
-                            elif athlete['injuries']['status'] == "Out":
-                                thisPlayerWeekStatus.playerStatus = 4
-                            elif athlete['injuries']['status'] == "Questionable":
-                                thisPlayerWeekStatus.playerStatus = 2
-                            elif athlete['injuries']['status'] == "Doubtful":
-                                thisPlayerWeekStatus.playerStatus = 3
+                                print("There's a status in injuries: " + athlete['injuries'][0]['status'])
+                            if 'status' in athlete['injuries'][0]:
+                                #print("there's a status in Injuries for player")
+                                if athlete['injuries'][0]['status'] == "Injured Reserve":
+                                    thisPlayerWeekStatus.playerStatus = 6
+                                elif athlete['injuries'][0]['status'] == "Out":
+                                    thisPlayerWeekStatus.playerStatus = 4
+                                elif athlete['injuries'][0]['status'] == "Questionable":
+                                    thisPlayerWeekStatus.playerStatus = 2
+                                elif athlete['injuries'][0]['status'] == "Doubtful":
+                                    thisPlayerWeekStatus.playerStatus = 3
                         else:
                             if 'status' in athlete:
                                 if athlete['status']['id'] == '1':
