@@ -95,4 +95,11 @@ textarea{
 .injury_player_name{
   width: 185px;
 }
- 
+
+.injury_player_pos{
+  width:50px;
+}
+
+.injury_player_status{
+  width: 90px;
+}
