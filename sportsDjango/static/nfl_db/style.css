@@ -84,4 +84,12 @@ textarea{
   width: 60px;
 }
 
+.form-select{
+  --bs-border-color: #9d9fa2;
+}
+
+.injury_table tr td{
+  text-align:left !important;
+}
+
  

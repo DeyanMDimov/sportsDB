@@ -600,7 +600,14 @@ def getPlayers(request):
         
     return render(request, 'nfl/players.html', pageDictionary)
 
-
+def getInjuryStatus(request):
+    print("Hit this")
+    if(request.method == 'GET'):
+        activeTeams = nflTeam.objects.all()
+        for team in activeTeams:
+            crudLogic.getCurrentWeekAthletesStatus(team.espnId)
+        
+        return JsonResponse({}, status="200")
 
 def loadModel(request, target):
     weeksOnPage = []
@@ -640,6 +647,14 @@ def loadModel(request, target):
             # if len(gamesInWeek) == 0:
                 
             for match in gamesInWeek:
+                team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
+                team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+
+                homeTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team1).exclude(playerStatus = 1)
+                #print(str(team1.espnId) + ": " + str(len(homeTeamInjuries)))
+                awayTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team2).exclude(playerStatus = 1)
+                #print(str(team2.espnId) + ": " + str(len(awayTeamInjuries)))
+
                 if selectedModel == "v1" or selectedModel == "v1.5":
                     
                     if selectedModel == "v1":
@@ -650,8 +665,7 @@ def loadModel(request, target):
                     
                     if(match.completed):
                         anyGamesCompleted = True
-                        team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
-                        team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+                       
 
                         if match.completed:     
                             individualModelResult.team1ActualYards = match.homeTeamTotalYards
@@ -669,8 +683,9 @@ def loadModel(request, target):
                             individualModelResult.bookProvidedTotal = match.overUnderLine
                         if match.matchLineHomeTeam != None:
                             individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
-
-
+                    
+                    individualModelResult.homeTeamInjuries = list(homeTeamInjuries)
+                    individualModelResult.awayTeamInjuries = list(awayTeamInjuries)
                     modelResults.append(individualModelResult)
                     
 
@@ -715,7 +730,11 @@ def loadModel(request, target):
                         if match.matchLineHomeTeam != None:
                             individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
 
+                    individualModelResult.homeTeamInjuries = list(homeTeamInjuries)
+                    individualModelResult.awayTeamInjuries = list(awayTeamInjuries)
+
                     modelResults.append(individualModelResult)
+                
 
             overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
             overUnderWrong = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'False', modelResults)))
@@ -730,13 +749,15 @@ def loadModel(request, target):
             modelResults = businessLogic.setBetRankingsV1(modelResults)
             for m in modelResults:
                 print(m.team1Name + " vs. " + m.team2Name + " Bet Rank Score: " + str(m.betRankScore))
-               
+            
+
 
             print(selectedModel)
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason,'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions, 'sel_ma': selectedLen})
             else:
-                return render(request, 'nfl/modelSummary.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, 'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions, 'anyCompleted': anyGamesCompleted, 'ouRecord': overUnderRecord, 'lbRecord': lineBetRecord, 'sel_ma': selectedLen})
+                return render(request, 'nfl/modelSummary.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, 'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions, 'anyCompleted': anyGamesCompleted, 'ouRecord': overUnderRecord, \
+                                                                 'lbRecord': lineBetRecord, 'sel_ma': selectedLen})
         else: 
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions})
@@ -1074,7 +1095,7 @@ def testPage(request):
 
 def playerSignificance(request):
     if(request.method == 'GET'):
-        print("GOT IT")
+      
         playerId = request.GET.get('playerId')
         playerStar = request.GET.get('isStar')
         playerContrib = request.GET.get('bigImpact')

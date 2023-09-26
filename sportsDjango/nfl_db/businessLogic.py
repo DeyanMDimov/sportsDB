@@ -68,6 +68,9 @@ class individualBettingModelResult:
 
     matchModelDetails = None
 
+    homeTeamInjuries = []
+    awayTeamInjuries = []
+
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
         self.team1Name = t1name
@@ -560,6 +563,9 @@ class individualV2ModelResult:
     previousWeekNotFinished = False
 
     matchModelDetails = None
+
+    homeTeamInjuries = []
+    awayTeamInjuries = []
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         

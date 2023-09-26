@@ -11,5 +11,6 @@ urlpatterns = [
     path('loadYearlySummary/', views.loadModelYear, name="loadModelYear"),
     path('individualStat/', views.viewIndividualStat, name="individualStat"),
     path('players/', views.getPlayers, name="getPLayers"),
-    path('ajax/playerSignificance/', views.playerSignificance, name="playerSignificance")
+    path('ajax/playerSignificance/', views.playerSignificance, name="playerSignificance"),
+    path('ajax/getInjuryStatus/', views.getInjuryStatus, name="getInjuryStatus")
 ]

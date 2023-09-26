@@ -316,44 +316,53 @@
                                         </tbody>
                                     </table>
                                 </td>
+                                <td colspan="4">
+                                </td>
                                 <td colspan="6">
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
                                             <tr>
-                                                <td colspan="4">
+                                                <td colspan="2">
                                                     Key Injuries
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td colspan="2">
+                                                <td colspan="1">
                                                     {{result.team1Name}}
                                                 </td>
                                                 
-                                                <td colspan="2">
+                                                <td colspan="1">
                                                     {{result.team2Name}}
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
+                                                <td>
+                                                    <table class="injury_table" style="text-align:left">
+                                                        <tbody>
+                                                            {% for injury in result.homeTeamInjuries %}
+                                                            <tr>
+                                                                <td>{{injury.player.name}}</td>
+                                                                <td></td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </td>
+                                                <td>
+                                                    <table class="injury_table" style="text-align:left">
+                                                        <tbody>
+                                                            {% for injury in result.awayTeamInjuries %}
+                                                            <tr>
+                                                                <td>{{injury.player.name}}</td>
+                                                                <td></td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </td>
                                             </tr>
-                                            <tr>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                            </tr>
-                                            <tr>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                            </tr>
-                                            <tr>
-                                               
-                                            </tr>
+                                           
+                                            
                                         </tbody>
                                     </table>
                                 </td>

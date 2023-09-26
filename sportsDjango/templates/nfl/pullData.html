@@ -58,7 +58,7 @@
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-success">Load!</button>
+                <button type="submit" class="btn btn-success" id="save-btn">Load!</button>
                 
             </form>
             <br>
@@ -105,12 +105,34 @@
                 <button type="submit">Load Full Season</button>
             </form>
         </div> {% endcomment %}
+        {% comment %} 
         <div>
-            {% comment %} Load data for game with ID:
+            Load data for game with ID:
             <form method="GET">
                 <input type="text" id="espnGameId" name="espnGameId"><br><br>
                 <button type="submit">Load!</button>
-            </form> {% endcomment %}
+            </form> 
+        </div>
+        {% endcomment %}
+        <div id="injuriesbutton">
+            <button class="btn btn-outline-dark" id="ajaxbutton"> Get Injuries</button>
         </div>
     </div>
+    <script>
+        $("#injuriesbutton").on("click", "#ajaxbutton", function () {
+            var url = "../ajax/getInjuryStatus/"  
+            console.log("ayyy")
+            $.ajax(
+                {                       
+                    url: url,           
+                    data: {
+                    
+                    },
+                    success: function () 
+                    {
+                        console.log("We did it.");
+                    }
+                });
+        });
+    </script>
 {% endblock %}

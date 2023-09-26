@@ -2,7 +2,7 @@ from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
 
 
-# Create your models here.
+
 
 class nflTeam(models.Model):
     geography = models.CharField(max_length = 30, default = "-")
@@ -22,6 +22,7 @@ class nflMatch(models.Model):
     awayTeam                            = models.ManyToManyField(nflTeam, related_name = 'awayTeam', blank = True)
     awayTeamEspnId                      = models.SmallIntegerField(null = True, blank = True)
     completed                           = models.BooleanField(default = False)
+    divisionalMatch                     = models.BooleanField(default = False)
     weekOfSeason                        = models.SmallIntegerField(validators = [MinValueValidator(-4), MaxValueValidator(22)], default = 0)
     yearOfSeason                        = models.SmallIntegerField(validators = [MinValueValidator(2002)], default = 2002)
     neutralStadium                      = models.BooleanField(default = False)
@@ -209,6 +210,19 @@ class teamMatchPerformance(models.Model):
 class teamMatchRoster(models.Model):
     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
     nflTeam = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+
+# class nflTeamSeasonByeWeek(models.Model):
+#     nflTeam = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+#     nflTeamEspnId = models.SmallIntegerField(null=True, blank=True)
+#     yearOfSeason = models.SmallIntegerField(null = True, blank = True)
+#     byeWeek = models.SmallIntegerField(null = True, blank = True)
+
+# class nflTeamSchedule(models.Model):
+#     nflTeam = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+#     nflTeamEspnId = models.SmallIntegerField(null=True, blank=True)
+#     yearOfSeason = models.SmallIntegerField(null = True, blank = True)
+
+
 
 class driveOfPlay(models.Model):
     nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
