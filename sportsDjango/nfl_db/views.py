@@ -651,13 +651,13 @@ def loadModel(request, target):
                 team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
                 team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
 
-                homeTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team1).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate').distinct('player__espnId')
+                homeTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team1).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate')#.distinct('player__espnId')
 
 
                     
                     
                 
-                awayTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team2).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate').distinct('player__espnId')
+                awayTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team2).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate')#.distinct('player__espnId')
 
                 if selectedModel == "v1" or selectedModel == "v1.5":
                     
