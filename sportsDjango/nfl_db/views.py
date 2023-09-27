@@ -651,13 +651,45 @@ def loadModel(request, target):
                 team1 = nflTeam.objects.get(espnId = match.homeTeamEspnId)
                 team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
 
-                homeTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team1).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate')#.distinct('player__espnId')
+                homeTeamInjuries = []
+                awayTeamInjuries = []
+
+                homeTeamInjuriesInclDuplicates = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team1).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate')#.distinct('player__espnId')
 
 
-                    
-                    
+
+                for playerInjury in homeTeamInjuriesInclDuplicates:
+                    if len(homeTeamInjuries) == 0:
+                        homeTeamInjuries.append(playerInjury)
+                    else: 
+                        thisPlayersInjury = list(filter(lambda x: x.player == playerInjury.player, homeTeamInjuries))
+
+                        if len(list(thisPlayersInjury)) == 0:
+                            homeTeamInjuries.append(playerInjury)
+                        elif len(thisPlayersInjury) ==  1:
+                            
+                            if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
+                                homeTeamInjuries.remove(thisPlayersInjury[0])
+                                homeTeamInjuries.append(playerInjury)
+                            
                 
-                awayTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team2).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate')#.distinct('player__espnId')
+                awayTeamInjuriesInclDuplicates = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team2).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate')#.distinct('player__espnId')
+
+                
+                for playerInjury in awayTeamInjuriesInclDuplicates:
+                    if len(homeTeamInjuries) == 0:
+                        awayTeamInjuries.append(playerInjury)
+                    else: 
+                        thisPlayersInjury = list(filter(lambda x: x.player == playerInjury.player, awayTeamInjuries))
+
+                        if len(list(thisPlayersInjury)) == 0:
+                            awayTeamInjuries.append(playerInjury)
+                        elif len(thisPlayersInjury) ==  1:
+                            
+                            if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
+                                awayTeamInjuries.remove(thisPlayersInjury[0])
+                                awayTeamInjuries.append(playerInjury)
+
 
                 if selectedModel == "v1" or selectedModel == "v1.5":
                     
