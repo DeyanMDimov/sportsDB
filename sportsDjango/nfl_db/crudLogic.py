@@ -1524,22 +1524,22 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
         except:
                 pass
         if playerObj == None:
-            pass
-        else:
-            try:
-                playerWeekStatusObj = playerWeekStatus.objects.get(player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek)
-            except:
-                playerWeekStatusObj = playerWeekStatus.objects.create(
-                    player = playerObj,
-                    team = team,
-                    weekOfSeason = seasonWeek,
-                    yearOfSeason = seasonYear,
-                )
-                if athlete['didNotPlay'] == True or athlete['valid'] == False:
-                    playerWeekStatusObj.playerStatus = 4
-                    playerWeekStatusObj.save()
-            
-            athletesAndAvailability.append([playerObj, playerWeekStatusObj])
+            playerObj = createPlayerAthletesFromGameRoster(athlete, team.espnId)
+        
+        try:
+            playerWeekStatusObj = playerWeekStatus.objects.get(player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek)
+        except:
+            playerWeekStatusObj = playerWeekStatus.objects.create(
+                player = playerObj,
+                team = team,
+                weekOfSeason = seasonWeek,
+                yearOfSeason = seasonYear,
+            )
+            if athlete['didNotPlay'] == True or athlete['valid'] == False:
+                playerWeekStatusObj.playerStatus = 4
+                playerWeekStatusObj.save()
+        
+        athletesAndAvailability.append([playerObj, playerWeekStatusObj])
     
     return athletesAndAvailability
 
@@ -1662,7 +1662,7 @@ def getCurrentWeekAthletesStatus(teamId):
 
 
 
-def createPlayerAthletes(rosterData, teamId):
+def createPlayerAthletesFromTeamRoster(rosterData, teamId):
     print(str(teamId))
     for athlete in rosterData['items']:
         playerObj = None
@@ -1718,6 +1718,35 @@ def createPlayerAthletes(rosterData, teamId):
             else:
                getPlayerTenures(playerObj)
                
+def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
+    
+    url = athleteRosterData['athlete']['$ref']
+    response = requests.get(url)
+    athleteData = response.json()
+    
+
+    playerObj = player.objects.create(
+            espnId = athleteData['id'],
+            name = athleteData['displayName'],
+            firstSeason = getFirstSeasonYear(athleteData['experience']['years']),
+            team = nflTeam.objects.get(espnId = teamId),
+            playerHeightInches = athleteData['height'],
+            playerWeightPounds = athleteData['weight'],
+            playerPosition = getAthletePosition(athleteData['position']['abbreviation']), 
+            sideOfBall = getAthleteSideOfBall(athleteData['position'])
+        )
+    
+    if athleteData['experience']['years'] == 0:
+        playerTeamTenure.objects.create(
+            player = playerObj,
+            team = nflTeam.objects.get(espnId = teamId),
+            startDate = datetime(2023, 9, 8)
+        )
+        print("Player tenure created for ROOKIE.")
+    print("Successfully loaded player w/ ESPN ID: " + str(playerObj.espnId) + " - " + playerObj.name)
+
+    return playerObj
+    
 
 def getPlayerTenures(playerObj):
     yearToStart = playerObj.firstSeason
@@ -1835,14 +1864,24 @@ def getAthletePosition(abbreviation):
     
 def getAthleteSideOfBall(positionData):
     if 'parent' in positionData:
-        if positionData['parent']['name'] == "Offense":
-            return 1
-        elif positionData['parent']['name'] == "Defense":
-            return 2
-        elif positionData['parent']['name'] == "Special Teams":
-            return 3
+        if 'name' in positionData['parent']:
+            if positionData['parent']['name'] == "Offense":
+                return 1
+            elif positionData['parent']['name'] == "Defense":
+                return 2
+            elif positionData['parent']['name'] == "Special Teams":
+                return 3
+            else:
+                return 4
         else:
-            return 4
+            if getAthletePosition(positionData['abbreviation']) in range(1,7):
+                return 1
+            elif getAthletePosition(positionData['abbreviation']) in range(7,11):
+                return 2
+            elif getAthletePosition(positionData['abbreviation']) in range(11,13):
+                return 3
+            else:
+                return 4
     else:
         if getAthletePosition(positionData['abbreviation']) in range(1,7):
             return 1

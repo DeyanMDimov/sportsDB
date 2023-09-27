@@ -509,7 +509,7 @@ def getPlayers(request):
                     rosterData = responseData['athletes']
 
                     for subsection in rosterData:
-                        crudLogic.createPlayerAthletes(subsection, teamId)
+                        crudLogic.createPlayerAthletesFromTeamRoster(subsection, teamId)
 
 
                     playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
