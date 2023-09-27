@@ -59,7 +59,7 @@
                         Season: <select name="season" id="season" class="form-control">
                             {% for yr in years %}
                             <option value="{{yr}}" 
-                            {%if yr|stringformat:"i" == season %}
+                            {%if yr|stringformat:"i" == sel_Year %}
                                     selected
                                 {% endif %} >{{yr}}</option>    
                             {% endfor %} 
@@ -68,7 +68,10 @@
                     <div class="mb-1 col-2">
                         Week: <select name="week" id="week" class="form-control">
                             {% for wk in weeks %}
-                            <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                            <option value="{{wk.0}}"
+                                {% if wk.0 == sel_Week %}
+                                    selected
+                                {% endif %} > {{ wk.1 }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -77,7 +80,7 @@
                         <select name="team" id="team" class="form-control">
                         {% for team in teams %}
                             <option value="{{ team.abbreviation }}"
-                            {%if selTeam.abbreviation == team.abbreviation %}
+                            {%if sel_Team == team.abbreviation %}
                                 selected
                             {% endif %}
                             > {{ team.abbreviation }}</option>
@@ -275,7 +278,7 @@
         
         {% if athleteAvailSeason %}
         <h3> 
-            Player Availability for {{yearOfSeason}}
+            Player Availability for {{season}}
         </h3>
         <div class="container" style="overflow:scroll">
             <table class="table table-bordered" id="player_table">

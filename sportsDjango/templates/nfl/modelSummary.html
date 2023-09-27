@@ -13,7 +13,7 @@
                             <select class="form-select" name="season" id="select_season" aria-label="Floating label">
                                 {% for yr in years %}
                                 <option value="{{yr}}" 
-                                    {%if yr|stringformat:"i" == season %}
+                                    {%if yr|stringformat:"i" == yearOfSeason %}
                                         selected
                                     {% endif %} >{{yr}}</option>
                                 {% endfor %}

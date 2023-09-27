@@ -478,7 +478,7 @@ def getPlayers(request):
     nflTeams = nflTeam.objects.all().order_by('abbreviation')
 
     yearsOnPage = []
-    for y in range(2022, 2017, -1):
+    for y in range(2023, 2017, -1):
         yearsOnPage.append(y)
 
     weeksOnPage = []
@@ -570,10 +570,11 @@ def getPlayers(request):
                     else:
                         return render(request, 'nfl/players.html', pageDictionary)
                 
-                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvailSeason': athleteAvailabilitySeason, 'sel_Team': inputReq['team']})
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvailSeason': athleteAvailabilitySeason, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason,})
                 
             else:
                 if 'team' in inputReq:
+
                     selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
                     teamId = selectedTeam.espnId
                     selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
@@ -593,8 +594,8 @@ def getPlayers(request):
 
                     athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
 
-
-                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability})
+                    # print(weekOfSeason)
+                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
                 
                 
         
@@ -651,9 +652,8 @@ def loadModel(request, target):
                 team2 = nflTeam.objects.get(espnId = match.awayTeamEspnId)
 
                 homeTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team1).exclude(playerStatus = 1)
-                #print(str(team1.espnId) + ": " + str(len(homeTeamInjuries)))
+                
                 awayTeamInjuries = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team2).exclude(playerStatus = 1)
-                #print(str(team2.espnId) + ": " + str(len(awayTeamInjuries)))
 
                 if selectedModel == "v1" or selectedModel == "v1.5":
                     
