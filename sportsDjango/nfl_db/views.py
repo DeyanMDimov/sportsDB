@@ -609,6 +609,7 @@ def getInjuryStatus(request):
             crudLogic.getCurrentWeekAthletesStatus(team.espnId)
         
         return JsonResponse({}, status="200")
+    
 
 def loadModel(request, target):
     weeksOnPage = []

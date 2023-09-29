@@ -1543,6 +1543,10 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
     
     return athletesAndAvailability
 
+def scheduledInjuryPull():
+    activeTeams = nflTeam.objects.all()
+    for team in activeTeams:
+        getCurrentWeekAthletesStatus(team.espnId)
 
 def getCurrentWeekAthletesStatus(teamId):
 
@@ -1570,8 +1574,8 @@ def getCurrentWeekAthletesStatus(teamId):
         if lastCompletedGame.weekOfSeason != 18:
             nextGame = list(filter(lambda x: x.completed == False, sortedMatchesInSeason))[0]
 
-            if lastCompletedGame.weekOfSeason == nextGame.weekOfSeason - 1:
-                currentWeekOfSeason = nextGame.weekOfSeason
+            currentWeekOfSeason = nextGame.weekOfSeason
+            
 
     else:
         currentWeekOfSeason = 1    
