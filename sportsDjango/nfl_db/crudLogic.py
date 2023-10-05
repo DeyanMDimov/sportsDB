@@ -1463,70 +1463,61 @@ def scheduledScorePull():
 
     #print(str(thisDay))
 
-    daysToCheck = [0, 3, 6]
+    daysToCheck = [0, 3, 4, 5, 6]
 
     yearOfSeason = thisDay.year if thisDay.month > 4 else thisDay.year - 1 
-
+    weekOfSeason = 1
 
     if thisDay.weekday() in daysToCheck:
 
-        if thisDay.weekday() == 0 and thisDay.time > datetime(hour = 22, minute = 59, second = 00, tzinfo = central_zone):
-            #find Monday game and get score
-            for wk in range(1, 23):
-                weekMatches = nflMatch.objects.filter(weekOfSeason = wk)
-                
-                incompleteMatchesInDB = list(weekMatches.filter(completed = False))
-                if len(incompleteMatchesInDB) == 0:
-                    continue
-                
-                else:
-                    mondayGames = list(incompleteMatchesInDB.filter(nflMatch.datePlayed.weekday() == 0))
-                    for monGame in mondayGames:
-                        matchId = monGame.espnId
-                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
-                        gameDataResponse = requests.get(matchURL)
-                        gameData=gameDataResponse.json()
+        gamesPlayedToday = nflMatch.objects.filter(completed = False).filter(nflMatch.datePlayed < thisDay).filter(nflMatch.datePlayed.date() == thisDay.date())
 
-                        processGameData(gameData, wk, yearOfSeason)
-                    
-                    return
-                    
-        elif thisDay.weekday() == 3 and thisDay.time > datetime(hour = 22, minute = 59, second = 00, tzinfo = central_zone):
-            for wk in range(1, 23):
-                weekMatches = nflMatch.objects.filter(weekOfSeason = wk)
-                incompleteMatchesInDB = list(weekMatches.filter(completed = False))
-                if len(incompleteMatchesInDB) == 0: 
-                    continue
-                else:
-                    thursdayGames = list(weekMatches.filter(nflMatch.datePlayed.weekday() == 3))
-                    for thursGame in thursdayGames:
-                        matchId = thursGame.espnId
-                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
-                        gameDataResponse = requests.get(matchURL)
-                        gameData=gameDataResponse.json()
+        if len(list(gamesPlayedToday)) > 0:
+            print("Today is " + thisDay.strftime('%A') + " " + thisDay.date + " and " + str(len(list(gamesPlayedToday))) + " are played today.")
+            weekOfSeason = gamesPlayedToday[0].weekOfSeason
 
-                        processGameData(gameData, wk, yearOfSeason)
+            if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time > datetime(hour = 23, minute = 30, second = 00, tzinfo = central_zone):
+                #find Monday or Thursday games and get scores
+                
+                for unfinishedGame in gamesPlayedToday:
+                    matchId = unfinishedGame.espnId
+                    matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
+                    gameDataResponse = requests.get(matchURL)
+                    gameData=gameDataResponse.json()
+
+                    processGameData(gameData, weekOfSeason, yearOfSeason)
                     
-                    return
+                return    
+                        
+            elif thisDay.weekday() == 4 and thisDay.time > datetime(hour = 18, minute = 30, second = 00, tzinfo = central_zone):
+                
+                for fridayGame in gamesPlayedToday:
+                    matchId = fridayGame.espnId
+                    matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
+                    gameDataResponse = requests.get(matchURL)
+                    gameData=gameDataResponse.json()
+
+                    processGameData(gameData, weekOfSeason, yearOfSeason)
+                
+                return     
+            
+            else:
+
+                for sundayGame in gamesPlayedToday:
+                    matchId = sundayGame.espnId
+                    matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
+                    gameDataResponse = requests.get(matchURL)
+                    gameData=gameDataResponse.json()
         
-        else:
-            for wk in range(1, 23):
-                weekMatches = nflMatch.objects.filter(weekOfSeason = wk)
-                incompleteMatchesInDB = list(weekMatches.filter(completed = False))
-                if len(incompleteMatchesInDB) == 0: 
-                    continue
-                else:
-                    sundayGames = list(incompleteMatchesInDB.filter(nflMatch.datePlayed.weekDay() == 6))
-                    for sundayGame in sundayGames:
-                        matchId = sundayGame.espnId
-                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
-                        gameDataResponse = requests.get(matchURL)
-                        gameData=gameDataResponse.json()
-             
-                        processGameData(gameData, wk, yearOfSeason)
-                    
-                    return       
+                    processGameData(gameData, weekOfSeason, yearOfSeason)
+                
+                return       
+        else: 
+            print("Today is " + thisDay.strftime('%A') + " " + thisDay.date + " and no games were updated at " + thisDay.strftime('%H:%M:%S'))
+            return
+
     else:
+        print("Today is " + thisDay.strftime('%A') + " " + thisDay.date + " and we did not check for games.")
         return
 
 def processGameData(gameData, weekOfSeason, yearOfSeason):
