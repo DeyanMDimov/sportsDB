@@ -1,17 +1,9 @@
 from nfl_db import models
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
 from django.db import IntegrityError
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo
 import json, requests, traceback
-
-# nflTeam, 
-# nflMatch, 
-# teamMatchPerformance, 
-# player, 
-# driveOfPlay, 
-# playByPlay, 
-# playerMatchOffense, 
-# playerWeekStatus
 
 def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, seasonYear):
     
@@ -451,24 +443,6 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
 
     return matchData
 
-# def updateNflMatch():
-#     pass
-
-# def updateNflMatchOdds():
-#     pass
-
-# def deleteNflMatchesId(matchId):
-#     pass
-
-# def deleteNflMatchesByWeek(yearOfSeason, weekOfSeason):
-#     pass
-
-# def deleteNflMatchesByYear(yearOfSeason):
-#     pass
-
-
-
-
 def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamStats, matchEspnId, teamId, opponentId, opponentStats, playByPlayData, playByPlayObj, drivesData, seasonWeek, seasonYear):
     exceptions = [] 
 
@@ -833,9 +807,6 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             exceptions.append([problem_text, jsonObject])
             raise Exception(exceptions)
 
-# def deleteTeamMatchPerformance ():
-#     pass
-
 class playByPlayData:
     playByPlayPages = []
 
@@ -1106,7 +1077,6 @@ def captureStatsFromDrives(drivesData, matchEspnId, teamId, opponentId, teamPerf
 
     teamPerf.save()
 
-
 def createDriveOfPlay (individualDrive, matchData):
     
     try:
@@ -1266,12 +1236,6 @@ def createPlayByPlay (individualPlay, driveEspnId):
         
         except:
             pass
-    
-# def updatePlayByPlay ():
-#     pass
-
-# def deletePlayByPlay ():
-#     pass
 
 def setPlayType(inputType):
     
@@ -1485,6 +1449,192 @@ def getExplosivePlays(playByPlayData, teamId):
     
     return teamExplosivePlays
 
+def scheduledScorePull():
+    thisDayUTC = datetime.now()
+    
+    utc_zone = ZoneInfo('UTC')
+    central_zone = ZoneInfo('America/Chicago')  
+
+    thisDayUTC = thisDayUTC.replace(tzinfo = utc_zone)
+
+    #print(str(thisDayUTC))
+
+    thisDay = thisDayUTC.astimezone(central_zone)
+
+    #print(str(thisDay))
+
+    daysToCheck = [0, 3, 6]
+
+    yearOfSeason = thisDay.year if thisDay.month > 4 else thisDay.year - 1 
+
+
+    if thisDay.weekday() in daysToCheck:
+
+        if thisDay.weekday() == 0 and thisDay.time > datetime(hour = 22, minute = 59, second = 00, tzinfo = central_zone):
+            #find Monday game and get score
+            for wk in range(1, 23):
+                weekMatches = nflMatch.objects.filter(weekOfSeason = wk)
+                
+                incompleteMatchesInDB = list(weekMatches.filter(completed = False))
+                if len(incompleteMatchesInDB) == 0:
+                    continue
+                
+                else:
+                    mondayGames = list(incompleteMatchesInDB.filter(nflMatch.datePlayed.weekday() == 0))
+                    for monGame in mondayGames:
+                        matchId = monGame.espnId
+                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
+                        gameDataResponse = requests.get(matchURL)
+                        gameData=gameDataResponse.json()
+
+                        processGameData(gameData, wk, yearOfSeason)
+                    
+                    return
+                    
+        elif thisDay.weekday() == 3 and thisDay.time > datetime(hour = 22, minute = 59, second = 00, tzinfo = central_zone):
+            for wk in range(1, 23):
+                weekMatches = nflMatch.objects.filter(weekOfSeason = wk)
+                incompleteMatchesInDB = list(weekMatches.filter(completed = False))
+                if len(incompleteMatchesInDB) == 0: 
+                    continue
+                else:
+                    thursdayGames = list(weekMatches.filter(nflMatch.datePlayed.weekday() == 3))
+                    for thursGame in thursdayGames:
+                        matchId = thursGame.espnId
+                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
+                        gameDataResponse = requests.get(matchURL)
+                        gameData=gameDataResponse.json()
+
+                        processGameData(gameData, wk, yearOfSeason)
+                    
+                    return
+        
+        else:
+            for wk in range(1, 23):
+                weekMatches = nflMatch.objects.filter(weekOfSeason = wk)
+                incompleteMatchesInDB = list(weekMatches.filter(completed = False))
+                if len(incompleteMatchesInDB) == 0: 
+                    continue
+                else:
+                    sundayGames = list(incompleteMatchesInDB.filter(nflMatch.datePlayed.weekDay() == 6))
+                    for sundayGame in sundayGames:
+                        matchId = sundayGame.espnId
+                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
+                        gameDataResponse = requests.get(matchURL)
+                        gameData=gameDataResponse.json()
+             
+                        processGameData(gameData, wk, yearOfSeason)
+                    
+                    return       
+    else:
+        return
+
+def processGameData(gameData, weekOfSeason, yearOfSeason):
+    matchEspnId = gameData['id']
+    dateOfGameFromApi = gameData['date']
+    dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
+
+    homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+    homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
+    awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
+    print()
+    print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
+
+    gameStatusUrl = gameData['competitions'][0]['status']['$ref']
+    gameStatusResponse = requests.get(gameStatusUrl)
+    gameStatus = gameStatusResponse.json()
+
+    gameCompleted = (gameStatus['type']['completed'] == True)
+    gameOvertime = ("OT" in gameStatus['type']['detail']) 
+
+    oddsUrl = gameData['competitions'][0]['odds']['$ref']
+    oddsResponse = requests.get(oddsUrl)
+    oddsData = oddsResponse.json()
+
+    existingMatch = None
+    existingHomeTeamPerf = None
+    existingAwayTeamPerf = None
+
+    try:
+        existingMatch = nflMatch.objects.get(espnId = matchEspnId)
+    except Exception as e:
+        print(e)
+
+    try:
+        existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = homeTeamEspnId)
+    except Exception as e:
+        print(e)
+
+    try:    
+        existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
+    except Exception as e:
+        print(e)                        
+
+    if datetime.datetime.now()<dateOfGame or gameCompleted==False:
+        createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
+
+    else:
+        homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
+        homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
+        homeTeamStats = homeTeamStatsResponse.json()
+
+        homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
+        homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
+        homeTeamScore = homeTeamScoreResponse.json()
+
+        awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
+        awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
+        awayTeamStats = awayTeamStatsResponse.json()
+        
+        awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
+        awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
+        awayTeamScore = awayTeamScoreResponse.json()
+
+        drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
+        drivesDataResponse = requests.get(drivesDataUrl)
+        drivesData = drivesDataResponse.json()
+
+        playsDataUrl = gameData['competitions'][0]['details']['$ref']
+        playsDataResponse = requests.get(playsDataUrl)
+        playsData = playsDataResponse.json()
+
+        playByPlayOfGame = playByPlayData(playsData)
+        
+        pagesOfPlaysData = playsData['pageCount']
+        if pagesOfPlaysData > 1:
+            print("Multiple pages of Data in game")
+            for page in range(2, pagesOfPlaysData+1):
+                multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
+                pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
+                pagePlaysData = pagePlaysDataResponse.json()
+                playByPlayOfGame.addJSON(pagePlaysData)
+        
+        try:
+            matchData = createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+        except Exception as e:
+            matchData = nflMatch.objects.get(espnId = matchEspnId)
+            print("There was an exception updating MatchEspnId: " + str(matchEspnId))
+            print(e)
+
+        try:
+            existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
+        except Exception as e:
+            print("There was an exception getting homeTeamPerformance for MatchEspnId: " + str(matchEspnId))
+            print(e)        
+        
+        try:
+            createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, awayTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
+        except Exception as e: 
+            print("Problem with creating home team Match performance for MatchEspnId: " + str(matchEspnId))
+            print(e)
+            
+        try:
+            createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, homeTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
+        except Exception as e:
+            print("Problem with creating away team Match performance for MatchEspnId: " + str(matchEspnId))
+            print(e)
+            
 def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekNum):
     if len(seasonAvailability) == 0:
         for playerRecord in weekAvailability:
@@ -1549,7 +1699,9 @@ def scheduledInjuryPull():
         getCurrentWeekAthletesStatus(team.espnId)
 
 def getCurrentWeekAthletesStatus(teamId):
-
+    
+    print("Running at " + str(datetime.now()))
+    print("Get here")
     url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
     response = requests.get(url)
     responseData = response.json()
@@ -1558,6 +1710,8 @@ def getCurrentWeekAthletesStatus(teamId):
     currentDate = date.today()
     currentYear = currentDate.year
     currentWeekOfSeason = 0
+    
+    
 
     countOfPlayers = 0
 
@@ -1596,8 +1750,9 @@ def getCurrentWeekAthletesStatus(teamId):
                 try:
                     thisPlayerWeekStatus = playerWeekStatus.objects.get(player = playerObj, weekOfSeason = currentWeekOfSeason, yearOfSeason = currentYear, reportDate = currentDate)
                     
-                except: 
+                except Exception as e: 
                     print("Found Error")
+
                 if thisPlayerWeekStatus == None:
                     thisPlayerWeekStatus = playerWeekStatus.objects.create(
                         player = playerObj,
@@ -1662,10 +1817,6 @@ def getCurrentWeekAthletesStatus(teamId):
     
     #print(str(teamId) + ": " + str(countOfPlayers) + ". WeekOfSeason: " + str(currentWeekOfSeason))
     
-    
-
-
-
 def createPlayerAthletesFromTeamRoster(rosterData, teamId):
     print(str(teamId))
     for athlete in rosterData['items']:
@@ -1751,7 +1902,6 @@ def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
 
     return playerObj
     
-
 def getPlayerTenures(playerObj):
     yearToStart = playerObj.firstSeason
     playerTenures = playerTeamTenure.objects.filter(player = playerObj)
@@ -1923,8 +2073,6 @@ def getFirstSeasonYear(yearsOfExperience):
         firstSeasonYear = currentYear-numYears+1
     return firstSeasonYear
 
-
-
 def resetAllMatchAssociationsForClearing():
     for match in models.nflMatch.objects.all():
         match.homeTeam.clear()
@@ -1950,3 +2098,38 @@ def resetAllPerformanceAssociationsForClearing():
 
     return('Performances deleted - ', deletePerfMessage)
 
+# def updateNflMatch():
+#     pass
+
+# def updateNflMatchOdds():
+#     pass
+
+# def deleteNflMatchesId(matchId):
+#     pass
+
+# def deleteNflMatchesByWeek(yearOfSeason, weekOfSeason):
+#     pass
+
+# def deleteNflMatchesByYear(yearOfSeason):
+#     pass
+
+# def updateNflMatch():
+#     pass
+
+# def updateNflMatchOdds():
+#     pass
+
+# def deleteNflMatchesId(matchId):
+#     pass
+
+# def deleteNflMatchesByWeek(yearOfSeason, weekOfSeason):
+#     pass
+
+# def deleteNflMatchesByYear(yearOfSeason):
+#     pass
+
+# def updatePlayByPlay ():
+#     pass
+
+# def deletePlayByPlay ():
+#     pass
