@@ -1694,9 +1694,22 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
     return athletesAndAvailability
 
 def scheduledInjuryPull():
-    activeTeams = nflTeam.objects.all()
-    for team in activeTeams:
-        getCurrentWeekAthletesStatus(team.espnId)
+    thisDayUTC = datetime.now()
+    
+    utc_zone = ZoneInfo('UTC')
+    central_zone = ZoneInfo('America/Chicago')  
+
+    thisDayUTC = thisDayUTC.replace(tzinfo = utc_zone)
+
+    thisDay = thisDayUTC.astimezone(central_zone)
+
+    if (thisDay.weekday() == 6 and (thisDay.hour == 11 or thisDay.hour == 14 or thisDay.hour == 18)) or thisDayUTC.hour == 15:
+        activeTeams = nflTeam.objects.all()
+        for team in activeTeams:
+            getCurrentWeekAthletesStatus(team.espnId)        
+    
+
+    
 
 def getCurrentWeekAthletesStatus(teamId):
     
@@ -1751,7 +1764,7 @@ def getCurrentWeekAthletesStatus(teamId):
                     thisPlayerWeekStatus = playerWeekStatus.objects.get(player = playerObj, weekOfSeason = currentWeekOfSeason, yearOfSeason = currentYear, reportDate = currentDate)
                     
                 except Exception as e: 
-                    print("Found Error")
+                    print("No player status for today yet.")
 
                 if thisPlayerWeekStatus == None:
                     thisPlayerWeekStatus = playerWeekStatus.objects.create(
@@ -1761,61 +1774,42 @@ def getCurrentWeekAthletesStatus(teamId):
                     )
                     thisPlayerWeekStatus.team = nflTeam.objects.get(espnId = teamId)
                     thisPlayerWeekStatus.reportDate = currentDate
-                    if 'injuries' in athlete:
-                        if len(athlete['injuries']) != 0:
-                            if teamId == 1:
-                                print("There's a status in injuries: " + athlete['injuries'][0]['status'])
-                            if 'status' in athlete['injuries'][0]:
-                                #print("there's a status in Injuries for player")
-                                if athlete['injuries'][0]['status'] == "Injured Reserve":
-                                    thisPlayerWeekStatus.playerStatus = 6
-                                elif athlete['injuries'][0]['status'] == "Out":
-                                    thisPlayerWeekStatus.playerStatus = 4
-                                elif athlete['injuries'][0]['status'] == "Questionable":
-                                    thisPlayerWeekStatus.playerStatus = 2
-                                elif athlete['injuries'][0]['status'] == "Doubtful":
-                                    thisPlayerWeekStatus.playerStatus = 3
-                        else:
-                            if 'status' in athlete:
-                                if athlete['status']['id'] == '1':
-                                    thisPlayerWeekStatus.playerStatus = 1
-
-
-                    thisPlayerWeekStatus.save()
-                    
+                if 'injuries' in athlete:
+                    if len(athlete['injuries']) != 0:
+                        if 'status' in athlete['injuries'][0]:
+                            if athlete['injuries'][0]['status'] == "Injured Reserve":
+                                thisPlayerWeekStatus.playerStatus = 6
+                            elif athlete['injuries'][0]['status'] == "Out":
+                                thisPlayerWeekStatus.playerStatus = 4
+                            elif athlete['injuries'][0]['status'] == "Questionable":
+                                thisPlayerWeekStatus.playerStatus = 2
+                            elif athlete['injuries'][0]['status'] == "Doubtful":
+                                thisPlayerWeekStatus.playerStatus = 3
+                    else:
+                        if 'status' in athlete:
+                            if athlete['status']['id'] == '1':
+                                thisPlayerWeekStatus.playerStatus = 1
+                            else:
+                                print("Player w/ ID: " + str(playerObj.espnId) + " has an unexpected status. Status ID: " + str(athlete['status']['id']) + "  Status Name: " + athlete['status']['name'])
+                                athleteJSON = athlete
+                                athleteJSON['links'] = ""
+                                print(athleteJSON)
                 else:
-                    #print("Player week status already exists for this week but we're updating anyway")
-                    thisPlayerWeekStatus.reportDate = currentDate
-                    if 'injuries' in athlete:
-                        if teamId == 1:
-                            print(athlete['injuries'])
-                            print("Len Athlete[injuries]: " + str(len(athlete['injuries'])))
-                        if len(athlete['injuries']) != 0:
-                            if teamId == 1:
-                                print("There's a status in injuries: " + athlete['injuries'][0]['status'])
-                            if 'status' in athlete['injuries'][0]:
-                                #print("there's a status in Injuries for player")
-                                if athlete['injuries'][0]['status'] == "Injured Reserve":
-                                    thisPlayerWeekStatus.playerStatus = 6
-                                elif athlete['injuries'][0]['status'] == "Out":
-                                    thisPlayerWeekStatus.playerStatus = 4
-                                elif athlete['injuries'][0]['status'] == "Questionable":
-                                    thisPlayerWeekStatus.playerStatus = 2
-                                elif athlete['injuries'][0]['status'] == "Doubtful":
-                                    thisPlayerWeekStatus.playerStatus = 3
-                        else:
-                            if 'status' in athlete:
-                                if athlete['status']['id'] == '1':
-                                    thisPlayerWeekStatus.playerStatus = 1
+                    if 'status' in athlete:
+                            if athlete['status']['id'] == '1':
+                                thisPlayerWeekStatus.playerStatus = 1
 
+                    
 
-                    thisPlayerWeekStatus.save()
+                thisPlayerWeekStatus.save()
 
             else:
-                if teamId == 1:
-                    print("PlayerObj not found in system")
+                print("PlayerObj not found in system. Player ID: " + str(athlete['id']) + " Details: ")
+                athleteJSON = athlete
+                athleteJSON['links'] = ""
+                print(athleteJSON)
     
-    #print(str(teamId) + ": " + str(countOfPlayers) + ". WeekOfSeason: " + str(currentWeekOfSeason))
+
     
 def createPlayerAthletesFromTeamRoster(rosterData, teamId):
     print(str(teamId))
