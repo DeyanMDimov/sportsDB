@@ -1706,7 +1706,9 @@ def scheduledInjuryPull():
     if (thisDay.weekday() == 6 and (thisDay.hour == 11 or thisDay.hour == 14 or thisDay.hour == 18)) or thisDayUTC.hour == 15:
         activeTeams = nflTeam.objects.all()
         for team in activeTeams:
-            getCurrentWeekAthletesStatus(team.espnId)        
+            getCurrentWeekAthletesStatus(team.espnId)
+    else:
+        print("Ran at " + str(thisDay.hour) + ":" + str(thisDay.minute) + " and did not pull the injuries as it was not the right time.") 
     
 
     
