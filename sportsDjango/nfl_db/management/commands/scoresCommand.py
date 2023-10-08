@@ -10,8 +10,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         try:
            crudLogic.scheduledScorePull()
-           print("Done")
+           print("Done. Ran Successfully")
             
         except Exception as e:
             CommandError(repr(e))
-            print("Done")
+            print("Error: " + e)
