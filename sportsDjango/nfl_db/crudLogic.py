@@ -1482,7 +1482,7 @@ def scheduledScorePull():
 
             if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time > datetime(hour = 23, minute = 30, second = 00, tzinfo = central_zone):
                 #find Monday or Thursday games and get scores
-                
+                print("Looking for Monday and Thursday games")
                 for unfinishedGame in gamesPlayedToday:
                     matchId = unfinishedGame.espnId
                     matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
@@ -1506,7 +1506,7 @@ def scheduledScorePull():
                 return     
             
             else:
-
+                print("Where my Sunday games at?")
                 for sundayGame in gamesPlayedToday:
                     matchId = sundayGame.espnId
                     matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
