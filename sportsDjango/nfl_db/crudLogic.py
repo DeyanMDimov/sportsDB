@@ -1467,10 +1467,14 @@ def scheduledScorePull():
 
     yearOfSeason = thisDay.year if thisDay.month > 4 else thisDay.year - 1 
     weekOfSeason = 1
+    
+    print("today.weekday() = " + str(thisDay.weekday()))
 
     if thisDay.weekday() in daysToCheck:
 
-        gamesPlayedToday = nflMatch.objects.filter(completed = False).filter(nflMatch.datePlayed < thisDay).filter(nflMatch.datePlayed.date() == thisDay.date())
+        gamesPlayedToday = nflMatch.objects.filter(nflMatch.datePlayed.date() == thisDay.date()).filter(completed = False).filter(nflMatch.datePlayed < thisDay)
+        
+        print("today is " + thisDay.strftime('%A') + " and there are " + str(gamesPlayedToday) + " finished games at the moment.")
 
         if len(list(gamesPlayedToday)) > 0:
             print("Today is " + thisDay.strftime('%A') + " " + thisDay.date + " and " + str(len(list(gamesPlayedToday))) + " are played today.")

@@ -205,7 +205,7 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
     awayTeamName = awayTeamObject.abbreviation
 
     if movingAverageWeeks != 0:
-        if movingAverageWeeks > gameData.weekOfSeason:
+        if movingAverageWeeks >= gameData.weekOfSeason:
             lastWeekOfPreviousSeason = 18 if gameData.yearOfSeason - 1 >= 2021 else 17
             homeTeamPastGames = nflMatch.objects.filter(homeTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
                                 nflMatch.objects.filter(awayTeamEspnId = homeTeamEspnId, weekOfSeason__lt = gameData.weekOfSeason, weekOfSeason__gte = gameData.weekOfSeason - movingAverageWeeks, yearOfSeason = gameData.yearOfSeason, completed = True) | \
