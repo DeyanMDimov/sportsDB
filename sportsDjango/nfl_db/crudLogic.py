@@ -1,7 +1,7 @@
 from nfl_db import models
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
 from django.db import IntegrityError
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from zoneinfo import ZoneInfo
 import json, requests, traceback
 
@@ -1461,6 +1461,8 @@ def scheduledScorePull():
 
     thisDay = thisDayUTC.astimezone(central_zone)
 
+    yesterday = thisDay + timedelta(days=-1)
+
     #print(str(thisDay))
 
     daysToCheck = [0, 3, 4, 5, 6]
@@ -1469,15 +1471,27 @@ def scheduledScorePull():
     weekOfSeason = 1
     
     print("today.weekday() = " + str(thisDay.weekday()))
+    print()
+    print()
+    print("Step1: ")
+    print(str(thisDay.date()))
+    print("Step 2: ")
+    print()
+    print()
 
     if thisDay.weekday() in daysToCheck:
 
-        gamesPlayedToday = nflMatch.objects.filter(nflMatch.datePlayed.date() == thisDay.date()).filter(completed = False).filter(nflMatch.datePlayed < thisDay)
+        print("today is " + thisDay.strftime('%A') + ".")
+
+        #gamesPlayedToday = nflMatch.objects.filter(completed = False).filter(datePlayed = thisDay.date())
+
+        gamesPlayedToday = nflMatch.objects.filter(completed = False).filter(datePlayed__lt =  thisDay).filter(datePlayed__gt = yesterday)
+
+        print(" and there are " + str(gamesPlayedToday) + " finished games at the moment.")        
         
-        print("today is " + thisDay.strftime('%A') + " and there are " + str(gamesPlayedToday) + " finished games at the moment.")
 
         if len(list(gamesPlayedToday)) > 0:
-            print("Today is " + thisDay.strftime('%A') + " " + thisDay.date + " and " + str(len(list(gamesPlayedToday))) + " are played today.")
+            print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and " + str(len(list(gamesPlayedToday))) + " are played today.")
             weekOfSeason = gamesPlayedToday[0].weekOfSeason
 
             if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time > datetime(hour = 23, minute = 30, second = 00, tzinfo = central_zone):
@@ -1527,7 +1541,7 @@ def scheduledScorePull():
 def processGameData(gameData, weekOfSeason, yearOfSeason):
     matchEspnId = gameData['id']
     dateOfGameFromApi = gameData['date']
-    dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
+    dateOfGame = datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
 
     homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
     awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
@@ -1566,7 +1580,7 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
     except Exception as e:
         print(e)                        
 
-    if datetime.datetime.now()<dateOfGame or gameCompleted==False:
+    if datetime.now()<dateOfGame or gameCompleted==False:
         createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
 
     else:
