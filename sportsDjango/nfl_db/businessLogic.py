@@ -75,6 +75,9 @@ class individualBettingModelResult:
     homeTeamExplosiveRecs = 0 
     awayTeamExplosiveRush = 0
     awayTeamExplosiveRecs = 0 
+
+    homeTeamTurnoverDiff = 0
+    awayTeamTurnoverDiff = 0
     
 
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
@@ -372,16 +375,22 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
 
     homeTeamExplosiveRush = 0
     homeTeamExplosiveRecs = 0
+    homeTeamTurnOverDiff = 0
     awayTeamExplosiveRush = 0
     awayTeamExplosiveRecs = 0
-    
+    awayTeamTurnOverDiff = 0
+
     for performance in homeTeamPastPerformances:
         homeTeamExplosiveRush += performance.rushingPlaysTenPlus
         homeTeamExplosiveRecs += performance.passPlaysTwentyFivePlus
+        homeTeamTurnOverDiff += performance.totalTakeaways
+        homeTeamTurnOverDiff -= performance.totalGiveaways
     
     for performance in awayTeamPastPerformances:
         awayTeamExplosiveRush += performance.rushingPlaysTenPlus
         awayTeamExplosiveRecs += performance.passPlaysTwentyFivePlus
+        awayTeamTurnOverDiff += performance.totalTakeaways
+        awayTeamTurnOverDiff -= performance.totalGiveaways
 
     try:
         team1TotalOffensiveYardsPerGame     = homeTeamTotalOffenseYards/homeTeamGamesPlayed
@@ -398,8 +407,10 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
 
         modelResult.homeTeamExplosiveRush = homeTeamExplosiveRush
         modelResult.homeTeamExplosiveRecs = homeTeamExplosiveRecs
+        modelResult.homeTeamTurnoverDiff = homeTeamTurnOverDiff
         modelResult.awayTeamExplosiveRush = awayTeamExplosiveRush
         modelResult.awayTeamExplosiveRecs = awayTeamExplosiveRecs
+        modelResult.awayTeamTurnoverDiff = awayTeamTurnOverDiff
 
         return modelResult
     except ZeroDivisionError as e:
