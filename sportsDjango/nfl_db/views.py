@@ -787,7 +787,7 @@ def loadModel(request, target):
             for m in modelResults:
                 print(m.team1Name + " vs. " + m.team2Name + " Bet Rank Score: " + str(m.betRankScore))
             
-
+            
 
             print(selectedModel)
             if(reqTarget == 'showModel'):

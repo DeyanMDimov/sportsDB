@@ -126,10 +126,12 @@
                         <td>Model Line</td>
                         <td>Book Line</td>
                         <td>Result Line</td>
-                        {% if anyCompleted %}
                         <td>Model O/U Bet</td>
                         <td>Model Line Bet</td>
-                        {% endif %}
+                        {% comment %} {% if anyCompleted %}
+                        <td>Model O/U Bet</td>
+                        <td>Model Line Bet</td>
+                        {% endif %} {% endcomment %}
                     </thead>
                     <tbody>
                         {% for result in modelResults %}
@@ -149,8 +151,8 @@
                                 <td class="modelSummaryLine">Prev. Week</td>
                                 <td class="modelSummaryLine">Game </td>
                                 <td class="modelSummaryLine">Not Finished</td>
-                                {% comment %} <td class="modelSummaryLine"></td>
-                                <td class="modelSummaryLine"></td> {% endcomment %}
+                                <td class="modelSummaryLine"></td>
+                                <td class="modelSummaryLine"></td> 
                             </tr>
                             {% else %}
 
@@ -231,13 +233,13 @@
                                     ">
                                     {{result.lineBet}}
                                 </td>
-                                {% elif anyCompleted %}
+                                {% else %}
                                 <td></td>
                                 <td></td>
                                     
                                 {% endif %}
                             </tr>
-                            <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}" data-parent="#accordion-{{result.team1Name}}{{result.team2Name}}">
+                            <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse model-sum-row" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}" data-parent="#accordion-{{result.team1Name}}{{result.team2Name}}">
                                 <td colspan="6">
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
@@ -403,6 +405,49 @@
                                             </tr>
                                            
                                             
+                                        </tbody>
+                                    </table>
+                                </td>
+                                <td colspan="2">
+                                    <table style="font-size:0.9em" class="table text-start">
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="4">
+                                                    Explosive Plays
+                                                </td>
+                                            </tr>
+                                            <tr style="font-size:0.75em">
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    Rush <br>(10+)
+                                                </td>
+                                                <td>
+                                                    Rec <br>(25+)
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="font-size:0.75em">
+                                                    {{result.team1Name}}
+                                                </td>
+                                                <td>
+                                                    {{result.homeTeamExplosiveRush}}
+                                                </td>
+                                                <td>
+                                                    {{result.homeTeamExplosiveRecs}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="font-size:0.75em">
+                                                    {{result.team2Name}}
+                                                </td>
+                                                <td>
+                                                    {{result.awayTeamExplosiveRush}}
+                                                </td>
+                                                <td>
+                                                    {{result.awayTeamExplosiveRecs}}
+                                                </td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                 </td>

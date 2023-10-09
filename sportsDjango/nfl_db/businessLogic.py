@@ -71,6 +71,12 @@ class individualBettingModelResult:
     homeTeamInjuries = []
     awayTeamInjuries = []
 
+    homeTeamExplosiveRush = 0
+    homeTeamExplosiveRecs = 0 
+    awayTeamExplosiveRush = 0
+    awayTeamExplosiveRecs = 0 
+    
+
     def __init__(self, t1name, t1oypg, t1ypp, t1dypg, t1dypp, t2name, t2oypg, t2ypp, t2dypg, t2dypp):
         
         self.team1Name = t1name
@@ -143,9 +149,12 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear, movingAverageWeeks 
 
     homeTeamTotalOffenseYards = 0
     homeTeamTotalPoints = 0
+   
+
 
     homeTeamTotalYardsAllowed = 0
     homeTeamTotalPointsAllowed = 0
+    
 
     for homeTeamPastMatch in homeTeamPastGames:
         if int(homeTeamEspnId) == int(homeTeamPastMatch.homeTeamEspnId):
@@ -153,7 +162,7 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear, movingAverageWeeks 
             homeTeamTotalPoints         += homeTeamPastMatch.homeTeamPoints
             homeTeamTotalYardsAllowed   += homeTeamPastMatch.homeTeamYardsAllowed
             homeTeamTotalPointsAllowed  += homeTeamPastMatch.homeTeamPointsAllowed
-            
+
         else:
             homeTeamTotalOffenseYards   += homeTeamPastMatch.awayTeamTotalYards
             homeTeamTotalPoints         += homeTeamPastMatch.awayTeamPoints
@@ -164,6 +173,7 @@ def generateBettingModelV1(gameData, seasonWeek, seasonYear, movingAverageWeeks 
     awayTeamTotalOffenseYards = 0
     awayTeamTotalPoints = 0
 
+    
     awayTeamTotalYardsAllowed = 0
     awayTeamTotalPointsAllowed = 0
 
@@ -357,6 +367,21 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
                 awayTeamTotalYardsAllowed   += awayTeamPastMatch.awayTeamYardsAllowed
                 awayTeamTotalPointsAllowed  += awayTeamPastMatch.awayTeamPointsAllowed
 
+    homeTeamPastPerformances = teamMatchPerformance.objects.filter(yearOfSeason = gameData.yearOfSeason, weekOfSeason__lt = gameData.weekOfSeason, teamEspnId = homeTeamEspnId)
+    awayTeamPastPerformances = teamMatchPerformance.objects.filter(yearOfSeason = gameData.yearOfSeason, weekOfSeason__lt = gameData.weekOfSeason, teamEspnId = awayTeamEspnId)
+
+    homeTeamExplosiveRush = 0
+    homeTeamExplosiveRecs = 0
+    awayTeamExplosiveRush = 0
+    awayTeamExplosiveRecs = 0
+    
+    for performance in homeTeamPastPerformances:
+        homeTeamExplosiveRush += performance.rushingPlaysTenPlus
+        homeTeamExplosiveRecs += performance.passPlaysTwentyFivePlus
+    
+    for performance in awayTeamPastPerformances:
+        awayTeamExplosiveRush += performance.rushingPlaysTenPlus
+        awayTeamExplosiveRecs += performance.passPlaysTwentyFivePlus
 
     try:
         team1TotalOffensiveYardsPerGame     = homeTeamTotalOffenseYards/homeTeamGamesPlayed
@@ -370,6 +395,11 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
         team2TotalDefensiveYardsPerPoint    = awayTeamTotalYardsAllowed/awayTeamTotalPointsAllowed
 
         modelResult = individualBettingModelResult(homeTeamName, team1TotalOffensiveYardsPerGame, team1TotalYardsPerPoint, team1TotalDefensiveYardsPerGame, team1TotalDefensiveYardsPerPoint, awayTeamName, team2TotalOffensiveYardsPerGame, team2TotalYardsPerPoint, team2TotalDefensiveYardsPerGame, team2TotalDefensiveYardsPerPoint)
+
+        modelResult.homeTeamExplosiveRush = homeTeamExplosiveRush
+        modelResult.homeTeamExplosiveRecs = homeTeamExplosiveRecs
+        modelResult.awayTeamExplosiveRush = awayTeamExplosiveRush
+        modelResult.awayTeamExplosiveRecs = awayTeamExplosiveRecs
 
         return modelResult
     except ZeroDivisionError as e:

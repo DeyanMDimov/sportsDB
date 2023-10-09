@@ -103,3 +103,7 @@ textarea{
 .injury_player_status{
   width: 90px;
 }
+
+.model-sum-row td{
+  vertical-align: top;
+}
