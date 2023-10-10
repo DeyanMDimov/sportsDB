@@ -1,7 +1,7 @@
 from nfl_db import models
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
 from django.db import IntegrityError
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, date, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 import json, requests, traceback
 
@@ -1494,7 +1494,7 @@ def scheduledScorePull():
             print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and " + str(len(list(gamesPlayedToday))) + " are played today.")
             weekOfSeason = gamesPlayedToday[0].weekOfSeason
 
-            if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time > datetime(hour = 23, minute = 30, second = 00, tzinfo = central_zone):
+            if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time > time(hour = 23, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
                 #find Monday or Thursday games and get scores
                 print("Looking for Monday and Thursday games")
                 for unfinishedGame in gamesPlayedToday:
@@ -1507,7 +1507,7 @@ def scheduledScorePull():
                     
                 return    
                         
-            elif thisDay.weekday() == 4 and thisDay.time > datetime(hour = 18, minute = 30, second = 00, tzinfo = central_zone):
+            elif thisDay.weekday() == 4 and thisDay.time > time(hour = 18, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
                 
                 for fridayGame in gamesPlayedToday:
                     matchId = fridayGame.espnId
