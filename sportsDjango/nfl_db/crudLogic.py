@@ -1494,7 +1494,7 @@ def scheduledScorePull():
             print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and " + str(len(list(gamesPlayedToday))) + " are played today.")
             weekOfSeason = gamesPlayedToday[0].weekOfSeason
 
-            if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time > time(hour = 23, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
+            if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time() > time(hour = 23, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
                 #find Monday or Thursday games and get scores
                 print("Looking for Monday and Thursday games")
                 for unfinishedGame in gamesPlayedToday:
@@ -1507,7 +1507,7 @@ def scheduledScorePull():
                     
                 return    
                         
-            elif thisDay.weekday() == 4 and thisDay.time > time(hour = 18, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
+            elif thisDay.weekday() == 4 and thisDay.time() > time(hour = 18, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
                 
                 for fridayGame in gamesPlayedToday:
                     matchId = fridayGame.espnId
@@ -1531,11 +1531,11 @@ def scheduledScorePull():
                 
                 return       
         else: 
-            print("Today is " + thisDay.strftime('%A') + " " + thisDay.date + " and no games were updated at " + thisDay.strftime('%H:%M:%S'))
+            print("Today is " + thisDay.strftime('%A') + " " + thisDay.date() + " and no games were updated at " + thisDay.strftime('%H:%M:%S'))
             return
 
     else:
-        print("Today is " + thisDay.strftime('%A') + " " + thisDay.date + " and we did not check for games.")
+        print("Today is " + thisDay.strftime('%A') + " " + thisDay.date() + " and we did not check for games.")
         return
 
 def processGameData(gameData, weekOfSeason, yearOfSeason):
