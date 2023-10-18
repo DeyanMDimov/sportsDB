@@ -1651,7 +1651,7 @@ def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekN
         
         return seasonAvailability
     else:
-        seasonAvailability.sort(key= lambda x: x[0].name)
+        #seasonAvailability.sort(key= lambda x: x[0].name)
         
         for player in weekAvailability:
             playerRow = list(filter(lambda y: y[0] == player[0], seasonAvailability))
@@ -1700,6 +1700,7 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
         
         athletesAndAvailability.append([playerObj, playerWeekStatusObj])
     
+    athletesAndAvailability = sorted(athletesAndAvailability, key = lambda x: x[0].playerPosition)
     return athletesAndAvailability
 
 def scheduledInjuryPull():

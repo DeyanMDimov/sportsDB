@@ -537,9 +537,12 @@ def getPlayers(request):
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = int(inputReq['week'].strip())
             if weekOfSeason == 100:
-                print("We Get here")
+                #print("We Get here")
+                endRangeWeek = 19
+                if int(yearOfSeason) == 2023:
+                    endRangeWeek = 7
                 athleteAvailabilitySeason = []
-                for wk in range (1, 19):
+                for wk in range (1, endRangeWeek):
                     if 'team' in inputReq:
                         selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
                         teamId = selectedTeam.espnId
@@ -561,8 +564,13 @@ def getPlayers(request):
                         gameRosterData = gameRosterResponse.json()
 
                         
-                        
-                        athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, wk)
+                        try:
+                            athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, wk)
+                        except Exception as e:
+                            print("Wk: " + str(wk))
+                            print("EndRangeWeek" + str(endRangeWeek))
+                            raise e
+                            
                         athleteAvailabilitySeason = crudLogic.organizeRosterAvailabilityArrays(athleteAvailabilitySeason, athleteAvailability, wk)
 
 
