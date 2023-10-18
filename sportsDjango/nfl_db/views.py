@@ -686,10 +686,10 @@ def loadModel(request, target):
                         if len(list(thisPlayersInjury)) == 0:
                             awayTeamInjuries.append(playerInjury)
                         elif len(thisPlayersInjury) ==  1:
-                            
-                            if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
-                                awayTeamInjuries.remove(thisPlayersInjury[0])
-                                awayTeamInjuries.append(playerInjury)
+                            if thisPlayersInjury[0].reportDate != None:
+                                if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
+                                    awayTeamInjuries.remove(thisPlayersInjury[0])
+                                    awayTeamInjuries.append(playerInjury)
 
 
                 if selectedModel == "v1" or selectedModel == "v1.5":

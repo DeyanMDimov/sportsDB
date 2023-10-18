@@ -76,6 +76,11 @@ class individualBettingModelResult:
     awayTeamExplosiveRush = 0
     awayTeamExplosiveRecs = 0 
 
+    homeTeamExplosiveRushAllowed = 0
+    homeTeamExplosiveRecsAllowed = 0 
+    awayTeamExplosiveRushAllowed = 0
+    awayTeamExplosiveRecsAllowed = 0 
+
     homeTeamTurnoverDiff = 0
     awayTeamTurnoverDiff = 0
     
@@ -375,9 +380,10 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
 
     homeTeamExplosiveRush = 0
     homeTeamExplosiveRecs = 0
-    homeTeamTurnOverDiff = 0
     awayTeamExplosiveRush = 0
     awayTeamExplosiveRecs = 0
+
+    homeTeamTurnOverDiff = 0
     awayTeamTurnOverDiff = 0
 
     for performance in homeTeamPastPerformances:
@@ -391,6 +397,24 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
         awayTeamExplosiveRecs += performance.passPlaysTwentyFivePlus
         awayTeamTurnOverDiff += performance.totalTakeaways
         awayTeamTurnOverDiff -= performance.totalGiveaways
+
+    homeTeamPastOpponentPerformances = teamMatchPerformance.objects.filter(yearOfSeason = gameData.yearOfSeason, weekOfSeason__lt = gameData.weekOfSeason, opponent = homeTeamObject)
+    awayTeamPastOpponentPerformances = teamMatchPerformance.objects.filter(yearOfSeason = gameData.yearOfSeason, weekOfSeason__lt = gameData.weekOfSeason, opponent = awayTeamObject)
+
+    homeTeamExplosiveRushAllowed = 0
+    homeTeamExplosiveRecsAllowed = 0
+    awayTeamExplosiveRushAllowed = 0
+    awayTeamExplosiveRecsAllowed = 0
+
+    for performance in homeTeamPastOpponentPerformances:
+        homeTeamExplosiveRushAllowed += performance.rushingPlaysTenPlus
+        homeTeamExplosiveRecsAllowed += performance.passPlaysTwentyFivePlus
+       
+    
+    for performance in awayTeamPastOpponentPerformances:
+        awayTeamExplosiveRushAllowed += performance.rushingPlaysTenPlus
+        awayTeamExplosiveRecsAllowed += performance.passPlaysTwentyFivePlus
+        
 
     try:
         team1TotalOffensiveYardsPerGame     = homeTeamTotalOffenseYards/homeTeamGamesPlayed
@@ -407,10 +431,16 @@ def generateBettingModelHistV1(gameData, movingAverageWeeks = 0):
 
         modelResult.homeTeamExplosiveRush = homeTeamExplosiveRush
         modelResult.homeTeamExplosiveRecs = homeTeamExplosiveRecs
-        modelResult.homeTeamTurnoverDiff = homeTeamTurnOverDiff
         modelResult.awayTeamExplosiveRush = awayTeamExplosiveRush
         modelResult.awayTeamExplosiveRecs = awayTeamExplosiveRecs
+
+        modelResult.homeTeamTurnoverDiff = homeTeamTurnOverDiff
         modelResult.awayTeamTurnoverDiff = awayTeamTurnOverDiff
+
+        modelResult.homeTeamExplosiveRushAllowed = homeTeamExplosiveRushAllowed
+        modelResult.homeTeamExplosiveRecsAllowed = homeTeamExplosiveRecsAllowed
+        modelResult.awayTeamExplosiveRushAllowed = awayTeamExplosiveRushAllowed
+        modelResult.awayTeamExplosiveRecsAllowed = awayTeamExplosiveRecsAllowed
 
         return modelResult
     except ZeroDivisionError as e:

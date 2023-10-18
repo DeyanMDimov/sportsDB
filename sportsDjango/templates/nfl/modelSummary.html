@@ -240,7 +240,7 @@
                                 {% endif %}
                             </tr>
                             <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse model-sum-row" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}" data-parent="#accordion-{{result.team1Name}}{{result.team2Name}}">
-                                <td colspan="6">
+                                <td colspan="5">
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
                                             <tr>
@@ -256,8 +256,8 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <th scope="row">
-                                                    Offense Yds/Point Rank:
+                                                <th scope="row" style="font-size:0.85em">
+                                                    OFF Yds/Point Rank:
                                                 </th>
                                                 <td>
                                                     {{result.matchModelDetails.homeTeamOffenseYdsPerPntRank}}
@@ -269,8 +269,8 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <th scope="row">
-                                                    Offense Yds/Game Rank:
+                                                <th scope="row" style="font-size:0.85em">
+                                                    OFF Yds/Game Rank:
                                                 </th>
                                                 <td>
                                                     {{result.matchModelDetails.homeTeamOffenseYdsPerGmRank}}
@@ -282,8 +282,8 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <th scope="row">
-                                                    Defense Yds/Point Rank:
+                                                <th scope="row" style="font-size:0.85em">
+                                                    DEF Yds/Point Rank:
                                                 </th>
                                                 <td>
                                                     {{result.matchModelDetails.homeTeamDefenseYdsPerPntRank}}
@@ -295,8 +295,8 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <th scope="row">
-                                                    Defense Yds/Game Rank:
+                                                <th scope="row" style="font-size:0.85em">
+                                                    DEF Yds/Game Rank:
                                                 </th>
                                                 <td>
                                                     {{result.matchModelDetails.homeTeamDefenseYdsPerGmRank}}
@@ -308,11 +308,24 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <th scope="row">
+                                                <th scope="row" style="font-size:0.85em">
                                                     Bet Rank Score
                                                 </th>
                                                 <td colspan="3">
                                                     {{result.betRankScore}}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="font-size:0.85em">
+                                                    Turnover Differential
+                                                </th>
+                                                <td>
+                                                    {{result.homeTeamTurnoverDiff}}
+                                                </td>
+                                                <td>
+                                                </td>
+                                                <td>
+                                                    {{result.awayTeamTurnoverDiff}}
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -336,7 +349,7 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td style="width: 325px">
+                                                <td style="width: 275px">
                                                     <table class="injury_table" style="text-align:left">
                                                         <tbody>
                                                             {% for injury in result.homeTeamInjuries %}
@@ -408,8 +421,8 @@
                                         </tbody>
                                     </table>
                                 </td>
-                                <td colspan="2">
-                                    <table style="font-size:0.9em" class="table text-start">
+                                <td colspan="3">
+                                    {% comment %} <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
                                             <tr>
                                                 <td colspan="4">
@@ -449,31 +462,94 @@
                                                 </td>
                                             </tr>
                                         </tbody>
-                                    </table>
+                                    </table> {% endcomment %}
                                     <table style="font-size:0.9em" class="table text-start">
-
                                         <tbody>
                                             <tr>
-                                                <td colspan="2">
-                                                    Turnover Differential
+                                                <td colspan="5">
+                                                    Explosive Plays
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td>
-                                                    {{result.team1Name}}
-                                                </td>
-                                                <td>
-                                                    {{result.team2Name}}
+                                                <td colspan="5">
+                                                    Rush (10+)
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td>
-                                                    {{result.homeTeamTurnoverDiff}}
+                                                <td style="font-size:0.85em">
+                                                    {{result.team1Name}} OFF
                                                 </td>
                                                 <td>
-                                                    {{result.awayTeamTurnoverDiff}}
+                                                    {{result.homeTeamExplosiveRush}}
+                                                </td>
+                                                <td>
+                                                    vs.
+                                                </td>
+                                                <td>
+                                                    {{result.awayTeamExplosiveRushAllowed}}
+                                                </td>
+                                                <td style="font-size:0.85em">
+                                                    {{result.team2Name}} DEF
                                                 </td>
                                             </tr>
+                                            <tr>
+                                                <td style="font-size:0.85em">
+                                                    {{result.team2Name}} OFF
+                                                </td>
+                                                <td>
+                                                    {{result.awayTeamExplosiveRush}}
+                                                </td>
+                                                <td>
+                                                    vs.
+                                                </td>
+                                                <td>
+                                                    {{result.homeTeamExplosiveRushAllowed}}
+                                                </td>
+                                                <td style="font-size:0.85em">
+                                                    {{result.team1Name}} DEF
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="5">
+                                                    Pass (25+)
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="font-size:0.85em">
+                                                    {{result.team1Name}} OFF
+                                                </td>
+                                                <td>
+                                                    {{result.homeTeamExplosiveRecs}}
+                                                </td>
+                                                <td>
+                                                    vs.
+                                                </td>
+                                                <td>
+                                                    {{result.awayTeamExplosiveRecsAllowed}}
+                                                </td>
+                                                <td style="font-size:0.85em">
+                                                    {{result.team2Name}} DEF
+                                                </td>
+                                            </tr>
+                                              <tr>
+                                                <td style="font-size:0.85em">
+                                                    {{result.team2Name}} OFF
+                                                </td>
+                                                <td>
+                                                    {{result.awayTeamExplosiveRecs}}
+                                                </td>
+                                                <td>
+                                                    vs.
+                                                </td>
+                                                <td>
+                                                    {{result.homeTeamExplosiveRecsAllowed}}
+                                                </td>
+                                                <td style="font-size:0.85em">
+                                                    {{result.team1Name}} DEF
+                                                </td>
+                                            </tr>
+                                            
+
                                         </tbody>
                                     </table>
 
