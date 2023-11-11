@@ -1130,6 +1130,8 @@ def createDriveOfPlay (individualDrive, matchData):
     for play in individualDrive['plays']['items']:
         if(play['start']['yardsToEndzone'] <= 25):
             addedDrive.reachedRedZone = True
+        
+        
 
     # for play in individualDrive['plays']['items']:
     #     createPlayByPlay(play, addedDrive.espnId)
@@ -1504,7 +1506,8 @@ def scheduledScorePull():
                     gameData=gameDataResponse.json()
 
                     processGameData(gameData, weekOfSeason, yearOfSeason)
-                    
+                
+                #nextWeekUrl = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
                 return    
                         
             elif thisDay.weekday() == 4 and thisDay.time() > time(hour = 18, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
@@ -1713,7 +1716,7 @@ def scheduledInjuryPull():
 
     thisDay = thisDayUTC.astimezone(central_zone)
 
-    if (thisDay.weekday() == 6 and (thisDay.hour == 11 or thisDay.hour == 14 or thisDay.hour == 18)) or thisDayUTC.hour == 15:
+    if (thisDay.weekday() == 6 and (thisDay.hour == 12 or thisDay.hour == 15 or thisDay.hour == 19)) or thisDayUTC.hour == 16:
         activeTeams = nflTeam.objects.all()
         for team in activeTeams:
             getCurrentWeekAthletesStatus(team.espnId)
