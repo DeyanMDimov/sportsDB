@@ -540,7 +540,7 @@ def getPlayers(request):
                 #print("We Get here")
                 endRangeWeek = 19
                 if int(yearOfSeason) == 2023:
-                    endRangeWeek = 7
+                    endRangeWeek = 11
                 athleteAvailabilitySeason = []
                 for wk in range (1, endRangeWeek):
                     if 'team' in inputReq:
