@@ -71,10 +71,10 @@ body {
   --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3e%3cpath fill-rule='evenodd' d='M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
 }
 
-
 .accordion-button:focus{
-  box-shadow:0px !important;
+  box-shadow:none !important;
 }
+
 
 textarea{
   resize: both;
@@ -109,9 +109,57 @@ textarea{
 }
 
 .weeks-plays{
-  margin-left:10px;
-}
+  margin-left:0px;
+} 
 
 .match-drive-play{
-  border: solid 1px; 
+  border: solid 1px #888; 
+  padding-left:10px;
+  padding-top:10px;
+}
+
+.drives-container{
+
+  padding-top:10px;
+  border: solid 1px #888; 
+}
+
+.drives-indiv{
+  height: 50px;
+  border:solid 1px #AAA;
+  padding-left:10px;
+  margin-bottom:0px;
+}
+
+.plays-container{
+  padding-left:10px;
+  padding-top:10px;
+  border: solid 1px #888; 
+}
+
+.plays-in-drive-table
+{
+  border: none;
+}
+
+
+
+.plays-col-quarter{
+  width:50px;
+}
+.plays-col-time{
+  width:90px;
+}
+.plays-col-type{
+  width: 350px;
+}
+.plays-col-yards{
+  width: 30px;
+  text-align:right;
+}
+
+.plays-col-down{
+  padding-left:30px;
+  width: 42px;
+
 }
