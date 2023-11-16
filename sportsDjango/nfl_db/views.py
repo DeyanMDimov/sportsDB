@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 import json
-from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
 from django.db import models
 from nfl_db import businessLogic, crudLogic
 import datetime, time, requests, traceback
@@ -165,7 +165,7 @@ def getData(request):
                 gameLinks = data['items']
 
                 for link in gameLinks:
-                    print(link['$ref'])
+                    #print(link['$ref'])
                     gameDataResponse = requests.get(link['$ref'])
                     gameData=gameDataResponse.json()
 
@@ -242,7 +242,7 @@ def getData(request):
                         
                         pagesOfPlaysData = playsData['pageCount']
                         if pagesOfPlaysData > 1:
-                            print("Multiple pages of Data in game")
+                            #print("Multiple pages of Data in game")
                             for page in range(2, pagesOfPlaysData+1):
                                 multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
                                 pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
@@ -303,7 +303,8 @@ def getData(request):
                             game_exception.append(e.args[0][0][1])
                             game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
                             exceptionCollection.append(game_exception)
-                            
+
+                        print("Completed.")    
                             
                             
                 
@@ -541,7 +542,7 @@ def getPlayers(request):
                 endRangeWeek = 19
                 if int(yearOfSeason) == 2023:
 
-                    endRangeWeek = 10
+                    endRangeWeek = 12
                 athleteAvailabilitySeason = []
                 for wk in range (1, endRangeWeek):
                     if 'team' in inputReq:
@@ -570,7 +571,7 @@ def getPlayers(request):
                         except Exception as e:
                             print("Wk: " + str(wk))
                             print("EndRangeWeek" + str(endRangeWeek))
-                            raise e
+                            break
                             
                         athleteAvailabilitySeason = crudLogic.organizeRosterAvailabilityArrays(athleteAvailabilitySeason, athleteAvailability, wk)
 
@@ -696,9 +697,12 @@ def loadModel(request, target):
                             awayTeamInjuries.append(playerInjury)
                         elif len(thisPlayersInjury) ==  1:
                             if thisPlayersInjury[0].reportDate != None:
-                                if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
-                                    awayTeamInjuries.remove(thisPlayersInjury[0])
-                                    awayTeamInjuries.append(playerInjury)
+                                try:
+                                    if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
+                                        awayTeamInjuries.remove(thisPlayersInjury[0])
+                                        awayTeamInjuries.append(playerInjury)
+                                except:
+                                    pass
 
 
                 if selectedModel == "v1" or selectedModel == "v1.5":
@@ -1155,6 +1159,109 @@ def playerSignificance(request):
 
         return JsonResponse({}, status="200")
 
+def getPlays(request):
+    nflTeams = nflTeam.objects.all().order_by('abbreviation')
+
+    yearsOnPage = []
+    for y in range(2023, 2017, -1):
+        yearsOnPage.append(y)
+
+    weeksOnPage = []
+    weeksOnPage.append(["100", "ALL"])
+    for w in range(1,19):
+        weeksOnPage.append([w, w])
+    # weeksOnPage.append([19, "Wildcard Weekend"])
+    # weeksOnPage.append([20, "Divisional Round"])
+    # weeksOnPage.append([21, "Conference Championship"])
+    # weeksOnPage.append([22, "Super Bowl"])
+
+    pageDictionary = {}
+    pageDictionary['weeks'] = weeksOnPage
+    pageDictionary['years'] = yearsOnPage
+    pageDictionary['teams'] = nflTeams
+
+    if(request.method == 'GET'):
+        if 'teamName' in request.GET and 'season' in request.GET:
+                inputReq = request.GET
+                yearOfSeason = inputReq['season'].strip()
+                selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
+                teamId = selectedTeam.espnId
+                
+                if yearOfSeason == '2023':
+                    url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
+                    response = requests.get(url)
+                    responseData = response.json()
+                    rosterData = responseData['athletes']
+
+                    for subsection in rosterData:
+                        crudLogic.createPlayerAthletesFromTeamRoster(subsection, teamId)
+
+
+                    playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
+
+                    playerTenuresLoaded = []
+                    for pl in playersLoaded:
+                        individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
+                        for ipt in individualPlayerTenures:
+                            playerTenuresLoaded.append(ipt)
+                    
+                    # print(playerTenuresLoaded)
+
+                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'selTeam': selectedTeam, 'players': playersLoaded, 'season': inputReq['season'], 'tenures': playerTenuresLoaded})
+
+        elif 'week' in request.GET:
+            inputReq = request.GET
+            yearOfSeason = inputReq['season'].strip()
+            weekOfSeason = int(inputReq['week'].strip())
+            
+                
+            
+            # if 'team' in inputReq:
+
+            #     selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
+            #     teamId = selectedTeam.espnId
+            #     selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
+            #     if(len(selectedMatchQuerySet) == 0):
+            #         selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
+            #         if(len(selectedMatchQuerySet) == 0):
+            #             responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
+            #             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
+                
+            #     selectedMatch = selectedMatchQuerySet[0]
+            #     matchId = selectedMatch.espnId
+                
+            #     gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
+            #     gameRosterResponse = requests.get(gameRosterUrl)
+            #     print(gameRosterUrl)
+            #     gameRosterData = gameRosterResponse.json()
+
+            #     athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
+
+            #     # print(weekOfSeason)
+            #     return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
+            
+            matches = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason)
+            resultArray = []
+            for s_match in matches:
+                drives = driveOfPlay.objects.filter(nflMatch = s_match)
+                drives = sorted(drives, key=lambda x: x.sequenceNumber)
+                result_drives_array = []
+                for s_drive in drives:
+                    plays = playByPlay.objects.filter(driveOfPlay = s_drive)
+                    result_plays_array = []
+                    for play in plays:
+                        result_plays_array.append(play)
+                    result_plays_array = sorted(result_plays_array, key=lambda x: x.sequenceNumber)
+                    result_drives_array.append([s_drive, result_plays_array])
+                resultArray.append([s_match, result_drives_array])
+            
+            return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'resultArray': resultArray, 'weekNum': weekOfSeason})
+        else:
+            
+            return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})    
+                
+        
+    
 
 
 

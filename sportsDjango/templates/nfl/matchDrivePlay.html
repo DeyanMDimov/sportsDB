@@ -1,0 +1,42 @@
+
+{% load static %}
+{% load templateFilters%}
+{% block matchDrivePlay %}
+<div id="accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" class="match-drive-play">
+    <button class="accordion-button collapsed" type="button" data-toggle="collapse" data-target="#collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" aria-expanded="true" aria-controls="collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}">
+        <h3>
+            {{result.0.homeTeam.first.abbreviation}} vs {{result.0.awayTeam.first.abbreviation}} 
+        </h3>
+    </button>
+</div>
+<div id="collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" class="collapse drives-container" aria-labelledby="accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" data-parent="#accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}">
+    {% for drive in result.1%} 
+        <h6 id="accordion-{{drive.0.espnId}}">
+            <button class="accordion-button collapsed drives-indiv" type="button" data-toggle="collapse" data-target="#collapse-{{drive.0.espnId}}" aria-expanded="true" aria-controls="collapse-{{drive.0.espnId}}">
+            Drive {{drive.0.sequenceNumber}} - {{drive.0.teamOnOffense.abbreviation}} - {{drive.0.get_driveResult_display}}
+            </button>
+            <div id="collapse-{{drive.0.espnId}}" class="collapse plays-container" aria-labelledby="accordion-{{drive.0.espnId}}" data-parent="#accordion-{{drive.0.espnId}}">
+                <table class="plays-in-drive-table">
+                    <tbody>
+                        {% for play in drive.1 %}
+                        <tr class="indiv-play">
+                            <td class="plays-col-quarter">Q{{play.quarter}}</td>
+                            <td class="plays-col-time"> {{play.displayClockTime}}</td>
+                            <td class="plays-col-type">{{play.get_playType_display}}</td>
+                            <td class="plays-col-yards">{{play.yardsOnPlay}}</td>
+                            {% if play.get_playType_display == "KICKOFF" or play.get_playType_display == "OFFICIAL TIMEOUT" %}
+                            <td class="plays-col-down"></td>
+                            <td class="plays-col-time"></td>
+                            {% else %}
+                            <td class="plays-col-down">{{play.playDown}}</td>
+                            <td class="plays-col-time">&amp; {{play.distanceTilFirstDown}}</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </h6>
+    {% endfor %}
+</div>
+{% endblock %}

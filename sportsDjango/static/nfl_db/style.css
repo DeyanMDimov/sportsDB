@@ -107,3 +107,11 @@ textarea{
 .model-sum-row td{
   vertical-align: top;
 }
+
+.weeks-plays{
+  margin-left:10px;
+}
+
+.match-drive-play{
+  border: solid 1px; 
+}

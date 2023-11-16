@@ -227,8 +227,17 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         matchData.awayTeamSpecialTeamsPointsScored  = mappedAwayTeamStats['scoring']['kickExtraPoints']
         matchData.awayTeamDefensePointsScored       = int((mappedAwayTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedAwayTeamStats['general']['defensiveFumblesTouchdowns'])*6)
         
+        homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+        awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
 
-        print("Oddsdata items count:" + str(len(oddsData['items'])))
+        theHomeTeam = models.nflTeam.objects.get(espnId=homeTeamEspnId)
+        matchData.homeTeam.add(theHomeTeam)
+
+        theAwayTeam = models.nflTeam.objects.get(espnId=awayTeamEspnId)
+        matchData.awayTeam.add(theAwayTeam)
+
+
+        #print("Oddsdata items count:" + str(len(oddsData['items'])))
         if len(oddsData['items']) > 2:
             if seasonYear == 2023:
                 for i in range(1, len(oddsData['items'])):
@@ -316,8 +325,7 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
                     exceptionThrown = True
                     exceptions.append([problem_text, oddsData])
 
-    if exceptionThrown:
-        raise Exception(exceptions)
+    
     
     try:
         for individualDrive in drivesData['items']: 
@@ -326,8 +334,11 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         tback = traceback.extract_tb(e.__traceback__)
         problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
         exceptions.append([problem_text, drivesData])
-        raise Exception(exceptions)
+        exceptionThrown = True
 
+    
+    if exceptionThrown:
+        raise Exception(exceptions)
 
     # homeTeamExplosivePlays = getExplosivePlays(playsData, matchData.homeTeamEspnId)
     # awayTeamExplosivePlays = getExplosivePlays(playsData, matchData.awayTeamEspnId)
@@ -615,8 +626,8 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             teamPerf.atHome = False
 
         teamPerf.save()
-        print()
-        print("Team Perf saved. MatchID: " + str(teamPerf.matchEspnId) + " Team ID: " + str(teamPerf.teamEspnId))
+        #print()
+        #print("Team Perf saved. MatchID: " + str(teamPerf.matchEspnId) + " Team ID: " + str(teamPerf.teamEspnId))
 
     else:
         existingTeamPerformance.matchEspnId     = matchEspnId
@@ -784,8 +795,8 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             existingTeamPerformance.atHome = False
 
         existingTeamPerformance.save()
-        print()
-        print("Team Perf saved. MatchID: " + str(existingTeamPerformance.matchEspnId) + " Team ID: " + str(existingTeamPerformance.teamEspnId))
+        #print()
+        #print("Team Perf saved. MatchID: " + str(existingTeamPerformance.matchEspnId) + " Team ID: " + str(existingTeamPerformance.teamEspnId))
 
         teamPerf = existingTeamPerformance
 
@@ -1089,6 +1100,10 @@ def createDriveOfPlay (individualDrive, matchData):
     resultOfDrive = setResultOfDrive(individualDrive['result'], matchData.espnId)
 
 
+
+    #print("Drive " + str(individualDrive['sequenceNumber']) + ": " + individualDrive['result'] + "     - Recorded Result: " + str(resultOfDrive))
+
+
     try:
         addedDrive = driveOfPlay.objects.create(
             espnId = individualDrive['id'],
@@ -1133,8 +1148,8 @@ def createDriveOfPlay (individualDrive, matchData):
         
         
 
-    # for play in individualDrive['plays']['items']:
-    #     createPlayByPlay(play, addedDrive.espnId)
+    for play in individualDrive['plays']['items']:
+        createPlayByPlay(play, addedDrive.espnId, matchData, offenseTeam)
 
     addedDrive.save()
 
@@ -1147,57 +1162,100 @@ def deleteDriveOfPlay ():
 
 def setResultOfDrive(inputResult, matchEspnId = ""):
     def switch(inputResult):
-        if inputResult == "TD":
+        if str.lower(inputResult) == str.lower("TD"):
             return 1
-        elif inputResult == "FG":
+        elif str.lower(inputResult) == str.lower("FG"):
             return 2
-        elif inputResult == "MISSED FG":
+        elif str.lower(inputResult) == str.lower("MISSED FG"):
             return 3
-        elif inputResult == "PUNT":
+        elif str.lower(inputResult) == str.lower("PUNT"):
             return 4
-        elif inputResult == "BLOCKED PUNT":
+        elif str.lower(inputResult) == str.lower("PUNT RETURN TD") or str.lower(inputResult) == str.lower("PUNT TD"):
+            return 21
+        elif str.lower(inputResult) == str.lower("BLOCKED PUNT"):
             return 5
-        elif inputResult == "BLOCKED PUNT TD":
+        elif str.lower(inputResult) == str.lower("BLOCKED PUNT TD"):
             return 6
-        elif inputResult == "INT":
+        elif str.lower(inputResult) == str.lower("INT"):
             return 7
-        elif inputResult == "INT TD":
+        elif str.lower(inputResult) == str.lower("INT TD"):
             return 8
-        elif inputResult == "FUMBLE":
+        elif str.lower(inputResult) == str.lower("FUMBLE"):
             return 9
-        elif inputResult == "FUMBLE RETURN TD" or "FUMBLE TD":
+        elif str.lower(inputResult) == str.lower("FUMBLE RETURN TD") or str.lower(inputResult) == str.lower("FUMBLE TD"):
             return 10
-        elif inputResult == "DOWNS":
+        elif str.lower(inputResult) == str.lower("DOWNS"):
             return 12
-        elif inputResult == "END OF HALF":
+        elif str.lower(inputResult) == str.lower("END OF HALF"):
             return 13
-        elif inputResult == "END OF GAME":
+        elif str.lower(inputResult) == str.lower("END OF GAME"):
             return 14
-        elif inputResult == "SAFETY" or inputResult == "SF":
+        elif str.lower(inputResult) == str.lower("SAFETY") or str.lower(inputResult) == str.lower("SF"):
             return 16
-        elif inputResult == "BLOCKED FG TD" : 
+        elif str.lower(inputResult) == str.lower("BLOCKED FG TD") : 
             return 18
-        elif inputResult == "BLOCKED FG" : 
+        elif str.lower(inputResult) == str.lower("BLOCKED FG") or str.lower(inputResult) == str.lower("BLOCKED FG, DOWNS"): 
             return 19
+        
         else:
             print("UNEXPECTED DRIVE RESULT - ", inputResult, "Match ID: ", matchEspnId)
             return 17
     
     return switch(inputResult)
 
-def createPlayByPlay (individualPlay, driveEspnId):
-    createdPlay = playByPlay.objects.create(
-        espnId = individualPlay['id'],
-        playType = setPlayType(individualPlay['type']['text']),
-        yardsFromEndzone = individualPlay['start']['yardsToEndzone'],
-        yardsOnPlay = individualPlay['startYardage'],
-        playDown = individualPlay['start']['down'],
-        scoringPlay = individualPlay['scoringPlay'],
-        driveOfPlay = models.driveOfPlay.objects.get(espnId = driveEspnId),
-        teamOnOffense = models.nflTeam.objects.get(espnId = checkTeamFromRefUrl(individualPlay['start']['team']['$ref'])),
-        pointsScored = individualPlay['scoreValue'],
-        
-    )
+def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
+    playObject = None
+
+    try:
+        playObject = playByPlay.objects.get(espnId = individualPlay['id'])
+    except:
+        pass
+    
+    playType = setPlayType(individualPlay['type']['text'], individualPlay)
+
+    if playType == 40:
+        print(individualPlay['text'])
+   
+    try:
+        if playObject == None:
+            createdPlay = playByPlay.objects.create(
+                espnId = individualPlay['id'],
+                playType = playType,
+                yardsFromEndzone = individualPlay['start']['yardsToEndzone'],
+                yardsOnPlay = individualPlay['statYardage'],
+                playDown = individualPlay['start']['down'],
+                distanceTilFirstDown = individualPlay['start']['distance'],
+                scoringPlay = individualPlay['scoringPlay'],
+                driveOfPlay = models.driveOfPlay.objects.get(espnId = driveEspnId),
+                teamOnOffense = offenseTeam,
+                pointsScored = individualPlay['scoreValue'],
+                turnover = False,
+                penaltyOnPlay = False,
+                nflMatch = matchData,
+                quarter = individualPlay['period']['number'],
+                displayClockTime = individualPlay['clock']['displayValue'],
+                secondsRemainingInPeriod = int(individualPlay['clock']['value']),
+                playDescription = individualPlay['text'],
+                sequenceNumber = individualPlay['sequenceNumber']
+            )
+        else:
+            createdPlay = playObject
+            createdPlay.playType = playType
+            createdPlay.quarter = individualPlay['period']['number']
+            createdPlay.displayClockTime = individualPlay['clock']['displayValue']
+            createdPlay.secondsRemainingInPeriod = int(individualPlay['clock']['value'])
+            createdPlay.distanceTilFirstDown = int(individualPlay['start']['distance'])
+            createdPlay.playDown = int(individualPlay['start']['down'])
+            createdPlay.sequenceNumber = int(individualPlay['sequenceNumber'])
+    except Exception as e:
+        print("PLAY TYPE EXCEPTION IN PLAY BY PLAY CREATE: " + str(playType))
+        print("The Json value: " + individualPlay['type']['text'])
+        print(e)
+        print(individualPlay['text'])
+
+        raise(e)
+
+
 
     if createdPlay.playType in ['INTERCEPTION', 'INTERCEPTION RETURN TOUCHDOWN', 'DEFENSIVE FUMBLE RECOVERY ','DEFENSIVE FUMBLE RECOVERY TOUCHDOWN']:
         createdPlay.turnover = True
@@ -1207,16 +1265,42 @@ def createPlayByPlay (individualPlay, driveEspnId):
             createdPlay.offenseScored = True
         else:
             createdPlay.offenseScored = False
+    if 'scoringType' in individualPlay:
+        if individualPlay['scoringType']['abbreviation'] == "TD":
+            try:
+                extraPointOutcome = individualPlay['pointAfterAttempt']['text']
+            
+            except:
+                pass
+    
+    teamAbbreviation = createdPlay.teamOnOffense.abbreviation
+    
+    teamPenaltyText = ("PENALTY on " + teamAbbreviation)
+    
+    if "No Play" in individualPlay['text']: 
+        if teamPenaltyText in individualPlay['text']:
+            createdPlay.penaltyOnPlay = True
+            createdPlay.penaltyIsOnOffense = True
+            createdPlay.yardsGainedOrLostOnPenalty = abs(individualPlay['statYardage'])
+
+            # print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
+        elif teamAbbreviation == "ARI" and "on ARZ" in individualPlay['text']:
+            createdPlay.penaltyOnPlay = True
+            createdPlay.penaltyIsOnOffense = True
+            createdPlay.yardsGainedOrLostOnPenalty = abs(individualPlay['statYardage'])
+        else:
+            if "penalty" in individualPlay['text'].lower():               
+                createdPlay.penaltyOnPlay = True
+                createdPlay.penaltyIsOnOffense = False
+                createdPlay.yardsGainedOrLostOnPenalty = abs(individualPlay['statYardage'])
+    
+    createdPlay.save()
     
     
     
 
     
-        # penaltyOnPlay = models.BooleanField()
-        # penaltyIsOnOffense = models.BooleanField(null = True, blank = True)
-        # yardsGainedOrLostOnPenalty = models.SmallIntegerField(null = True, blank = True)
         
-        # nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
         
         
         # playType = models.SmallIntegerField(choices = playTypes, default = 1)
@@ -1232,78 +1316,99 @@ def createPlayByPlay (individualPlay, driveEspnId):
         # penaltyIsOnOffense = models.BooleanField(null = True, blank = True)
         # yardsGainedOrLostOnPenalty = models.SmallIntegerField(null = True, blank = True)
        
-    if individualPlay['scoringType']['abbreviation'] == "TD":
-        try:
-            extraPointOutcome = individualPlay['pointAfterAttempt']['text']
-        
-        except:
-            pass
+    
 
-def setPlayType(inputType):
+def setPlayType(inputType, indiv_play):
     
     def switch(inputType):
-        if inputType == "Rush":
+        if str.lower(inputType) == str.lower("Rush") or str.lower(inputType) == str.lower("Rushing Touchdown"):
             return 1
-        elif inputType == "Pass Reception":
+        elif str.lower(inputType) == str.lower("Pass Reception") or str.lower(inputType) == str.lower("Passing Touchdown"):
             return 2
-        elif inputType == "Pass Incompletion":
+        elif str.lower(inputType) == str.lower("Pass"):
+            if indiv_play['statYardage'] > 0:
+                return 2
+            else:
+                return 3
+        elif str.lower(inputType) == str.lower("Pass Incompletion"):
             return 3
-        elif inputType == "Sack":
+        elif str.lower(inputType) == str.lower("Sack"):
             return 4
-        elif inputType == "INTERCEPTION":
+        elif str.lower(inputType) == str.lower("PAT KICK MADE"):
             return 5
-        elif inputType == "INTERCEPTION RETURN TOUCHDOWN":
+        elif str.lower(inputType) == str.lower("PAT KICK MISSED"):
             return 6
-        elif inputType == "OFFENSIVE FUMBLE RECOVERY":
+        elif str.lower(inputType) == str.lower("2PT CONVERSION SUCCESS RUSH"):
             return 7
-        elif inputType == "OFFENSIVE FUMBLE RECOVERY TOUCHDOWN":
+        elif str.lower(inputType) == str.lower("2PT CONVERSION SUCCESS PASS"):
             return 8
-        elif inputType == "DEFENSIVE FUMBLE RECOVERY":
+        elif str.lower(inputType) == str.lower("2PT CONVERSION FAILED RUSH"):
             return 9
-        elif inputType == "DEFENSIVE FUMBLE RECOVERY TOUCHDOWN":
+        elif str.lower(inputType) == str.lower("2PT CONVERSION FAILED PASS"):
             return 10
-        elif inputType == "SAFETY":
+        elif str.lower(inputType) == str.lower("2PT CONVERSION SUCCESS OTHER"):
             return 11
-        elif inputType == "PUNT":
+        elif str.lower(inputType) == str.lower("2PT CONVERSION FAILED OTHER"):
             return 12
-        elif inputType == "Blocked Punt":
+        elif str.lower(inputType) == str.lower("Field Goal Good"):
             return 13
-        elif inputType == "PUNT MUFFED PUNTING TEAM RECOVERY":
+        elif str.lower(inputType) == str.lower("FG KICK MISSED") or str.lower(inputType) == str.lower("Field Goal Missed"):
             return 14
-        elif inputType == "PUNT MUFFED RECEIVING TEAM RECOVERY":
+        elif str.lower(inputType) == str.lower("FG KICK Blocked") or str.lower(inputType) == str.lower("Blocked Field Goal") or str.lower(inputType) == str.lower("Blocked Field Goal Touchdown"):
+            return 41
+        elif str.lower(inputType) == str.lower("INTERCEPTION") or str.lower(inputType) == str.lower("Pass Interception Return"):
             return 15
-        elif inputType == "Field Goal Good":
+        elif str.lower(inputType) == str.lower("INTERCEPTION RETURN TOUCHDOWN"):
             return 16
-        elif inputType == "FG KICK MISSED":
+        elif str.lower(inputType) == str.lower("OFFENSIVE FUMBLE RECOVERY") or str.lower(inputType) == str.lower("Fumble Recovery (Own)"):
             return 17
-        elif inputType == "Kickoff Return (Offense)" or inputType == "Kickoff":
+        elif str.lower(inputType) == str.lower("OFFENSIVE FUMBLE RECOVERY TOUCHDOWN"):
             return 18
-        elif inputType == "KICKOFF RECOVERY KICKING TEAM":
+        elif str.lower(inputType) == str.lower("DEFENSIVE FUMBLE RECOVERY") or str.lower(inputType) == str.lower("Fumble Recovery (Opponent)"):
             return 19
-        elif inputType == "PAT KICK MADE":
+        elif str.lower(inputType) == str.lower("DEFENSIVE FUMBLE RECOVERY TOUCHDOWN") or str.lower(inputType) == str.lower("Fumble Return Touchdown"):
             return 20
-        elif inputType == "PAT KICK MISSED":
+        elif str.lower(inputType) == str.lower("QB FUMBLE (UNCLEAR TYPE) - DEFENSIVE RECOVERY"):
             return 21
-        elif inputType == "2PT CONVERSION SUCCESS RUSH":
+        elif str.lower(inputType) == str.lower("QB FUMBLE (UNCLEAR TYPE) - OFFENSIVE RECOVERY"):
             return 22
-        elif inputType == "2PT CONVERSION SUCCESS PASS":
+        elif str.lower(inputType) == str.lower("SAFETY"):
             return 23
-        elif inputType == "2PT CONVERSION FAILED RUSH":
+        elif str.lower(inputType) == str.lower("PUNT") or str.lower(inputType) == str.lower("Punt Return Touchdown"):
             return 24
-        elif inputType == "2PT CONVERSION FAILED PASS":
+        elif str.lower(inputType) == str.lower("Blocked Punt"):
             return 25
-        elif inputType == "2PT CONVERSION SUCCESS OTHER":
+        elif str.lower(inputType) == str.lower("PUNT MUFFED PUNTING TEAM RECOVERY"):
             return 26
-        elif inputType == "2PT CONVERSION FAILED OTHER":
+        elif str.lower(inputType) == str.lower("PUNT MUFFED RECEIVING TEAM RECOVERY"):
             return 27
-        elif inputType == "KNEEL":
+        elif str.lower(inputType) == str.lower("Kickoff Return (Offense)") or str.lower(inputType) == str.lower("Kickoff") or str.lower(inputType) == str.lower("Kickoff Return Touchdown"):
             return 28
-        elif inputType == "SPIKE":
+        elif str.lower(inputType) == str.lower("KICKOFF RECOVERY KICKING TEAM"): 
             return 29
-        elif inputType == "NO PLAY/BLOWN DEAD":
+        elif str.lower(inputType) == str.lower("KNEEL"):
             return 30
-        elif inputType == "Timeout":
+        elif str.lower(inputType) == str.lower("SPIKE"):
             return 31
+        elif str.lower(inputType) == str.lower("NO PLAY/BLOWN DEAD") or str.lower(inputType) == str.lower("Penalty"):
+            return 32
+        elif str.lower(inputType) == str.lower("Timeout"):
+            return 33
+        elif str.lower(inputType) == str.lower("Official Timeout"):
+            return 34
+        elif str.lower(inputType) == str.lower("End Period"):
+            return 35
+        elif str.lower(inputType) == str.lower("Two-minute warning") or str.lower(inputType) == str.lower("Two minute warning"):
+            return 36
+        elif str.lower(inputType) == str.lower("End Of Half"):
+            return 37
+        elif str.lower(inputType) == str.lower("End Of Game"):
+            return 38
+        elif str.lower(inputType) == str.lower("End Of Regulation"):
+            return 39
+        else:
+            print("UNEXPECTED PLAY TYPE - ", inputType)
+            return 40
         
     return switch(inputType)
 

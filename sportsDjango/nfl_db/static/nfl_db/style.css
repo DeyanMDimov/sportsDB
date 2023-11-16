@@ -108,4 +108,58 @@ textarea{
   vertical-align: top;
 }
 
- 
+.weeks-plays{
+  margin-left:0px;
+} 
+
+.match-drive-play{
+  border: solid 1px #888; 
+  padding-left:10px;
+  padding-top:10px;
+}
+
+.drives-container{
+
+  padding-top:10px;
+  border: solid 1px #888; 
+}
+
+.drives-indiv{
+  height: 50px;
+  border:solid 1px #AAA;
+  padding-left:10px;
+  margin-bottom:0px;
+}
+
+.plays-container{
+  padding-left:10px;
+  padding-top:10px;
+  border: solid 1px #888; 
+}
+
+.plays-in-drive-table
+{
+  border: none;
+}
+
+
+
+.plays-col-quarter{
+  width:50px;
+}
+.plays-col-time{
+  width:90px;
+}
+.plays-col-type{
+  width: 350px;
+}
+.plays-col-yards{
+  width: 30px;
+  text-align:right;
+}
+
+.plays-col-down{
+  padding-left:30px;
+  width: 42px;
+
+}

@@ -236,6 +236,7 @@ class driveOfPlay(models.Model):
         (2, "FIELD GOAL MADE"),
         (3, "FIELD GOAL MISSED"),
         (4, "PUNT"),
+        (21, "PUNT RETURN TD"),
         (5, "PUNT BLOCKED"),
         (6, "PUNT BLOCKED TD"),
         (7, "INTERCEPTION"),
@@ -270,39 +271,51 @@ class playByPlay(models.Model):
         (2, "COMPLETED PASS"),
         (3, "INCOMPLETE PASS"),
         (4, "SACK"),
-        (5, "INTERCEPTION"),
-        (6, "INTERCEPTION RETURN TOUCHDOWN"),
-        (7, "OFFENSIVE FUMBLE RECOVERY"),
-        (8, "OFFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
-        (9, "DEFENSIVE FUMBLE RECOVERY"),
-        (10, "DEFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
-        (11, "SAFETY"),
-        (12, "PUNT"),
-        (13, "PUNT BLOCKED"),
-        (14, "PUNT MUFFED PUNTING TEAM RECOVERY"),
-        (15, "PUNT MUFFED RECEIVING TEAM RECOVERY"),
-        (16, "FG KICK"),
-        (17, "FG KICK MISSED"),
-        (18, "KICKOFF"),
-        (19, "KICKOFF RECOVERY KICKING TEAM"),
-        (20, "PAT KICK MADE"),
-        (21, "PAT KICK MISSED"),
-        (22, "2PT CONVERSION SUCCESS RUSH"),
-        (23, "2PT CONVERSION SUCCESS PASS"),
-        (24, "2PT CONVERSION FAILED RUSH"),
-        (25, "2PT CONVERSION FAILED PASS"),
-        (26, "2PT CONVERSION SUCCESS OTHER"),
-        (27, "2PT CONVERSION FAILED OTHER"),
-        (28, "KNEEL"),
-        (29, "SPIKE"),
-        (30, "NO PLAY/BLOWN DEAD"),
-        (31, "TIMEOUT"),
-        (32, "QB FUMBLE (UNCLEAR TYPE)")
+        (5, "PAT KICK MADE"),
+        (6, "PAT KICK MISSED"),
+        (7, "2PT CONVERSION SUCCESS RUSH"),
+        (8, "2PT CONVERSION SUCCESS PASS"),
+        (9, "2PT CONVERSION FAILED RUSH"),
+        (10, "2PT CONVERSION FAILED PASS"),
+        (11, "2PT CONVERSION SUCCESS OTHER"),
+        (12, "2PT CONVERSION FAILED OTHER"),
+        (13, "FG KICK"),
+        (14, "FG KICK MISSED"),
+        (41, "FG KICK BLOCKED"),
+        (15, "INTERCEPTION"),
+        (16, "INTERCEPTION RETURN TOUCHDOWN"),
+        (17, "OFFENSIVE FUMBLE RECOVERY"),
+        (18, "OFFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
+        (19, "DEFENSIVE FUMBLE RECOVERY"),
+        (20, "DEFENSIVE FUMBLE RECOVERY TOUCHDOWN"),
+        (21, "QB FUMBLE (UNCLEAR TYPE) - DEFENSIVE RECOVERY"),
+        (22, "QB FUMBLE (UNCLEAR TYPE) - OFFENSIVE RECOVERY"),
+        (23, "SAFETY"),
+        (24, "PUNT"),
+        (25, "PUNT BLOCKED"),
+        (26, "PUNT MUFFED PUNTING TEAM RECOVERY"),
+        (27, "PUNT MUFFED RECEIVING TEAM RECOVERY"),
+        (28, "KICKOFF"),
+        (29, "KICKOFF RECOVERY KICKING TEAM"),
+        (30, "KNEEL"),
+        (31, "SPIKE"),
+        (32, "NO PLAY/BLOWN DEAD"),
+        (33, "TIMEOUT"),
+        (34, "OFFICIAL TIMEOUT"),
+        (35, "END PERIOD"),
+        (36, "TWO MINUTE WARNING"),
+        (37, "END OF HALF"),
+        (38, "END OF GAME"),
+        (39, "END OF REGULATION"),
+        (40, "OTHER")
+
     )
     playType = models.SmallIntegerField(choices = playTypes, default = 1)
+    playDescription = models.CharField(max_length = 800, null = True, blank = True)
     yardsFromEndzone = models.SmallIntegerField(null = True, blank = True)
     yardsOnPlay = models.SmallIntegerField(null = True, blank = True)
-    playDown = models.SmallIntegerField(validators = [MinValueValidator(1), MaxValueValidator(4)], null = True, blank = True)
+    playDown = models.SmallIntegerField(validators = [MinValueValidator(0), MaxValueValidator(4)], null = True, blank = True)
+    distanceTilFirstDown = models.SmallIntegerField(null = True, blank = True)
     # rusher = models.ManyToManyField(player, blank = True, related_name = 'ballCarrier')
     # passer = models.ManyToManyField(player, blank = True, related_name = 'passer')
     # reciever = models.ManyToManyField(player, blank = True, related_name = 'receiver')
@@ -314,6 +327,10 @@ class playByPlay(models.Model):
     scoringPlay = models.BooleanField()
     offenseScored = models.BooleanField(null = True, blank = True)
     pointsScored = models.SmallIntegerField(null = True, blank = True)
+    quarter = models.CharField(max_length = 5, null=True, blank=True)
+    displayClockTime = models.CharField(max_length = 5, null=True, blank=True)
+    secondsRemainingInPeriod = models.SmallIntegerField(null=True, blank=True)
+    sequenceNumber = models.IntegerField(null=True, blank=True)
 
 class player(models.Model):
     espnId = models.IntegerField(unique = True)

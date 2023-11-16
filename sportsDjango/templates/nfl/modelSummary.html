@@ -47,12 +47,12 @@
                                 {% endif %}>
                                     V1.5 (V1 with Moving Avg.)
                                 </option> 
-                                <option value="v2"
+                                {% comment %} <option value="v2"
                                 {% if selectedModel == "v2" %}
                                     selected
                                 {% endif %}>
                                     V2.0 (Drives vs Drive Result)
-                                </option>
+                                </option> {% endcomment %}
                             </select>
                             <label for="select_s_week">Model</label>
                         </div>

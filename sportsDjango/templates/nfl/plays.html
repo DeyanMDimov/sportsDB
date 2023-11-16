@@ -1,0 +1,145 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% load templateFilters%}
+{% block plays %}
+    <div class = "container">
+        
+        <div>
+            
+            {% comment %} <form method="GET" class="p-3">
+                Pull Players for :
+                <div class="row g-2">
+                    <div class="mb-1 col-auto">
+                        <select name="season" id="season" class="form-control">
+                            {% for yr in years %}
+                            <option value="{{yr}}" 
+                            {%if yr|stringformat:"i" == season %}
+                                    selected
+                                {% endif %} >{{yr}}</option>    
+                            {% endfor %} 
+                        </select> 
+                    </div>
+                    <div class="mb-1 col-auto">
+                        <select name="teamName" id="teamName" class="form-control">
+                        {% for team in teams %}
+                            <option value="{{ team.abbreviation }}"
+                            {%if selTeam.abbreviation == team.abbreviation %}
+                                selected
+                            {% endif %}
+                            > {{ team.abbreviation }}</option>
+                        {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
+            </form> {% endcomment %}
+           
+            <form method="GET" class="p-3">
+                Get plays for:
+                <div class="row g-2">
+                    <div class="mb-1 col-2">
+                        Season: <select name="season" id="season" class="form-control">
+                            {% for yr in years %}
+                            <option value="{{yr}}" 
+                            {%if yr|stringformat:"i" == sel_Year %}
+                                    selected
+                                {% endif %} >{{yr}}</option>    
+                            {% endfor %} 
+                        </select> 
+                    </div>
+                    <div class="mb-1 col-2">
+                        Week: <select name="week" id="week" class="form-control">
+                            {% for wk in weeks %}
+                            <option value="{{wk.0}}"
+                                {% if wk.0 == sel_Week %}
+                                    selected
+                                {% endif %} > {{ wk.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-1 col-2">
+                        Team:
+                        <select name="team" id="team" class="form-control">
+                        {% for team in teams %}
+                            <option value="{{ team.abbreviation }}"
+                            {%if sel_Team == team.abbreviation %}
+                                selected
+                            {% endif %}
+                            > {{ team.abbreviation }}</option>
+                        {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline-primary">Load!</button>
+            </form>
+        </div>
+        {% if responseMessage %}
+        <h2>{{responseMessage}}</h2>
+        {% endif %}
+        {% if matches %}
+        <div>
+            <h3> 
+                Roster for {{ selTeam.teamName }} in {{ season }}
+            </h3>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <td style="width:320px">Name</td>
+                        <td>Position</td>
+                        <td>Weight</td>
+                        <td>Height</td>
+                        <td>Rookie Year</td>
+                        <td>Espn ID</td>
+                <tbody>
+                    {% for player in players%}
+                    <tr>
+                        <td id="accordion-{{player.espnId}}">
+                            <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{player.espnId}}" aria-expanded="true" aria-controls="collapse{{player.espnId}}">
+                                {{player.name}}
+                            </button>
+                        </td>
+                        <td>{{player.get_playerPosition_display}}</td>
+                        <td>{{player.playerWeightPounds}} pounds</td>
+                        <td>{{player.playerHeightInches}} inches</td>
+                        <td>{{player.firstSeason}}</td>
+                        <td>{{player.espnId}}</td>
+                    </tr>
+                    <tr id="collapse{{player.espnId}}" class="collapse" aria-labelledby="accordion-{{player.espnId}}" data-parent="#accordion-{{player.espnId}}">
+                        <td colspan="3" class="modelSummaryContainer">
+                            Tenures for player {{player.espnId}}
+                            <table class="table-bordered" id="player_tenure">
+                                <thead>
+                                    <td>Team</td>
+                                    <td>Start Date</td>
+                                    <td>End Date</td>
+                                </thead>
+                                <tbody>
+                                    {% for tnr in tenures %}
+                                        {% if tnr.player == player%}
+                                        <tr>
+                                            <td>{{tnr.team.fullName}}</td>
+                                            <td>{{tnr.startDate|date:"m/d/Y"}}</td>
+                                            <td>{{tnr.endDate|date:"m/d/Y"}}</td>
+                                        </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% if resultArray %}
+            <h3>Matches for Week {{weekNum}}</h3>
+            <div class="weeks-plays">
+                {% for result in resultArray %}
+                    {% include 'nfl/matchDrivePlay.html' with result=result %}
+                {%endfor%} 
+            </div>
+        {% endif %}
+    </div>
+    
+{% endblock %}
