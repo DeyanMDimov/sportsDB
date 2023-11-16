@@ -678,10 +678,12 @@ def loadModel(request, target):
                         if len(list(thisPlayersInjury)) == 0:
                             homeTeamInjuries.append(playerInjury)
                         elif len(thisPlayersInjury) ==  1:
-                            
-                            if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
-                                homeTeamInjuries.remove(thisPlayersInjury[0])
-                                homeTeamInjuries.append(playerInjury)
+                            try:
+                                if thisPlayersInjury[0].reportDate < playerInjury.reportDate:
+                                    homeTeamInjuries.remove(thisPlayersInjury[0])
+                                    homeTeamInjuries.append(playerInjury)
+                            except: 
+                                pass
                             
                 
                 awayTeamInjuriesInclDuplicates = playerWeekStatus.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, team = team2).exclude(playerStatus = 1).order_by('player__espnId', 'reportDate')#.distinct('player__espnId')
