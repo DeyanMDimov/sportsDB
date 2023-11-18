@@ -161,5 +161,8 @@ textarea{
 .plays-col-down{
   padding-left:30px;
   width: 42px;
+}
 
+#prev-week-arrow a, #next-week-arrow a{
+  color:#fff !important;
 }

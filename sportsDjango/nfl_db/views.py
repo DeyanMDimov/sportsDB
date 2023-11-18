@@ -150,7 +150,7 @@ def getData(request):
             exceptionCollection = []
 
             while i <= endWeek:
-                time.sleep(1)
+                #time.sleep(1)
                 weekOfSeason = i
                 
                 url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
@@ -310,7 +310,7 @@ def getData(request):
                 
                 print("Week ", str(i), " loaded.")
                 i += 1
-            if startWeek == endWeek:
+            if startWeek <= endWeek:
                 message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
             else:
                 message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
@@ -809,7 +809,7 @@ def loadModel(request, target):
                 return render(request, 'nfl/bettingModel.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason,'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions, 'sel_ma': selectedLen})
             else:
                 return render(request, 'nfl/modelSummary.html', {"selectedModel": selectedModel, "modelResults": modelResults, "yearOfSeason": yearOfSeason, "weekOfSeason":weekOfSeason, 'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions, 'anyCompleted': anyGamesCompleted, 'ouRecord': overUnderRecord, \
-                                                                 'lbRecord': lineBetRecord, 'sel_ma': selectedLen})
+                                                                 'lbRecord': lineBetRecord, 'sel_ma': selectedLen, 'int_sel_week': int(weekOfSeason)})
         else: 
             if(reqTarget == 'showModel'):
                 return render(request, 'nfl/bettingModel.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions})

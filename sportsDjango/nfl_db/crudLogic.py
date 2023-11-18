@@ -239,6 +239,7 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
 
         #print("Oddsdata items count:" + str(len(oddsData['items'])))
         if len(oddsData['items']) > 2:
+            print(str(seasonYear)) 
             if seasonYear == 2023:
                 for i in range(1, len(oddsData['items'])):
                     if oddsData[i]['provider']['name'] == "DraftKings":
