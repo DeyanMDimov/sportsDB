@@ -177,6 +177,7 @@ def getData(request):
                     awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
                     homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
                     awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
+                    
                     print()
                     print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
 
@@ -267,16 +268,16 @@ def getData(request):
                                 game_exception.append(matchEspnId)
                             exceptionCollection.append(game_exception)
 
-                        try:
-                            existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
-                        except Exception as e:
-                            print()
-                            print(e)
-                            print("matchEspnId = " + str(matchEspnId))
-                            print("homeTeamEspnId = " + str(homeTeamEspnId))
-                            print("matchData.espnId = " + str(matchData.espnId))
-                            print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
-                            print()
+                        # try:
+                        #     existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
+                        # except Exception as e:
+                        #     print()
+                        #     print(e)
+                        #     print("matchEspnId = " + str(matchEspnId))
+                        #     print("homeTeamEspnId = " + str(homeTeamEspnId))
+                        #     print("matchData.espnId = " + str(matchData.espnId))
+                        #     print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
+                        #     print()
 
                         
                         
@@ -351,71 +352,9 @@ def getData(request):
                 gameLinks = data['items']
 
                 for link in gameLinks:
-                    
                     gameDataResponse = requests.get(link['$ref'])
                     gameData=gameDataResponse.json()
-
-                    matchEspnId = gameData['id']
-                    dateOfGameFromApi = gameData['date']
-                    dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
-
-                    gameStatusUrl = gameData['competitions'][0]['status']['$ref']
-                    gameStatusResponse = requests.get(gameStatusUrl)
-                    gameStatus = gameStatusResponse.json()
-
-
-                    gameCompleted = (gameStatus['type']['completed'] == True)
-                    gameOvertime = ("OT" in gameStatus['type']['detail']) 
-
-                    oddsUrl = gameData['competitions'][0]['odds']['$ref']
-                    oddsResponse = requests.get(oddsUrl)
-                    oddsData = oddsResponse.json()
-
-                    existingMatch = None
-
-                    try:
-                        existingMatch = nflMatch.objects.get(espnId = matchEspnId)
-                    except:
-                        pass
-                    
-                    if datetime.datetime.now()<dateOfGame or gameCompleted == False:
-                        businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, weekOfSeason, yearOfSeason)
-                    else:
-                        homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
-                        homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
-                        homeTeamStats = homeTeamStatsResponse.json()
-
-                        homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
-                        homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
-                        homeTeamScore = homeTeamScoreResponse.json()
-
-                        awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
-                        awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
-                        awayTeamStats = awayTeamStatsResponse.json()
-                        
-                        awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
-                        awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
-                        awayTeamScore = awayTeamScoreResponse.json()
-
-                        drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
-                        drivesDataResponse = requests.get(drivesDataUrl)
-                        drivesData = drivesDataResponse.json()
-
-                        playsDataUrl = gameData['competitions'][0]['details']['$ref']
-                        playsDataResponse = requests.get(playsDataUrl)
-                        playsData = playsDataResponse.json()
-                        
-                        matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, weekOfSeason, yearOfSeason)
-
-                        try:
-                            businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
-                        except Exception as e: 
-                            businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
-                        
-                        try:
-                            businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
-                        except Exception as e:
-                            businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
+                    crudLogic.processGameData(gameData, i, yearOfSeason)
                             
                 
                 print("Week ", str(i), " loaded.")

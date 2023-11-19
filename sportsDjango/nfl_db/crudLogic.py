@@ -1640,11 +1640,11 @@ def scheduledScorePull():
                 
                 return       
         else: 
-            print("Today is " + thisDay.strftime('%A') + " " + thisDay.date() + " and no games were updated at " + thisDay.strftime('%H:%M:%S'))
+            print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and no games were updated at " + thisDay.strftime('%H:%M:%S'))
             return
 
     else:
-        print("Today is " + thisDay.strftime('%A') + " " + thisDay.date() + " and we did not check for games.")
+        print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and we did not check for games.")
         return
 
 def processGameData(gameData, weekOfSeason, yearOfSeason):
@@ -1656,6 +1656,7 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
     awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
     homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
     awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
+    
     print()
     print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
 
