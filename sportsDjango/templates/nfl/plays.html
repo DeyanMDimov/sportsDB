@@ -5,35 +5,6 @@
     <div class = "container">
         
         <div>
-            
-            {% comment %} <form method="GET" class="p-3">
-                Pull Players for :
-                <div class="row g-2">
-                    <div class="mb-1 col-auto">
-                        <select name="season" id="season" class="form-control">
-                            {% for yr in years %}
-                            <option value="{{yr}}" 
-                            {%if yr|stringformat:"i" == season %}
-                                    selected
-                                {% endif %} >{{yr}}</option>    
-                            {% endfor %} 
-                        </select> 
-                    </div>
-                    <div class="mb-1 col-auto">
-                        <select name="teamName" id="teamName" class="form-control">
-                        {% for team in teams %}
-                            <option value="{{ team.abbreviation }}"
-                            {%if selTeam.abbreviation == team.abbreviation %}
-                                selected
-                            {% endif %}
-                            > {{ team.abbreviation }}</option>
-                        {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Load!</button>
-            </form> {% endcomment %}
-           
             <form method="GET" class="p-3">
                 Get plays for:
                 <div class="row g-2">

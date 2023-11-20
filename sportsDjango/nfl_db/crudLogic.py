@@ -1580,11 +1580,9 @@ def scheduledScorePull():
     
     print("today.weekday() = " + str(thisDay.weekday()))
     print()
-    print()
     print("Step1: ")
     print(str(thisDay.date()))
     print("Step 2: ")
-    print()
     print()
 
     if thisDay.weekday() in daysToCheck:
@@ -1595,7 +1593,7 @@ def scheduledScorePull():
 
         gamesPlayedToday = nflMatch.objects.filter(completed = False).filter(datePlayed__lt =  thisDay).filter(datePlayed__gt = yesterday)
 
-        print(" and there are " + str(gamesPlayedToday) + " finished games at the moment.")        
+        print(" and there are " + str(len(gamesPlayedToday)) + " finished games at the moment.")        
         
 
         if len(list(gamesPlayedToday)) > 0:
