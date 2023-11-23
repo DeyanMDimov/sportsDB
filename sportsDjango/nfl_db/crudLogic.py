@@ -406,6 +406,7 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
                         if 'awayTeamOdds' in oddsData['items'][0]:
                             matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
             else:
+                
                 try:
                     matchData.overUnderLine= oddsData['items'][0]['overUnder']
                     matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
@@ -444,6 +445,7 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
                         continue
             else:
                 try:
+                    
                     matchData.overUnderLine= oddsData['items'][0]['overUnder']
                     matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
                     matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
@@ -1565,13 +1567,9 @@ def scheduledScorePull():
 
     thisDayUTC = thisDayUTC.replace(tzinfo = utc_zone)
 
-    #print(str(thisDayUTC))
-
     thisDay = thisDayUTC.astimezone(central_zone)
 
     yesterday = thisDay + timedelta(days=-1)
-
-    #print(str(thisDay))
 
     daysToCheck = [0, 3, 4, 5, 6]
 
@@ -1600,7 +1598,7 @@ def scheduledScorePull():
             print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and " + str(len(list(gamesPlayedToday))) + " are played today.")
             weekOfSeason = gamesPlayedToday[0].weekOfSeason
 
-            if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time() > time(hour = 23, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
+            if (thisDay.weekday() == 0 or thisDay.weekday() == 3) and thisDay.time() > time(hour = 22, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
                 #find Monday or Thursday games and get scores
                 print("Looking for Monday and Thursday games")
                 for unfinishedGame in gamesPlayedToday:
@@ -1610,6 +1608,15 @@ def scheduledScorePull():
                     gameData=gameDataResponse.json()
 
                     processGameData(gameData, weekOfSeason, yearOfSeason)
+                
+                if thisDay.weekday() == 0:
+                    gamesNextWeek = nflMatch.objects.filter(weekOfSeason = weekOfSeason+1)
+                    for game in gamesNextWeek:
+                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(game.espnId) + "?lang=en&region=us"
+                        matchDataResponse = requests.get(matchURL)
+                        matchData = matchDataResponse.json()
+
+                        processGameData(matchData, weekOfSeason+1, yearOfSeason)
                 
                 #nextWeekUrl = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
                 return    
@@ -1626,8 +1633,7 @@ def scheduledScorePull():
                 
                 return     
             
-            else:
-                print("Where my Sunday games at?")
+            else:                
                 for sundayGame in gamesPlayedToday:
                     matchId = sundayGame.espnId
                     matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(matchId) + "?lang=en&region=us"
@@ -1636,6 +1642,15 @@ def scheduledScorePull():
         
                     processGameData(gameData, weekOfSeason, yearOfSeason)
                 
+                if thisDay.time() > time(hour = 22, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
+                    gamesNextWeek = nflMatch.objects.filter(weekOfSeason = weekOfSeason+1)
+                    for game in gamesNextWeek:
+                        matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(game.espnId) + "?lang=en&region=us"
+                        matchDataResponse = requests.get(matchURL)
+                        matchData = matchDataResponse.json()
+
+                        processGameData(matchData, weekOfSeason+1, yearOfSeason)
+
                 return       
         else: 
             print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and no games were updated at " + thisDay.strftime('%H:%M:%S'))
@@ -1646,6 +1661,8 @@ def scheduledScorePull():
         return
 
 def processGameData(gameData, weekOfSeason, yearOfSeason):
+    exceptionCollection = []
+
     matchEspnId = gameData['id']
     dateOfGameFromApi = gameData['date']
     dateOfGame = datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
@@ -1720,7 +1737,7 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
         
         pagesOfPlaysData = playsData['pageCount']
         if pagesOfPlaysData > 1:
-            print("Multiple pages of Data in game")
+            #print("Multiple pages of Data in game")
             for page in range(2, pagesOfPlaysData+1):
                 multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
                 pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
@@ -1731,26 +1748,52 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
             matchData = createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
         except Exception as e:
             matchData = nflMatch.objects.get(espnId = matchEspnId)
-            print("There was an exception updating MatchEspnId: " + str(matchEspnId))
-            print(e)
+            print("There was an exception")
+            game_exception = []
+            if len(e.args) > 1:
+                game_exception.append("There were multiple exceptions when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                print("Multiple exceptions in one game")
+                game_exception.append(e.args[0][0][0])
+                game_exception.append(e.args[0][0][1])
+            else:
+                game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                game_exception.append(e.args[0][0][0])
+                game_exception.append(e.args[0][0][1])
+                game_exception.append(matchEspnId)
+            exceptionCollection.append(game_exception)
 
-        try:
-            existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
-        except Exception as e:
-            print("There was an exception getting homeTeamPerformance for MatchEspnId: " + str(matchEspnId))
-            print(e)        
+        # try:
+        #     existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
+        # except Exception as e:
+        #     print("There was an exception getting homeTeamPerformance for MatchEspnId: " + str(matchEspnId))
+        #     print(e)        
         
         try:
             createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, awayTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
         except Exception as e: 
-            print("Problem with creating home team Match performance for MatchEspnId: " + str(matchEspnId))
-            print(e)
+            print("Problem with creating home team Match performance")
+            game_exception = []
+            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+            game_exception.append(e.args[0][0][0])
+            game_exception.append(e.args[0][0][1])
+            game_exception.append(str(matchEspnId)+str(homeTeamEspnId))
+            exceptionCollection.append(game_exception)
             
         try:
             createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, homeTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
         except Exception as e:
-            print("Problem with creating away team Match performance for MatchEspnId: " + str(matchEspnId))
-            print(e)
+            print("Problem with creating away team Match performance")
+            game_exception = []
+            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+            game_exception.append(e.args[0][0][0])
+            game_exception.append(e.args[0][0][1])
+            game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
+            exceptionCollection.append(game_exception)
+        
+        print("Completed.")    
+
+        if len(exceptionCollection) > 0:
+            raise Exception(exceptionCollection)
             
 def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekNum):
     if len(seasonAvailability) == 0:

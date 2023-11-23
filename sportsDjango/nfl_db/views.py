@@ -13,22 +13,13 @@ def index(request):
     return render (request, 'nfl/base.html')
 
 def getData(request):
-    weeksOnPage = []
-    for w in range(1,19):
-        weeksOnPage.append([w, w])
-    weeksOnPage.append([19, "Wildcard Weekend"])
-    weeksOnPage.append([20, "Divisional Round"])
-    weeksOnPage.append([21, "Conference Championship"])
-    weeksOnPage.append([22, "Super Bowl"])
 
-    yearsOnPage = []
-    for y in range(2023, 2012, -1):
-        yearsOnPage.append(y)
-    
+    weeksOnPage = weeksOnPage_Helper()
+    yearsOnPage = yearsOnPage_Helper()
+
     pageDictionary = {}
-    pageDictionary['weeks'] = weeksOnPage
-    pageDictionary['years'] = yearsOnPage
-
+    pageDictionary['weeks'] = weeksOnPage_Helper()
+    pageDictionary['years'] = yearsOnPage_Helper()
 
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
@@ -136,10 +127,14 @@ def getData(request):
         
         elif 'season' in request.GET and 'startWeek' in request.GET and 'endWeek' in request.GET:
             inputReq = request.GET
+            
             yearOfSeason = int(inputReq['season'].strip())
             
             startWeek = int(inputReq['startWeek'].strip())
             endWeek = int(inputReq['endWeek'].strip())
+
+            if endWeek < startWeek: 
+                endWeek = startWeek
 
             i = startWeek
 
@@ -159,159 +154,163 @@ def getData(request):
                     playoffWeekOfSeason = weekOfSeason - 18
                     url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/3/weeks/'+str(playoffWeekOfSeason)+'/events')
                 
-                
                 response = requests.get(url)
                 data = response.json()
                 gameLinks = data['items']
 
                 for link in gameLinks:
-                    #print(link['$ref'])
+                    
                     gameDataResponse = requests.get(link['$ref'])
-                    gameData=gameDataResponse.json()
-
-                    matchEspnId = gameData['id']
-                    dateOfGameFromApi = gameData['date']
-                    dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
-                    
-                    homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
-                    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
-                    homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
-                    awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
-                    
-                    print()
-                    print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
-
-                    gameStatusUrl = gameData['competitions'][0]['status']['$ref']
-                    gameStatusResponse = requests.get(gameStatusUrl)
-                    gameStatus = gameStatusResponse.json()
-
-                    gameCompleted = (gameStatus['type']['completed'] == True)
-                    gameOvertime = ("OT" in gameStatus['type']['detail']) 
-
-                    oddsUrl = gameData['competitions'][0]['odds']['$ref']
-                    oddsResponse = requests.get(oddsUrl)
-                    oddsData = oddsResponse.json()
-
-                    existingMatch = None
-                    existingHomeTeamPerf = None
-                    existingAwayTeamPerf = None
+                    gameData = gameDataResponse.json()
 
                     try:
-                        existingMatch = nflMatch.objects.get(espnId = matchEspnId)
+                        crudLogic.processGameData(gameData, weekOfSeason, yearOfSeason)
                     except Exception as e:
-                        print(e)
+                        for exceptionArray in e.args[0]:
+                            exceptionCollection.append(exceptionArray)
+                    # matchEspnId = gameData['id']
+                    # dateOfGameFromApi = gameData['date']
+                    # dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
                     
-                    try:
-                        existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = homeTeamEspnId)
-                    except Exception as e:
-                        print(e)
-
-                    try:    
-                        existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
-                    except Exception as e:
-                        print(e)                        
+                    # homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+                    # awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+                    # homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
+                    # awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
                     
-                    if datetime.datetime.now()<dateOfGame or gameCompleted==False:
-                        crudLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
+                    # print()
+                    # print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
 
-                    else:
-                        homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
-                        homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
-                        homeTeamStats = homeTeamStatsResponse.json()
+                    # gameStatusUrl = gameData['competitions'][0]['status']['$ref']
+                    # gameStatusResponse = requests.get(gameStatusUrl)
+                    # gameStatus = gameStatusResponse.json()
 
-                        homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
-                        homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
-                        homeTeamScore = homeTeamScoreResponse.json()
+                    # gameCompleted = (gameStatus['type']['completed'] == True)
+                    # gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
-                        awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
-                        awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
-                        awayTeamStats = awayTeamStatsResponse.json()
+                    # oddsUrl = gameData['competitions'][0]['odds']['$ref']
+                    # oddsResponse = requests.get(oddsUrl)
+                    # oddsData = oddsResponse.json()
+
+                    # existingMatch = None
+                    # existingHomeTeamPerf = None
+                    # existingAwayTeamPerf = None
+
+                    # try:
+                    #     existingMatch = nflMatch.objects.get(espnId = matchEspnId)
+                    # except Exception as e:
+                    #     print(e)
+                    
+                    # try:
+                    #     existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = homeTeamEspnId)
+                    # except Exception as e:
+                    #     print(e)
+
+                    # try:    
+                    #     existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
+                    # except Exception as e:
+                    #     print(e)                        
+                    
+                    # if datetime.datetime.now()<dateOfGame or gameCompleted==False:
+                    #     crudLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
+
+                    # else:
+                    #     homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
+                    #     homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
+                    #     homeTeamStats = homeTeamStatsResponse.json()
+
+                    #     homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
+                    #     homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
+                    #     homeTeamScore = homeTeamScoreResponse.json()
+
+                    #     awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
+                    #     awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
+                    #     awayTeamStats = awayTeamStatsResponse.json()
                         
-                        awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
-                        awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
-                        awayTeamScore = awayTeamScoreResponse.json()
+                    #     awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
+                    #     awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
+                    #     awayTeamScore = awayTeamScoreResponse.json()
 
-                        drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
-                        drivesDataResponse = requests.get(drivesDataUrl)
-                        drivesData = drivesDataResponse.json()
+                    #     drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
+                    #     drivesDataResponse = requests.get(drivesDataUrl)
+                    #     drivesData = drivesDataResponse.json()
 
-                        playsDataUrl = gameData['competitions'][0]['details']['$ref']
-                        playsDataResponse = requests.get(playsDataUrl)
-                        playsData = playsDataResponse.json()
+                    #     playsDataUrl = gameData['competitions'][0]['details']['$ref']
+                    #     playsDataResponse = requests.get(playsDataUrl)
+                    #     playsData = playsDataResponse.json()
 
-                        playByPlayOfGame = crudLogic.playByPlayData(playsData)
+                    #     playByPlayOfGame = crudLogic.playByPlayData(playsData)
                         
-                        pagesOfPlaysData = playsData['pageCount']
-                        if pagesOfPlaysData > 1:
-                            #print("Multiple pages of Data in game")
-                            for page in range(2, pagesOfPlaysData+1):
-                                multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
-                                pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
-                                pagePlaysData = pagePlaysDataResponse.json()
-                                playByPlayOfGame.addJSON(pagePlaysData)
+                    #     pagesOfPlaysData = playsData['pageCount']
+                    #     if pagesOfPlaysData > 1:
+                    #         #print("Multiple pages of Data in game")
+                    #         for page in range(2, pagesOfPlaysData+1):
+                    #             multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
+                    #             pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
+                    #             pagePlaysData = pagePlaysDataResponse.json()
+                    #             playByPlayOfGame.addJSON(pagePlaysData)
                         
-                        try:
-                            matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
-                        except Exception as e:
-                            matchData = nflMatch.objects.get(espnId = matchEspnId)
-                            print("There was an exception")
-                            game_exception = []
-                            if len(e.args) > 1:
-                                game_exception.append("There were multiple exceptions when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-                                print("Multiple exceptions in one game")
-                                game_exception.append(e.args[0][0][0])
-                                game_exception.append(e.args[0][0][1])
-                            else:
-                                game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-                                game_exception.append(e.args[0][0][0])
-                                game_exception.append(e.args[0][0][1])
-                                game_exception.append(matchEspnId)
-                            exceptionCollection.append(game_exception)
+                    #     try:
+                    #         matchData = crudLogic.createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+                    #     except Exception as e:
+                    #         matchData = nflMatch.objects.get(espnId = matchEspnId)
+                    #         print("There was an exception")
+                    #         game_exception = []
+                    #         if len(e.args) > 1:
+                    #             game_exception.append("There were multiple exceptions when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                    #             print("Multiple exceptions in one game")
+                    #             game_exception.append(e.args[0][0][0])
+                    #             game_exception.append(e.args[0][0][1])
+                    #         else:
+                    #             game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                    #             game_exception.append(e.args[0][0][0])
+                    #             game_exception.append(e.args[0][0][1])
+                    #             game_exception.append(matchEspnId)
+                    #         exceptionCollection.append(game_exception)
 
-                        # try:
-                        #     existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
-                        # except Exception as e:
-                        #     print()
-                        #     print(e)
-                        #     print("matchEspnId = " + str(matchEspnId))
-                        #     print("homeTeamEspnId = " + str(homeTeamEspnId))
-                        #     print("matchData.espnId = " + str(matchData.espnId))
-                        #     print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
-                        #     print()
+                    #     # try:
+                    #     #     existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
+                    #     # except Exception as e:
+                    #     #     print()
+                    #     #     print(e)
+                    #     #     print("matchEspnId = " + str(matchEspnId))
+                    #     #     print("homeTeamEspnId = " + str(homeTeamEspnId))
+                    #     #     print("matchData.espnId = " + str(matchData.espnId))
+                    #     #     print("matchData.homeTeamEspnId = " + str(matchData.homeTeamEspnId))
+                    #     #     print()
 
                         
                         
                         
-                        try:
-                            crudLogic.createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, awayTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
-                        except Exception as e: 
-                            print("Problem with creating home team Match performance")
-                            game_exception = []
-                            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-                            game_exception.append(e.args[0][0][0])
-                            game_exception.append(e.args[0][0][1])
-                            game_exception.append(str(matchEspnId)+str(homeTeamEspnId))
-                            exceptionCollection.append(game_exception)
+                    #     try:
+                    #         crudLogic.createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, awayTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
+                    #     except Exception as e: 
+                    #         print("Problem with creating home team Match performance")
+                    #         game_exception = []
+                    #         game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                    #         game_exception.append(e.args[0][0][0])
+                    #         game_exception.append(e.args[0][0][1])
+                    #         game_exception.append(str(matchEspnId)+str(homeTeamEspnId))
+                    #         exceptionCollection.append(game_exception)
 
-                        try:
-                            crudLogic.createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, homeTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
+                    #     try:
+                    #         crudLogic.createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, homeTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
 
-                        except Exception as e:
-                            print("Problem with creating away team Match performance")
-                            game_exception = []
-                            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-                            game_exception.append(e.args[0][0][0])
-                            game_exception.append(e.args[0][0][1])
-                            game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
-                            exceptionCollection.append(game_exception)
+                    #     except Exception as e:
+                    #         print("Problem with creating away team Match performance")
+                    #         game_exception = []
+                    #         game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                    #         game_exception.append(e.args[0][0][0])
+                    #         game_exception.append(e.args[0][0][1])
+                    #         game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
+                    #         exceptionCollection.append(game_exception)
 
-                        print("Completed.")    
+                    #     print("Completed.")    
                             
                             
                 
                 print("Week ", str(i), " loaded.")
                 i += 1
-            if startWeek <= endWeek:
+            if startWeek >= endWeek:
                 message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
             else:
                 message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
@@ -339,12 +338,11 @@ def getData(request):
                     if(weekOfSeason >= 19):
                         playoffWeekOfSeason = weekOfSeason - 18
                         url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/3/weeks/'+playoffWeekOfSeason+'/events')
+                
                 # elif(yearOfSeason >= 2010):
                 #     if(weekOfSeason >= 18):
                 #         playoffWeekOfSeason = weekOfSeason - 17
                 #         url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/3/weeks/'+playoffWeekOfSeason+'/events')
-                
-                
                 
                 
                 response = requests.get(url)
@@ -417,18 +415,12 @@ def getData(request):
 def getPlayers(request):
     nflTeams = nflTeam.objects.all().order_by('abbreviation')
 
-    yearsOnPage = []
-    for y in range(2023, 2017, -1):
-        yearsOnPage.append(y)
+    yearsOnPage = yearsOnPage_Helper()
+   
 
-    weeksOnPage = []
-    weeksOnPage.append(["100", "ALL"])
-    for w in range(1,19):
-        weeksOnPage.append([w, w])
-    # weeksOnPage.append([19, "Wildcard Weekend"])
-    # weeksOnPage.append([20, "Divisional Round"])
-    # weeksOnPage.append([21, "Conference Championship"])
-    # weeksOnPage.append([22, "Super Bowl"])
+    weeksOnPage = weeksOnPage_Helper()
+    weeksOnPage.insert(0, ["100", "ALL"])
+    
 
     pageDictionary = {}
     pageDictionary['weeks'] = weeksOnPage
@@ -561,17 +553,9 @@ def getInjuryStatus(request):
     
 
 def loadModel(request, target):
-    weeksOnPage = []
-    for w in range(1,19):
-        weeksOnPage.append([w, w])
-    weeksOnPage.append([19, "Wildcard Weekend"])
-    weeksOnPage.append([20, "Divisional Round"])
-    weeksOnPage.append([21, "Conference Championship"])
-    weeksOnPage.append([22, "Super Bowl"])
-
-    yearsOnPage = []
-    for y in range(2023, 2017, -1):
-        yearsOnPage.append(y)
+    weeksOnPage = weeksOnPage_Helper()
+    
+    yearsOnPage = yearsOnPage_Helper()
     
     movingAvgLenOptions = []
     for ma in range(3,17):
@@ -761,9 +745,7 @@ def loadModel(request, target):
             return render(request, 'nfl/modelSummary.html')
 
 def loadModelYear(request):
-    yearsOnPage = []
-    for y in range(2022, 2017, -1):
-        yearsOnPage.append(y)
+    yearsOnPage = yearsOnPage_Helper()   
 
     numResultsSelect = []
     numResultsSelect.append(20)
@@ -777,7 +759,7 @@ def loadModelYear(request):
     modelsOnPage = []
     modelsOnPage.append(['v1', 'V1.0 (Avg Yds/Yds per Pt)'])
     modelsOnPage.append(['v1.5', 'V1.5 (V1 with Moving Avg.)'])
-    modelsOnPage.append(['v2','V2.0 (Drives vs Drive Result)'])
+    #modelsOnPage.append(['v2','V2.0 (Drives vs Drive Result)'])
     
     movingAvgLenOptions = []
     for ma in range(3,17):
@@ -1015,9 +997,7 @@ def loadModelYear(request):
 
 def fullTeamStats(request):
 
-    yearsOnPage = []
-    for y in range(2023, 2017, -1):
-        yearsOnPage.append(y)
+    yearsOnPage = yearsOnPage_Helper()
     
     inputReq = request.GET
 
@@ -1103,18 +1083,10 @@ def playerSignificance(request):
 def getPlays(request):
     nflTeams = nflTeam.objects.all().order_by('abbreviation')
 
-    yearsOnPage = []
-    for y in range(2023, 2017, -1):
-        yearsOnPage.append(y)
+    yearsOnPage = yearsOnPage_Helper()
 
-    weeksOnPage = []
-    weeksOnPage.append(["100", "ALL"])
-    for w in range(1,19):
-        weeksOnPage.append([w, w])
-    # weeksOnPage.append([19, "Wildcard Weekend"])
-    # weeksOnPage.append([20, "Divisional Round"])
-    # weeksOnPage.append([21, "Conference Championship"])
-    # weeksOnPage.append([22, "Super Bowl"])
+    weeksOnPage = weeksOnPage_Helper()
+    weeksOnPage.insert(0, ["100", "ALL"])
 
     pageDictionary = {}
     pageDictionary['weeks'] = weeksOnPage
@@ -1201,7 +1173,23 @@ def getPlays(request):
             
             return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})    
                 
-        
+def weeksOnPage_Helper():
+    weeksOnPage = []
+    for w in range(1,19):
+        weeksOnPage.append([w, w])
+    weeksOnPage.append([19, "Wildcard Weekend"])
+    weeksOnPage.append([20, "Divisional Round"])
+    weeksOnPage.append([21, "Conference Championship"])
+    weeksOnPage.append([22, "Super Bowl"])
+
+    return weeksOnPage
+
+def yearsOnPage_Helper():
+    yearsOnPage = []
+    for y in range(2023, 2016, -1):
+        yearsOnPage.append(y)
+    
+    return yearsOnPage        
     
 
 

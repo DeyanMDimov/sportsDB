@@ -1328,3 +1328,6 @@ class matchModelDetails:
         self.awayTeamOffenseYdsPerGmRank = awayTeamArray[2]
         self.awayTeamDefenseYdsPerPntRank = awayTeamArray[3]
         self.awayTeamDefenseYdsPerGmRank = awayTeamArray[4]
+
+
+
