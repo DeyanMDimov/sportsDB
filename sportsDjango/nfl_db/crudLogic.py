@@ -5,347 +5,306 @@ from datetime import datetime, date, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 import json, requests, traceback
 
+def processGameData(gameData, weekOfSeason, yearOfSeason):
+    exceptionCollection = []
+
+    matchEspnId = gameData['id']
+    dateOfGameFromApi = gameData['date']
+    dateOfGame = datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
+
+    homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+    homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
+    awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
+    
+    print()
+    print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
+
+    gameStatusUrl = gameData['competitions'][0]['status']['$ref']
+    gameStatusResponse = requests.get(gameStatusUrl)
+    gameStatus = gameStatusResponse.json()
+
+    gameCompleted = (gameStatus['type']['completed'] == True)
+    gameOvertime = ("OT" in gameStatus['type']['detail']) 
+
+    oddsUrl = gameData['competitions'][0]['odds']['$ref']
+    oddsResponse = requests.get(oddsUrl)
+    oddsData = oddsResponse.json()
+
+    existingMatch = None
+    existingHomeTeamPerf = None
+    existingAwayTeamPerf = None
+
+    try:
+        existingMatch = nflMatch.objects.get(espnId = matchEspnId)
+    except Exception as e:
+        print(e)
+
+    try:
+        existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = homeTeamEspnId)
+    except Exception as e:
+        print(e)
+
+    try:    
+        existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
+    except Exception as e:
+        print(e)                        
+
+    if datetime.now()<dateOfGame or gameCompleted==False:
+        createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
+
+    else:
+        homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
+        homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
+        homeTeamStats = homeTeamStatsResponse.json()
+
+        homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
+        homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
+        homeTeamScore = homeTeamScoreResponse.json()
+
+        awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
+        awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
+        awayTeamStats = awayTeamStatsResponse.json()
+        
+        awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
+        awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
+        awayTeamScore = awayTeamScoreResponse.json()
+
+        drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
+        drivesData = drivesDataObj(drivesDataUrl)
+
+        playsDataUrl = gameData['competitions'][0]['details']['$ref']
+        playsDataResponse = requests.get(playsDataUrl)
+        playsData = playsDataResponse.json()
+
+        playByPlayOfGame = playByPlayData(playsData)
+        
+        pagesOfPlaysData = playsData['pageCount']
+        if pagesOfPlaysData > 1:
+            for page in range(2, pagesOfPlaysData+1):
+                multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
+                pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
+                pagePlaysData = pagePlaysDataResponse.json()
+                playByPlayOfGame.addJSON(pagePlaysData)
+        
+        try:
+            matchData = createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
+        except Exception as e:
+            matchData = nflMatch.objects.get(espnId = matchEspnId)
+            print("There was an exception")
+            game_exception = []
+            if len(e.args) > 1:
+                game_exception.append("There were multiple exceptions when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                print("Multiple exceptions in one game")
+                game_exception.append(e.args[0][0][0])
+                game_exception.append(e.args[0][0][1])
+            else:
+                game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+                game_exception.append(e.args[0][0][0])
+                game_exception.append(e.args[0][0][1])
+                game_exception.append(matchEspnId)
+            exceptionCollection.append(game_exception)
+
+ 
+        try:
+            createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, awayTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
+        except Exception as e: 
+            print("Problem with creating home team Match performance")
+            game_exception = []
+            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+            game_exception.append(e.args[0][0][0])
+            game_exception.append(e.args[0][0][1])
+            game_exception.append(str(matchEspnId)+str(homeTeamEspnId))
+            exceptionCollection.append(game_exception)
+            
+        try:
+            createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, homeTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
+        except Exception as e:
+            print("Problem with creating away team Match performance")
+            game_exception = []
+            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
+            game_exception.append(e.args[0][0][0])
+            game_exception.append(e.args[0][0][1])
+            game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
+            exceptionCollection.append(game_exception)
+        
+        print("Completed.")    
+
+        if len(exceptionCollection) > 0:
+            raise Exception(exceptionCollection)
+
 def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, seasonYear):
     
     exceptionThrown = False
     exceptions = []
 
     mappedHomeTeamStats = teamStatsJsonMap(homeTeamStats)
-    
     mappedAwayTeamStats = teamStatsJsonMap(awayTeamStats)
 
     homeTeamAbrv = nflTeam.objects.get(espnId = gameData['competitions'][0]['competitors'][0]['id']).abbreviation
     awayTeamAbrv = nflTeam.objects.get(espnId = gameData['competitions'][0]['competitors'][1]['id']).abbreviation
 
-    # for catName, statsdict in mappedHomeTeamStats.items():
-    #     print("----Category: " + catName)
-    #     for statName, statValue in statsdict.items():
-    #         print("--------Stat: " + statName)
+    homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+
 
     if nflMatchObject == None:
         matchData = nflMatch.objects.create(
                         espnId = gameData['id'],
                         datePlayed = gameData['date'],
-                        homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id'],
-                        awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id'],
-                        completed = gameCompleted,
+                        homeTeamEspnId = homeTeamEspnId,
+                        awayTeamEspnId = awayTeamEspnId,
                         weekOfSeason = weekOfSeason,
                         yearOfSeason = seasonYear,
                         neutralStadium = gameData['competitions'][0]['neutralSite'],
                         playoffs = False,
                         indoorStadium = gameData['competitions'][0]['venue']['indoor'],
-                        
-                        overtime = gameOvertime,
-                        
                         preseason= True if int(weekOfSeason) < 0 else False,
-                        
-                        #-----homeTeam Stats
-                        homeTeamPoints                  = homeTeamScore['value'],
-                        homeTeamPointsAllowed           = awayTeamScore['value'],
-                        homeTeamTotalYards              = mappedHomeTeamStats['passing']['totalYards'],
-                        homeTeamYardsAllowed            = mappedAwayTeamStats['passing']['totalYards'],
-                        homeTeamRushingYards            = mappedHomeTeamStats['rushing']['rushingYards'],
-                        homeTeamRushYardsAllowed        = mappedAwayTeamStats['rushing']['rushingYards'],
-                        homeTeamReceivingYards          = mappedHomeTeamStats['receiving']['receivingYards'],
-                        homeTeamReceivingYardsAllowed   = mappedAwayTeamStats['receiving']['receivingYards'],
-                        homeTeamGiveaways               = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost'], 
-                        homeTeamTakeaways               = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost'], 
-                        homeTeamRushingTDScored         = mappedHomeTeamStats['scoring']['rushingTouchdowns'],
-                        homeTeamRushingTDAllowed        = mappedAwayTeamStats['scoring']['rushingTouchdowns'],
-                        homeTeamReceivingTDScored       = mappedHomeTeamStats['scoring']['receivingTouchdowns'],
-                        homeTeamReceivingTDAllowed      = mappedAwayTeamStats['scoring']['receivingTouchdowns'],
-                        homeTeamFGScored                = mappedHomeTeamStats['scoring']['fieldGoals'],
-                        homeTeamFGAllowed               = mappedAwayTeamStats['scoring']['fieldGoals'],
-                        homeTeamSpecialTeamsPointsScored    = mappedHomeTeamStats['scoring']['kickExtraPoints'],
-                        homeTeamDefensePointsScored         = int((mappedHomeTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedHomeTeamStats['general']['defensiveFumblesTouchdowns'])*6),
-                        
-                        #-----awayTeam stuff
-                        awayTeamPoints                  = awayTeamScore['value'],
-                        awayTeamPointsAllowed           = homeTeamScore['value'],
-                        awayTeamTotalYards              = mappedAwayTeamStats['passing']['totalYards'],
-                        awayTeamYardsAllowed            = mappedHomeTeamStats['passing']['totalYards'],
-                        awayTeamRushingYards            = mappedAwayTeamStats['rushing']['rushingYards'],
-                        awayTeamRushYardsAllowed        = mappedHomeTeamStats['rushing']['rushingYards'],
-                        awayTeamReceivingYards          = mappedAwayTeamStats['receiving']['receivingYards'],
-                        awayTeamReceivingYardsAllowed   = mappedHomeTeamStats['receiving']['receivingYards'],
-                        awayTeamGiveaways               = mappedAwayTeamStats['passing']['interceptions'] + mappedAwayTeamStats['general']['fumblesLost'], 
-                        awayTeamTakeaways               = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost'], 
-                        awayTeamRushingTDScored         = mappedAwayTeamStats['scoring']['rushingTouchdowns'],
-                        awayTeamRushingTDAllowed        = mappedHomeTeamStats['scoring']['rushingTouchdowns'],
-                        awayTeamReceivingTDScored       = mappedAwayTeamStats['scoring']['receivingTouchdowns'],
-                        awayTeamReceivingTDAllowed      = mappedHomeTeamStats['scoring']['receivingTouchdowns'],
-                        awayTeamFGScored                = mappedAwayTeamStats['scoring']['fieldGoals'],
-                        awayTeamFGAllowed               = mappedHomeTeamStats['scoring']['fieldGoals'],
-                        awayTeamSpecialTeamsPointsScored    = mappedAwayTeamStats['scoring']['kickExtraPoints'],
-                        awayTeamDefensePointsScored         = int((mappedAwayTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedAwayTeamStats['general']['defensiveFumblesTouchdowns'])*6),                        
                     )
 
-        homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
-        awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
-        matchData.homeTeam.add(models.nflTeam.objects.get(espnId=homeTeamEspnId))
-        matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
-
-        try:
-            matchData.temperature = gameData['competitions'][0]['weather']['temperature']
-            matchData.precipitation = gameData['competitions'][0]['weather']['precipitation']
-            matchData.windSpeed = gameData['competitions'][0]['weather']['windSpeed']
-        except Exception as e:
-            tback = traceback.extract_tb(e.__traceback__)
-            problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
-            exceptionThrown = True
-            exceptions.append([problem_text, gameData])
         
-        if len(oddsData['items']) > 2:
-            if seasonYear == 2023:
-                for i in range(1, len(oddsData['items'])):
-                    if oddsData[i]['provider']['name'] == "DraftKings":
-                        if 'spread' in oddsData['items'][i]:
-                            matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
-                        else:
-                            print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
-                        if 'overUnder' in oddsData['items'][i]:
-                            matchData.overUnderLine = oddsData['items'][i]['overUnder']
-                        else:
-                            print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
-                        if 'homeTeamOdds' in oddsData['items'][i]:
-                            matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
-                        
-                        if 'awayTeamOdds' in oddsData['items'][0]:
-                            matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
-            else:
-                try:
-                    spreadSet = False
-                    overUnderSet = False
-                    homeTeamMLSet = False
-                    awayTeamMLSet = False
-                    if 'spread' in oddsData['items'][0]:
-                        matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'spread' in oddsData['items'][i]:
-                                matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
-                                spreadSet = True
-                                break
-                            else:
-                                pass 
-                        if not spreadSet:
-                            print("No Spread Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No spread data?")
-                    
-                    if 'overUnder' in oddsData['items'][0]:
-                        matchData.overUnderLine = oddsData['items'][0]['overUnder']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'overUnder' in oddsData['items'][i]:
-                                matchData.overUnderLine = oddsData['items'][i]['overUnder']
-                                overUnderSet = True
-                                break
-                            else: 
-                                pass
-                        if not overUnderSet:
-                            print("No Over/Under Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No over/under data?")
-
-                    if 'homeTeamOdds' in oddsData['items'][0]:
-                        matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'homeTeamOdds' in oddsData['items'][i]:
-                                matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
-                                homeTeamMLSet = True
-                                break
-                            else: 
-                                pass
-                        if not homeTeamMLSet:
-                            print("No Home Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No home team ML data?")
-                    
-                    if 'awayTeamOdds' in oddsData['items'][0]:
-                        matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'awayTeamOdds' in oddsData['items'][i]:
-                                matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
-                                awayTeamMLSet = True
-                                break
-                            else: 
-                                pass
-                        if not awayTeamMLSet:
-                            print("No Away Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No away team ML data?")
-                        
-                    
-                except Exception as e:
-                    tback = traceback.extract_tb(e.__traceback__)
-                    problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
-                    exceptionThrown = True
-                    exceptions.append([problem_text, oddsData])
+        
         
         
     else:
         matchData = nflMatchObject
         
-        matchData.completed = gameCompleted
-        matchData.overtime = gameOvertime
-        matchData.homeTeamPoints                = homeTeamScore['value']
-        matchData.homeTeamPointsAllowed         = awayTeamScore['value']
-        matchData.homeTeamTotalYards            = mappedHomeTeamStats['passing']['totalYards']
-        matchData.homeTeamYardsAllowed          = mappedAwayTeamStats['passing']['totalYards']
-        matchData.homeTeamRushingYards          = mappedHomeTeamStats['rushing']['rushingYards']
-        matchData.homeTeamRushYardsAllowed      = mappedAwayTeamStats['rushing']['rushingYards']
-        matchData.homeTeamReceivingYards        = mappedHomeTeamStats['receiving']['receivingYards']
-        matchData.homeTeamReceivingYardsAllowed = mappedAwayTeamStats['receiving']['receivingYards']
-        matchData.homeTeamGiveaways             = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
-        matchData.homeTeamTakeaways             = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
-        matchData.homeTeamRushingTDScored       = mappedHomeTeamStats['scoring']['rushingTouchdowns']
-        matchData.homeTeamRushingTDAllowed      = mappedAwayTeamStats['scoring']['rushingTouchdowns']
-        matchData.homeTeamReceivingTDScored     = mappedHomeTeamStats['scoring']['receivingTouchdowns']
-        matchData.homeTeamReceivingTDAllowed    = mappedAwayTeamStats['scoring']['receivingTouchdowns']
-        matchData.homeTeamFGScored              = mappedHomeTeamStats['scoring']['fieldGoals']
-        matchData.homeTeamFGAllowed             = mappedAwayTeamStats['scoring']['fieldGoals']
-        matchData.homeTeamSpecialTeamsPointsScored  = mappedHomeTeamStats['scoring']['kickExtraPoints']
-        matchData.homeTeamDefensePointsScored       = int((mappedHomeTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedHomeTeamStats['general']['defensiveFumblesTouchdowns'])*6)
-        #awayTeam stuff
-        matchData.awayTeamPoints                = awayTeamScore['value']
-        matchData.awayTeamPointsAllowed         = homeTeamScore['value']
-        matchData.awayTeamTotalYards            = mappedAwayTeamStats['passing']['totalYards']
-        matchData.awayTeamYardsAllowed          = mappedHomeTeamStats['passing']['totalYards']
-        matchData.awayTeamRushingYards          = mappedAwayTeamStats['rushing']['rushingYards']
-        matchData.awayTeamRushYardsAllowed      = mappedHomeTeamStats['rushing']['rushingYards']
-        matchData.awayTeamReceivingYards        = mappedAwayTeamStats['receiving']['receivingYards']
-        matchData.awayTeamReceivingYardsAllowed = mappedHomeTeamStats['receiving']['receivingYards']
-        matchData.awayTeamGiveaways             = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
-        matchData.awayTeamTakeaways             = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
-        matchData.awayTeamRushingTDScored       = mappedAwayTeamStats['scoring']['rushingTouchdowns']
-        matchData.awayTeamRushingTDAllowed      = mappedHomeTeamStats['scoring']['rushingTouchdowns']
-        matchData.awayTeamReceivingTDScored     = mappedAwayTeamStats['scoring']['receivingTouchdowns']
-        matchData.awayTeamReceivingTDAllowed    = mappedHomeTeamStats['scoring']['receivingTouchdowns']
-        matchData.awayTeamFGScored              = mappedAwayTeamStats['scoring']['fieldGoals']
-        matchData.awayTeamFGAllowed             = mappedHomeTeamStats['scoring']['fieldGoals']
-        matchData.awayTeamSpecialTeamsPointsScored  = mappedAwayTeamStats['scoring']['kickExtraPoints']
-        matchData.awayTeamDefensePointsScored       = int((mappedAwayTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedAwayTeamStats['general']['defensiveFumblesTouchdowns'])*6)
+    matchData.completed = gameCompleted
+    matchData.overtime = gameOvertime
+    matchData.homeTeamPoints                = homeTeamScore['value']
+    matchData.homeTeamPointsAllowed         = awayTeamScore['value']
+    matchData.homeTeamTotalYards            = mappedHomeTeamStats['passing']['totalYards']
+    matchData.homeTeamYardsAllowed          = mappedAwayTeamStats['passing']['totalYards']
+    matchData.homeTeamRushingYards          = mappedHomeTeamStats['rushing']['rushingYards']
+    matchData.homeTeamRushYardsAllowed      = mappedAwayTeamStats['rushing']['rushingYards']
+    matchData.homeTeamReceivingYards        = mappedHomeTeamStats['receiving']['receivingYards']
+    matchData.homeTeamReceivingYardsAllowed = mappedAwayTeamStats['receiving']['receivingYards']
+    matchData.homeTeamGiveaways             = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+    matchData.homeTeamTakeaways             = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+    matchData.homeTeamRushingTDScored       = mappedHomeTeamStats['scoring']['rushingTouchdowns']
+    matchData.homeTeamRushingTDAllowed      = mappedAwayTeamStats['scoring']['rushingTouchdowns']
+    matchData.homeTeamReceivingTDScored     = mappedHomeTeamStats['scoring']['receivingTouchdowns']
+    matchData.homeTeamReceivingTDAllowed    = mappedAwayTeamStats['scoring']['receivingTouchdowns']
+    matchData.homeTeamFGScored              = mappedHomeTeamStats['scoring']['fieldGoals']
+    matchData.homeTeamFGAllowed             = mappedAwayTeamStats['scoring']['fieldGoals']
+    matchData.homeTeamSpecialTeamsPointsScored  = mappedHomeTeamStats['scoring']['kickExtraPoints']
+    matchData.homeTeamDefensePointsScored       = int((mappedHomeTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedHomeTeamStats['general']['defensiveFumblesTouchdowns'])*6)
+    #awayTeam stuff
+    matchData.awayTeamPoints                = awayTeamScore['value']
+    matchData.awayTeamPointsAllowed         = homeTeamScore['value']
+    matchData.awayTeamTotalYards            = mappedAwayTeamStats['passing']['totalYards']
+    matchData.awayTeamYardsAllowed          = mappedHomeTeamStats['passing']['totalYards']
+    matchData.awayTeamRushingYards          = mappedAwayTeamStats['rushing']['rushingYards']
+    matchData.awayTeamRushYardsAllowed      = mappedHomeTeamStats['rushing']['rushingYards']
+    matchData.awayTeamReceivingYards        = mappedAwayTeamStats['receiving']['receivingYards']
+    matchData.awayTeamReceivingYardsAllowed = mappedHomeTeamStats['receiving']['receivingYards']
+    matchData.awayTeamGiveaways             = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+    matchData.awayTeamTakeaways             = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+    matchData.awayTeamRushingTDScored       = mappedAwayTeamStats['scoring']['rushingTouchdowns']
+    matchData.awayTeamRushingTDAllowed      = mappedHomeTeamStats['scoring']['rushingTouchdowns']
+    matchData.awayTeamReceivingTDScored     = mappedAwayTeamStats['scoring']['receivingTouchdowns']
+    matchData.awayTeamReceivingTDAllowed    = mappedHomeTeamStats['scoring']['receivingTouchdowns']
+    matchData.awayTeamFGScored              = mappedAwayTeamStats['scoring']['fieldGoals']
+    matchData.awayTeamFGAllowed             = mappedHomeTeamStats['scoring']['fieldGoals']
+    matchData.awayTeamSpecialTeamsPointsScored  = mappedAwayTeamStats['scoring']['kickExtraPoints']
+    matchData.awayTeamDefensePointsScored       = int((mappedAwayTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedAwayTeamStats['general']['defensiveFumblesTouchdowns'])*6)
         
-        homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
-        awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+    
+    theHomeTeam = models.nflTeam.objects.get(espnId=homeTeamEspnId)
+    matchData.homeTeam.add(theHomeTeam)
 
-        theHomeTeam = models.nflTeam.objects.get(espnId=homeTeamEspnId)
-        matchData.homeTeam.add(theHomeTeam)
-
-        theAwayTeam = models.nflTeam.objects.get(espnId=awayTeamEspnId)
-        matchData.awayTeam.add(theAwayTeam)
-
-
-        #print("Oddsdata items count:" + str(len(oddsData['items'])))
-        if len(oddsData['items']) > 2:
-            print(str(seasonYear)) 
-            if seasonYear == 2023:
-                for i in range(1, len(oddsData['items'])):
-                    if oddsData[i]['provider']['name'] == "DraftKings":
+    theAwayTeam = models.nflTeam.objects.get(espnId=awayTeamEspnId)
+    matchData.awayTeam.add(theAwayTeam)
+        
+    if len(oddsData['items']) > 2:
+        print(str(seasonYear)) 
+        if seasonYear == 2023:
+            pass
+        else:
+            try:
+                spreadSet = False
+                overUnderSet = False
+                homeTeamMLSet = False
+                awayTeamMLSet = False
+                if 'spread' in oddsData['items'][0]:
+                    matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
+                else:
+                    for i in range(1, len(oddsData['items'])):
                         if 'spread' in oddsData['items'][i]:
                             matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
-                        else:
-                            print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
+                            spreadSet = True
+                            break
+                        else: 
+                            pass
+                    if not spreadSet:
+                        print("No Spread Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        raise Exception("No spread data?")
+                
+                if 'overUnder' in oddsData['items'][0]:
+                    matchData.overUnderLine = oddsData['items'][0]['overUnder']
+                else:
+                    for i in range(1, len(oddsData['items'])):
                         if 'overUnder' in oddsData['items'][i]:
                             matchData.overUnderLine = oddsData['items'][i]['overUnder']
-                        else:
-                            print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
+                            overUnderSet = True
+                            break
+                        else: 
+                            pass
+                    if not overUnderSet:
+                        print("No Over/Under Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        raise Exception("No over/under data?")
+                    
+                if 'homeTeamOdds' in oddsData['items'][0]:
+                    matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
+                else:
+                    for i in range(1, len(oddsData['items'])):
                         if 'homeTeamOdds' in oddsData['items'][i]:
                             matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
-                        
-                        if 'awayTeamOdds' in oddsData['items'][0]:
+                            homeTeamMLSet = True
+                            break
+                        else: 
+                            pass
+                    if not homeTeamMLSet:
+                        print("No Home Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        raise Exception("No home team ML data?")
+                
+                if 'awayTeamOdds' in oddsData['items'][0]:
+                    matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
+                else:
+                    for i in range(1, len(oddsData['items'])):
+                        if 'awayTeamOdds' in oddsData['items'][i]:
                             matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
-            else:
-                try:
-                    spreadSet = False
-                    overUnderSet = False
-                    homeTeamMLSet = False
-                    awayTeamMLSet = False
-                    if 'spread' in oddsData['items'][0]:
-                        matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'spread' in oddsData['items'][i]:
-                                matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
-                                spreadSet = True
-                                break
-                            else: 
-                                pass
-                        if not spreadSet:
-                            print("No Spread Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No spread data?")
-                    
-                    if 'overUnder' in oddsData['items'][0]:
-                        matchData.overUnderLine = oddsData['items'][0]['overUnder']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'overUnder' in oddsData['items'][i]:
-                                matchData.overUnderLine = oddsData['items'][i]['overUnder']
-                                overUnderSet = True
-                                break
-                            else: 
-                                pass
-                        if not overUnderSet:
-                            print("No Over/Under Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No over/under data?")
-                        
-                    if 'homeTeamOdds' in oddsData['items'][0]:
-                        matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'homeTeamOdds' in oddsData['items'][i]:
-                                matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
-                                homeTeamMLSet = True
-                                break
-                            else: 
-                                pass
-                        if not homeTeamMLSet:
-                            print("No Home Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No home team ML data?")
-                    
-                    if 'awayTeamOdds' in oddsData['items'][0]:
-                        matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
-                    else:
-                        for i in range(1, len(oddsData['items'])):
-                            if 'awayTeamOdds' in oddsData['items'][i]:
-                                matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
-                                awayTeamMLSet = True
-                                break
-                            else: 
-                                pass
-                        if not awayTeamMLSet:
-                            print("No Away Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                            raise Exception("No away team ML data?")
+                            awayTeamMLSet = True
+                            break
+                        else: 
+                            pass
+                    if not awayTeamMLSet:
+                        print("No Away Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        raise Exception("No away team ML data?")
 
-                except Exception as e:
-                    tback = traceback.extract_tb(e.__traceback__)
-                    problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
-                    exceptionThrown = True
-                    exceptions.append([problem_text, oddsData])
+            except Exception as e:
+                tback = traceback.extract_tb(e.__traceback__)
+                problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+                exceptionThrown = True
+                exceptions.append([problem_text, oddsData])
 
     
     
     try:
-        for individualDrive in drivesData['items']: 
-            createDriveOfPlay(individualDrive, matchData)
+        for drivesPage in drivesData.drivesPages:
+            for individualDrive in drivesPage['items']: 
+                createDriveOfPlay(individualDrive, matchData)
     except Exception as e:
         tback = traceback.extract_tb(e.__traceback__)
         problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
-        exceptions.append([problem_text, drivesData])
+        exceptions.append([problem_text, drivesPage])
         exceptionThrown = True
 
     
     if exceptionThrown:
         raise Exception(exceptions)
 
-    # homeTeamExplosivePlays = getExplosivePlays(playsData, matchData.homeTeamEspnId)
-    # awayTeamExplosivePlays = getExplosivePlays(playsData, matchData.awayTeamEspnId)
-
-    # matchData.homeTeamExplosivePlays = homeTeamExplosivePlays
-    # matchData.awayTeamExplosivePlays = awayTeamExplosivePlays
+   
 
     matchData.save()    
 
@@ -831,6 +790,28 @@ class playByPlayData:
     def addJSON(self, playByPlayJSON):
         self.playByPlayPages.append(playByPlayJSON)
 
+class drivesDataObj:
+    drivesPages = []
+
+    def __init__(self, drivesUrl):
+        self.drivesPages = []
+        drivesDataResponse = requests.get(drivesUrl)
+        drivesJSON = drivesDataResponse.json()
+
+        self.drivesPages.append(drivesJSON)
+        pagesOfDrivesData = drivesJSON['pageCount']
+
+        if pagesOfDrivesData > 1:
+            for page in range(2, pagesOfDrivesData+1):
+                multiPageDrivesDataUrl = drivesUrl+"&page="+str(page)
+                pageDrivesDataResponse = requests.get(multiPageDrivesDataUrl)
+                pageDrivesData = pageDrivesDataResponse.json()
+                self.drivesPages.append(pageDrivesData)
+
+    
+
+
+
 def captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId, teamPerf):
     
     exceptions = [] 
@@ -962,9 +943,15 @@ def captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId
                         if 'Aborted' in play['text']:
                             pass
                         elif(play['type']['text'] == "Rush" and play['statYardage']>=10):
-                            teamRushingTenPlus += 1
+                            if 'PENALTY' not in play['text']: 
+                                teamRushingTenPlus += 1
+                            # else:
+                            #     if str('PENALTY on ' + opponentAbbreviation) in play['text']:
+                           
                         elif (play['type']['text'] == "Pass Reception" and play['statYardage']>=25):
-                            teamPassPlaysTwentyFivePlus += 1
+                            if 'PENALTY' not in play['text']: 
+                                teamPassPlaysTwentyFivePlus += 1
+                            
 
                         if(play['start']['yardsToEndzone'] <= 25):
                             if(play['type']['text'] == "Fumble Recovery (Opponent)" or play['type']['text'] == "Fumble Recovery (Opponent)"):
@@ -1319,7 +1306,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
         # penaltyIsOnOffense = models.BooleanField(null = True, blank = True)
         # yardsGainedOrLostOnPenalty = models.SmallIntegerField(null = True, blank = True)
        
-    
+
 
 def setPlayType(inputType, indiv_play):
     
@@ -1659,141 +1646,6 @@ def scheduledScorePull():
     else:
         print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and we did not check for games.")
         return
-
-def processGameData(gameData, weekOfSeason, yearOfSeason):
-    exceptionCollection = []
-
-    matchEspnId = gameData['id']
-    dateOfGameFromApi = gameData['date']
-    dateOfGame = datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
-
-    homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
-    awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
-    homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
-    awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
-    
-    print()
-    print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
-
-    gameStatusUrl = gameData['competitions'][0]['status']['$ref']
-    gameStatusResponse = requests.get(gameStatusUrl)
-    gameStatus = gameStatusResponse.json()
-
-    gameCompleted = (gameStatus['type']['completed'] == True)
-    gameOvertime = ("OT" in gameStatus['type']['detail']) 
-
-    oddsUrl = gameData['competitions'][0]['odds']['$ref']
-    oddsResponse = requests.get(oddsUrl)
-    oddsData = oddsResponse.json()
-
-    existingMatch = None
-    existingHomeTeamPerf = None
-    existingAwayTeamPerf = None
-
-    try:
-        existingMatch = nflMatch.objects.get(espnId = matchEspnId)
-    except Exception as e:
-        print(e)
-
-    try:
-        existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = homeTeamEspnId)
-    except Exception as e:
-        print(e)
-
-    try:    
-        existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
-    except Exception as e:
-        print(e)                        
-
-    if datetime.now()<dateOfGame or gameCompleted==False:
-        createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, str(weekOfSeason), str(yearOfSeason))
-
-    else:
-        homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
-        homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
-        homeTeamStats = homeTeamStatsResponse.json()
-
-        homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
-        homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
-        homeTeamScore = homeTeamScoreResponse.json()
-
-        awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
-        awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
-        awayTeamStats = awayTeamStatsResponse.json()
-        
-        awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
-        awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
-        awayTeamScore = awayTeamScoreResponse.json()
-
-        drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
-        drivesDataResponse = requests.get(drivesDataUrl)
-        drivesData = drivesDataResponse.json()
-
-        playsDataUrl = gameData['competitions'][0]['details']['$ref']
-        playsDataResponse = requests.get(playsDataUrl)
-        playsData = playsDataResponse.json()
-
-        playByPlayOfGame = playByPlayData(playsData)
-        
-        pagesOfPlaysData = playsData['pageCount']
-        if pagesOfPlaysData > 1:
-            #print("Multiple pages of Data in game")
-            for page in range(2, pagesOfPlaysData+1):
-                multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
-                pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
-                pagePlaysData = pagePlaysDataResponse.json()
-                playByPlayOfGame.addJSON(pagePlaysData)
-        
-        try:
-            matchData = createOrUpdateFinishedNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, str(weekOfSeason), str(yearOfSeason))
-        except Exception as e:
-            matchData = nflMatch.objects.get(espnId = matchEspnId)
-            print("There was an exception")
-            game_exception = []
-            if len(e.args) > 1:
-                game_exception.append("There were multiple exceptions when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-                print("Multiple exceptions in one game")
-                game_exception.append(e.args[0][0][0])
-                game_exception.append(e.args[0][0][1])
-            else:
-                game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-                game_exception.append(e.args[0][0][0])
-                game_exception.append(e.args[0][0][1])
-                game_exception.append(matchEspnId)
-            exceptionCollection.append(game_exception)
-
-        # try:
-        #     existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchData.espnId, teamEspnId = matchData.homeTeamEspnId)
-        # except Exception as e:
-        #     print("There was an exception getting homeTeamPerformance for MatchEspnId: " + str(matchEspnId))
-        #     print(e)        
-        
-        try:
-            createOrUpdateTeamMatchPerformance(existingHomeTeamPerf, homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, awayTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))                        
-        except Exception as e: 
-            print("Problem with creating home team Match performance")
-            game_exception = []
-            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-            game_exception.append(e.args[0][0][0])
-            game_exception.append(e.args[0][0][1])
-            game_exception.append(str(matchEspnId)+str(homeTeamEspnId))
-            exceptionCollection.append(game_exception)
-            
-        try:
-            createOrUpdateTeamMatchPerformance(existingAwayTeamPerf, awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, homeTeamStats, playsData, playByPlayOfGame, drivesData, seasonWeek=str(weekOfSeason), seasonYear=str(yearOfSeason))    
-        except Exception as e:
-            print("Problem with creating away team Match performance")
-            game_exception = []
-            game_exception.append("There was an exception when pulling game " + str(matchEspnId) + " from week " + str(weekOfSeason) + " of year " + str(yearOfSeason) + ".")
-            game_exception.append(e.args[0][0][0])
-            game_exception.append(e.args[0][0][1])
-            game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
-            exceptionCollection.append(game_exception)
-        
-        print("Completed.")    
-
-        if len(exceptionCollection) > 0:
-            raise Exception(exceptionCollection)
             
 def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekNum):
     if len(seasonAvailability) == 0:
@@ -2290,3 +2142,344 @@ def resetAllPerformanceAssociationsForClearing():
 
 # def deletePlayByPlay ():
 #     pass
+
+def createOrUpdateFinishedNflMatch_old(nflMatchObject, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, seasonYear):
+    
+    exceptionThrown = False
+    exceptions = []
+
+    mappedHomeTeamStats = teamStatsJsonMap(homeTeamStats)
+    mappedAwayTeamStats = teamStatsJsonMap(awayTeamStats)
+
+    homeTeamAbrv = nflTeam.objects.get(espnId = gameData['competitions'][0]['competitors'][0]['id']).abbreviation
+    awayTeamAbrv = nflTeam.objects.get(espnId = gameData['competitions'][0]['competitors'][1]['id']).abbreviation
+
+    if nflMatchObject == None:
+        matchData = nflMatch.objects.create(
+                        espnId = gameData['id'],
+                        datePlayed = gameData['date'],
+                        homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id'],
+                        awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id'],
+                        completed = gameCompleted,
+                        weekOfSeason = weekOfSeason,
+                        yearOfSeason = seasonYear,
+                        neutralStadium = gameData['competitions'][0]['neutralSite'],
+                        playoffs = False,
+                        indoorStadium = gameData['competitions'][0]['venue']['indoor'],
+                        
+                        overtime = gameOvertime,
+                        
+                        preseason= True if int(weekOfSeason) < 0 else False,
+                        
+                        #-----homeTeam Stats
+                        homeTeamPoints                  = homeTeamScore['value'],
+                        homeTeamPointsAllowed           = awayTeamScore['value'],
+                        homeTeamTotalYards              = mappedHomeTeamStats['passing']['totalYards'],
+                        homeTeamYardsAllowed            = mappedAwayTeamStats['passing']['totalYards'],
+                        homeTeamRushingYards            = mappedHomeTeamStats['rushing']['rushingYards'],
+                        homeTeamRushYardsAllowed        = mappedAwayTeamStats['rushing']['rushingYards'],
+                        homeTeamReceivingYards          = mappedHomeTeamStats['receiving']['receivingYards'],
+                        homeTeamReceivingYardsAllowed   = mappedAwayTeamStats['receiving']['receivingYards'],
+                        homeTeamGiveaways               = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost'], 
+                        homeTeamTakeaways               = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost'], 
+                        homeTeamRushingTDScored         = mappedHomeTeamStats['scoring']['rushingTouchdowns'],
+                        homeTeamRushingTDAllowed        = mappedAwayTeamStats['scoring']['rushingTouchdowns'],
+                        homeTeamReceivingTDScored       = mappedHomeTeamStats['scoring']['receivingTouchdowns'],
+                        homeTeamReceivingTDAllowed      = mappedAwayTeamStats['scoring']['receivingTouchdowns'],
+                        homeTeamFGScored                = mappedHomeTeamStats['scoring']['fieldGoals'],
+                        homeTeamFGAllowed               = mappedAwayTeamStats['scoring']['fieldGoals'],
+                        homeTeamSpecialTeamsPointsScored    = mappedHomeTeamStats['scoring']['kickExtraPoints'],
+                        homeTeamDefensePointsScored         = int((mappedHomeTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedHomeTeamStats['general']['defensiveFumblesTouchdowns'])*6),
+                        
+                        #-----awayTeam stuff
+                        awayTeamPoints                  = awayTeamScore['value'],
+                        awayTeamPointsAllowed           = homeTeamScore['value'],
+                        awayTeamTotalYards              = mappedAwayTeamStats['passing']['totalYards'],
+                        awayTeamYardsAllowed            = mappedHomeTeamStats['passing']['totalYards'],
+                        awayTeamRushingYards            = mappedAwayTeamStats['rushing']['rushingYards'],
+                        awayTeamRushYardsAllowed        = mappedHomeTeamStats['rushing']['rushingYards'],
+                        awayTeamReceivingYards          = mappedAwayTeamStats['receiving']['receivingYards'],
+                        awayTeamReceivingYardsAllowed   = mappedHomeTeamStats['receiving']['receivingYards'],
+                        awayTeamGiveaways               = mappedAwayTeamStats['passing']['interceptions'] + mappedAwayTeamStats['general']['fumblesLost'], 
+                        awayTeamTakeaways               = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost'], 
+                        awayTeamRushingTDScored         = mappedAwayTeamStats['scoring']['rushingTouchdowns'],
+                        awayTeamRushingTDAllowed        = mappedHomeTeamStats['scoring']['rushingTouchdowns'],
+                        awayTeamReceivingTDScored       = mappedAwayTeamStats['scoring']['receivingTouchdowns'],
+                        awayTeamReceivingTDAllowed      = mappedHomeTeamStats['scoring']['receivingTouchdowns'],
+                        awayTeamFGScored                = mappedAwayTeamStats['scoring']['fieldGoals'],
+                        awayTeamFGAllowed               = mappedHomeTeamStats['scoring']['fieldGoals'],
+                        awayTeamSpecialTeamsPointsScored    = mappedAwayTeamStats['scoring']['kickExtraPoints'],
+                        awayTeamDefensePointsScored         = int((mappedAwayTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedAwayTeamStats['general']['defensiveFumblesTouchdowns'])*6),                        
+                    )
+
+        homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+        awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+        matchData.homeTeam.add(models.nflTeam.objects.get(espnId=homeTeamEspnId))
+        matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
+
+        try:
+            matchData.temperature = gameData['competitions'][0]['weather']['temperature']
+            matchData.precipitation = gameData['competitions'][0]['weather']['precipitation']
+            matchData.windSpeed = gameData['competitions'][0]['weather']['windSpeed']
+        except Exception as e:
+            tback = traceback.extract_tb(e.__traceback__)
+            problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+            exceptionThrown = True
+            exceptions.append([problem_text, gameData])
+        
+        if len(oddsData['items']) > 2:
+            if seasonYear == 2023:
+                for i in range(1, len(oddsData['items'])):
+                    if oddsData[i]['provider']['name'] == "DraftKings":
+                        if 'spread' in oddsData['items'][i]:
+                            matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
+                        else:
+                            print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        
+                        if 'overUnder' in oddsData['items'][i]:
+                            matchData.overUnderLine = oddsData['items'][i]['overUnder']
+                        else:
+                            print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        
+                        if 'homeTeamOdds' in oddsData['items'][i]:
+                            matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
+                        
+                        if 'awayTeamOdds' in oddsData['items'][0]:
+                            matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+            else:
+                try:
+                    spreadSet = False
+                    overUnderSet = False
+                    homeTeamMLSet = False
+                    awayTeamMLSet = False
+                    if 'spread' in oddsData['items'][0]:
+                        matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'spread' in oddsData['items'][i]:
+                                matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
+                                spreadSet = True
+                                break
+                            else:
+                                pass 
+                        if not spreadSet:
+                            print("No Spread Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No spread data?")
+                    
+                    if 'overUnder' in oddsData['items'][0]:
+                        matchData.overUnderLine = oddsData['items'][0]['overUnder']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'overUnder' in oddsData['items'][i]:
+                                matchData.overUnderLine = oddsData['items'][i]['overUnder']
+                                overUnderSet = True
+                                break
+                            else: 
+                                pass
+                        if not overUnderSet:
+                            print("No Over/Under Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No over/under data?")
+
+                    if 'homeTeamOdds' in oddsData['items'][0]:
+                        matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'homeTeamOdds' in oddsData['items'][i]:
+                                matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
+                                homeTeamMLSet = True
+                                break
+                            else: 
+                                pass
+                        if not homeTeamMLSet:
+                            print("No Home Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No home team ML data?")
+                    
+                    if 'awayTeamOdds' in oddsData['items'][0]:
+                        matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'awayTeamOdds' in oddsData['items'][i]:
+                                matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+                                awayTeamMLSet = True
+                                break
+                            else: 
+                                pass
+                        if not awayTeamMLSet:
+                            print("No Away Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No away team ML data?")
+                        
+                    
+                except Exception as e:
+                    tback = traceback.extract_tb(e.__traceback__)
+                    problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+                    exceptionThrown = True
+                    exceptions.append([problem_text, oddsData])
+        
+        
+    else:
+        matchData = nflMatchObject
+        
+        matchData.completed = gameCompleted
+        matchData.overtime = gameOvertime
+        matchData.homeTeamPoints                = homeTeamScore['value']
+        matchData.homeTeamPointsAllowed         = awayTeamScore['value']
+        matchData.homeTeamTotalYards            = mappedHomeTeamStats['passing']['totalYards']
+        matchData.homeTeamYardsAllowed          = mappedAwayTeamStats['passing']['totalYards']
+        matchData.homeTeamRushingYards          = mappedHomeTeamStats['rushing']['rushingYards']
+        matchData.homeTeamRushYardsAllowed      = mappedAwayTeamStats['rushing']['rushingYards']
+        matchData.homeTeamReceivingYards        = mappedHomeTeamStats['receiving']['receivingYards']
+        matchData.homeTeamReceivingYardsAllowed = mappedAwayTeamStats['receiving']['receivingYards']
+        matchData.homeTeamGiveaways             = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+        matchData.homeTeamTakeaways             = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+        matchData.homeTeamRushingTDScored       = mappedHomeTeamStats['scoring']['rushingTouchdowns']
+        matchData.homeTeamRushingTDAllowed      = mappedAwayTeamStats['scoring']['rushingTouchdowns']
+        matchData.homeTeamReceivingTDScored     = mappedHomeTeamStats['scoring']['receivingTouchdowns']
+        matchData.homeTeamReceivingTDAllowed    = mappedAwayTeamStats['scoring']['receivingTouchdowns']
+        matchData.homeTeamFGScored              = mappedHomeTeamStats['scoring']['fieldGoals']
+        matchData.homeTeamFGAllowed             = mappedAwayTeamStats['scoring']['fieldGoals']
+        matchData.homeTeamSpecialTeamsPointsScored  = mappedHomeTeamStats['scoring']['kickExtraPoints']
+        matchData.homeTeamDefensePointsScored       = int((mappedHomeTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedHomeTeamStats['general']['defensiveFumblesTouchdowns'])*6)
+        #awayTeam stuff
+        matchData.awayTeamPoints                = awayTeamScore['value']
+        matchData.awayTeamPointsAllowed         = homeTeamScore['value']
+        matchData.awayTeamTotalYards            = mappedAwayTeamStats['passing']['totalYards']
+        matchData.awayTeamYardsAllowed          = mappedHomeTeamStats['passing']['totalYards']
+        matchData.awayTeamRushingYards          = mappedAwayTeamStats['rushing']['rushingYards']
+        matchData.awayTeamRushYardsAllowed      = mappedHomeTeamStats['rushing']['rushingYards']
+        matchData.awayTeamReceivingYards        = mappedAwayTeamStats['receiving']['receivingYards']
+        matchData.awayTeamReceivingYardsAllowed = mappedHomeTeamStats['receiving']['receivingYards']
+        matchData.awayTeamGiveaways             = mappedAwayTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+        matchData.awayTeamTakeaways             = mappedHomeTeamStats['passing']['interceptions'] + mappedHomeTeamStats['general']['fumblesLost']
+        matchData.awayTeamRushingTDScored       = mappedAwayTeamStats['scoring']['rushingTouchdowns']
+        matchData.awayTeamRushingTDAllowed      = mappedHomeTeamStats['scoring']['rushingTouchdowns']
+        matchData.awayTeamReceivingTDScored     = mappedAwayTeamStats['scoring']['receivingTouchdowns']
+        matchData.awayTeamReceivingTDAllowed    = mappedHomeTeamStats['scoring']['receivingTouchdowns']
+        matchData.awayTeamFGScored              = mappedAwayTeamStats['scoring']['fieldGoals']
+        matchData.awayTeamFGAllowed             = mappedHomeTeamStats['scoring']['fieldGoals']
+        matchData.awayTeamSpecialTeamsPointsScored  = mappedAwayTeamStats['scoring']['kickExtraPoints']
+        matchData.awayTeamDefensePointsScored       = int((mappedAwayTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedAwayTeamStats['general']['defensiveFumblesTouchdowns'])*6)
+        
+        homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+        awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+
+        theHomeTeam = models.nflTeam.objects.get(espnId=homeTeamEspnId)
+        matchData.homeTeam.add(theHomeTeam)
+
+        theAwayTeam = models.nflTeam.objects.get(espnId=awayTeamEspnId)
+        matchData.awayTeam.add(theAwayTeam)
+
+
+        #print("Oddsdata items count:" + str(len(oddsData['items'])))
+        if len(oddsData['items']) > 2:
+            print(str(seasonYear)) 
+            if seasonYear == 2023:
+                pass
+                # for i in range(1, len(oddsData['items'])):
+                #     if oddsData[i]['provider']['name'] == "DraftKings":
+                #         if 'spread' in oddsData['items'][i]:
+                #             matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
+                #         else:
+                #             print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        
+                #         if 'overUnder' in oddsData['items'][i]:
+                #             matchData.overUnderLine = oddsData['items'][i]['overUnder']
+                #         else:
+                #             print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                        
+                #         if 'homeTeamOdds' in oddsData['items'][i]:
+                #             matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
+                        
+                #         if 'awayTeamOdds' in oddsData['items'][0]:
+                #             matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+            else:
+                try:
+                    spreadSet = False
+                    overUnderSet = False
+                    homeTeamMLSet = False
+                    awayTeamMLSet = False
+                    if 'spread' in oddsData['items'][0]:
+                        matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'spread' in oddsData['items'][i]:
+                                matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
+                                spreadSet = True
+                                break
+                            else: 
+                                pass
+                        if not spreadSet:
+                            print("No Spread Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No spread data?")
+                    
+                    if 'overUnder' in oddsData['items'][0]:
+                        matchData.overUnderLine = oddsData['items'][0]['overUnder']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'overUnder' in oddsData['items'][i]:
+                                matchData.overUnderLine = oddsData['items'][i]['overUnder']
+                                overUnderSet = True
+                                break
+                            else: 
+                                pass
+                        if not overUnderSet:
+                            print("No Over/Under Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No over/under data?")
+                        
+                    if 'homeTeamOdds' in oddsData['items'][0]:
+                        matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'homeTeamOdds' in oddsData['items'][i]:
+                                matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
+                                homeTeamMLSet = True
+                                break
+                            else: 
+                                pass
+                        if not homeTeamMLSet:
+                            print("No Home Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No home team ML data?")
+                    
+                    if 'awayTeamOdds' in oddsData['items'][0]:
+                        matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
+                    else:
+                        for i in range(1, len(oddsData['items'])):
+                            if 'awayTeamOdds' in oddsData['items'][i]:
+                                matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+                                awayTeamMLSet = True
+                                break
+                            else: 
+                                pass
+                        if not awayTeamMLSet:
+                            print("No Away Team Odds Data Found at all for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            raise Exception("No away team ML data?")
+
+                except Exception as e:
+                    tback = traceback.extract_tb(e.__traceback__)
+                    problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+                    exceptionThrown = True
+                    exceptions.append([problem_text, oddsData])
+
+    
+    
+    try:
+        for individualDrive in drivesData['items']: 
+            createDriveOfPlay(individualDrive, matchData)
+    except Exception as e:
+        tback = traceback.extract_tb(e.__traceback__)
+        problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+        exceptions.append([problem_text, drivesData])
+        exceptionThrown = True
+
+    
+    if exceptionThrown:
+        raise Exception(exceptions)
+
+    # homeTeamExplosivePlays = getExplosivePlays(playsData, matchData.homeTeamEspnId)
+    # awayTeamExplosivePlays = getExplosivePlays(playsData, matchData.awayTeamEspnId)
+
+    # matchData.homeTeamExplosivePlays = homeTeamExplosivePlays
+    # matchData.awayTeamExplosivePlays = awayTeamExplosivePlays
+
+    matchData.save()    
+
+    return matchData

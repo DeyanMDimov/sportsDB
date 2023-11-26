@@ -86,6 +86,7 @@ class nflMatch(models.Model):
     homeTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
     awayTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
 
+
 class teamMatchPerformance(models.Model):
     matchEspnId     = models.IntegerField()
     nflMatch        = models.ManyToManyField(nflMatch)
@@ -427,7 +428,39 @@ class playerWeekStatus(models.Model):
     )
     playerStatus = models.SmallIntegerField(choices = playerStatuses, default = 1)
 
+class playerPlayParticipant(models.Model):
+    play = models.ForeignKey(playByPlay, on_delete = models.CASCADE)
+    player = models.ForeignKey(player, on_delete = models.CASCADE)
+    playerRoles = (
+        (1, "rusher"),
+        (2, "passer"),
+        (3, "receiver"),
+        (4, "kicker"),
+        (5, "returner"),
+        (6, "punter"),
+        (7, "sackedby"),
+        (8, "tackledby"),
+        (9, "assistedby"),
+        (10, "interceptedby"),
+        (11, "fumbledby"), 
+        (12, "recoveredby"),
+        (13, "penalized"),
+        (20, "other")
+    )
+    playerRole = models.SmallIntegerField(choices = playerRoles, default = 1)
 
+
+class nflMatchOdds(models.Model):
+    nflMatch                            = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
+    matchLineHomeTeam_Open              = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    overUnderLine_Open                  = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    homeTeamMoneyLine_Open              = models.SmallIntegerField(null = True, blank = True)
+    awayTeamMoneyLine_Open              = models.SmallIntegerField(null = True, blank = True)
+    openOddsDate                        = models.DateTimeField(null = True, blank = True)
+    matchLineHomeTeam                   = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    overUnderLine                       = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    homeTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
+    awayTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
 
 
 
