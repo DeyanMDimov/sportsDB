@@ -427,6 +427,14 @@ class playerWeekStatus(models.Model):
         (6, "IR")
     )
     playerStatus = models.SmallIntegerField(choices = playerStatuses, default = 1)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['yearOfSeason'], name = 'season_index'),
+            models.Index(fields=['weekOfSeason'], name = 'week_index'),
+            models.Index(fields=['player'], name = 'player_index'),
+            models.Index(fields=['team'], name = 'team_index')
+        ]
 
 class playerPlayParticipant(models.Model):
     play = models.ForeignKey(playByPlay, on_delete = models.CASCADE)

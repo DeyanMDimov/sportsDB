@@ -500,6 +500,7 @@ def loadModel(request, target):
                     
                     if selectedModel == "v1":
                         individualModelResult = businessLogic.generateBettingModelHistV1(match)
+
                     else:
                         individualModelResult = businessLogic.generateBettingModelHistV1(match, int(selectedLen))
                     gameEspnId = match.espnId
