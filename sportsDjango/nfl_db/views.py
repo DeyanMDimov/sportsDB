@@ -4,7 +4,7 @@ from django.core import serializers
 import json
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
 from django.db import models
-from nfl_db import businessLogic, crudLogic
+from nfl_db import businessLogic, crudLogic, players
 import datetime, time, requests, traceback
 
 # Create your views here.
@@ -307,7 +307,7 @@ def getPlayers(request):
                     rosterData = responseData['athletes']
 
                     for subsection in rosterData:
-                        crudLogic.createPlayerAthletesFromTeamRoster(subsection, teamId)
+                        players.createPlayerAthletesFromTeamRoster(subsection, teamId)
 
 
                     playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
@@ -975,7 +975,7 @@ def getPlays(request):
                     rosterData = responseData['athletes']
 
                     for subsection in rosterData:
-                        crudLogic.createPlayerAthletesFromTeamRoster(subsection, teamId)
+                        players.createPlayerAthletesFromTeamRoster(subsection, teamId)
 
 
                     playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
