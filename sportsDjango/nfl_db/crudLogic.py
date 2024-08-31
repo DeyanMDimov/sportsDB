@@ -28,6 +28,7 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
     gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
     oddsUrl = gameData['competitions'][0]['odds']['$ref']
+    print(oddsUrl)
     oddsResponse = requests.get(oddsUrl)
     oddsData = oddsResponse.json()
 
@@ -218,7 +219,7 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         
     if len(oddsData['items']) > 2:
         print(str(seasonYear)) 
-        if seasonYear == 2023:
+        if seasonYear == 2024:
             pass
         else:
             try:
@@ -323,6 +324,7 @@ def teamStatsJsonMap(teamStats):
     return teamStatsMapped
 
 def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSeason, seasonYear):
+
     homeTeamAbrv = nflTeam.objects.get(espnId = gameData['competitions'][0]['competitors'][0]['id']).abbreviation
     awayTeamAbrv = nflTeam.objects.get(espnId = gameData['competitions'][0]['competitors'][1]['id']).abbreviation
     
@@ -345,19 +347,19 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
         matchData.homeTeam.add(models.nflTeam.objects.get(espnId=homeTeamEspnId))
         matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
         
-        if len(oddsData['items']) > 2:
-            if seasonYear == 2023:
+        if len(oddsData['items']) >= 2:
+            if seasonYear == 2024:
                 for i in range(1, len(oddsData['items'])):
-                    if oddsData[i]['provider']['name'] == "DraftKings":
+                    if oddsData[i]['provider']['name'] == "ESPN BET":
                         if 'spread' in oddsData['items'][i]:
                             matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
                         else:
-                            print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                         if 'overUnder' in oddsData['items'][i]:
                             matchData.overUnderLine = oddsData['items'][i]['overUnder']
                         else:
-                            print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                         if 'homeTeamOdds' in oddsData['items'][i]:
                             matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
@@ -377,24 +379,27 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
         matchData.save()    
     else:
         matchData = nflMatchObject
-        if len(oddsData['items']) > 2:
-            if int(seasonYear) == 2023:
-                for i in range(1, len(oddsData['items'])):
-                    if oddsData['items'][i]['provider']['name'] == "DraftKings":
+        if len(oddsData['items']) >= 2:
+            if int(seasonYear) == 2024:
+                
+
+                for i in range(0, len(oddsData['items'])):
+                    
+                    if oddsData['items'][i]['provider']['name'] == "ESPN BET":
                         print()
-                        print("Odds Data from Draft Kings for " + homeTeamAbrv + " vs. " + awayTeamAbrv)
+                        print("Odds Data from ESPN BET for " + homeTeamAbrv + " vs. " + awayTeamAbrv)
                         print(oddsData['items'][i])
                         print()
 
                         if 'spread' in oddsData['items'][i]:
                             matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
                         else:
-                            print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                         if 'overUnder' in oddsData['items'][i]:
                             matchData.overUnderLine = oddsData['items'][i]['overUnder']
                         else:
-                            print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                         if 'homeTeamOdds' in oddsData['items'][i]:
                             matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
@@ -404,11 +409,15 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
                         continue
             else:
                 try:
-                    
+
                     matchData.overUnderLine= oddsData['items'][0]['overUnder']
                     matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
                     matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
                     matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
+                    print("Over Under: " + str(matchData.overUnderLine))
+                    print("Home Team ML: " + str(matchData.homeTeamMoneyLine))
+                    print("Away Team ML: " + str(matchData.awayTeamMoneyLine))
+                    print("Match Line: " + str(matchData.matchLineHomeTeam))
                 except Exception as e:
                     print(e)
 
@@ -1861,7 +1870,7 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
                 playerTeamTenure.objects.create(
                     player = playerObj,
                     team = nflTeam.objects.get(espnId = teamId),
-                    startDate = datetime(2023, 9, 8)
+                    startDate = datetime(2024, 9, 8)
                 )
                 print("Player tenure created for ROOKIE.")
             print("Successfully loaded player " + str(playerObj.espnId))
@@ -1871,13 +1880,13 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
             playerObj.save()
             
             playerTenures = playerTeamTenure.objects.filter(player = playerObj)
-            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2023, playerTenures))
+            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2024, playerTenures))
             if athlete['experience']['years'] == 0:    
                 if len(list(currentSeasonTenures)) == 0:
                     playerTeamTenure.objects.create(
                         player = playerObj,
                         team = nflTeam.objects.get(espnId = teamId),
-                        startDate = datetime(2023, 9, 8)
+                        startDate = datetime(2024, 9, 8)
                     )
                     print()
                     print("Player tenure created for rookie.")
@@ -1907,7 +1916,7 @@ def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
         playerTeamTenure.objects.create(
             player = playerObj,
             team = nflTeam.objects.get(espnId = teamId),
-            startDate = datetime(2023, 9, 8)
+            startDate = datetime(2024, 9, 8)
         )
         print("Player tenure created for ROOKIE.")
     print("Successfully loaded player w/ ESPN ID: " + str(playerObj.espnId) + " - " + playerObj.name)
@@ -1925,7 +1934,7 @@ def getPlayerTenures(playerObj):
     
     if len(playerTenures) == 0:
         try:
-            for yr in range(yearToStart, 2023):
+            for yr in range(yearToStart, 2024):
                 seasonGameLogUrl = "http://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/"+str(playerObj.espnId)+"/gamelog?season="+str(yr)
                 response = requests.get(seasonGameLogUrl)
                 responseData = response.json()
@@ -2231,18 +2240,18 @@ def createOrUpdateFinishedNflMatch_old(nflMatchObject, gameData, gameCompleted, 
             exceptions.append([problem_text, gameData])
         
         if len(oddsData['items']) > 2:
-            if seasonYear == 2023:
+            if seasonYear == 2024:
                 for i in range(1, len(oddsData['items'])):
-                    if oddsData[i]['provider']['name'] == "DraftKings":
+                    if oddsData[i]['provider']['name'] == "ESPN BET":
                         if 'spread' in oddsData['items'][i]:
                             matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
                         else:
-                            print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                         if 'overUnder' in oddsData['items'][i]:
                             matchData.overUnderLine = oddsData['items'][i]['overUnder']
                         else:
-                            print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                         if 'homeTeamOdds' in oddsData['items'][i]:
                             matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
@@ -2375,19 +2384,19 @@ def createOrUpdateFinishedNflMatch_old(nflMatchObject, gameData, gameCompleted, 
         #print("Oddsdata items count:" + str(len(oddsData['items'])))
         if len(oddsData['items']) > 2:
             print(str(seasonYear)) 
-            if seasonYear == 2023:
+            if seasonYear == 2024:
                 pass
                 # for i in range(1, len(oddsData['items'])):
-                #     if oddsData[i]['provider']['name'] == "DraftKings":
+                #     if oddsData[i]['provider']['name'] == "ESPN BET":
                 #         if 'spread' in oddsData['items'][i]:
                 #             matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
                 #         else:
-                #             print("No Spread Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                #             print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                 #         if 'overUnder' in oddsData['items'][i]:
                 #             matchData.overUnderLine = oddsData['items'][i]['overUnder']
                 #         else:
-                #             print("No O/U Data found for DraftKings for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                #             print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
                         
                 #         if 'homeTeamOdds' in oddsData['items'][i]:
                 #             matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
