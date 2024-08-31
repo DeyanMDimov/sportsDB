@@ -299,7 +299,7 @@ def getPlayers(request):
                 selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
                 teamId = selectedTeam.espnId
                 
-                if yearOfSeason == '2023':
+                if yearOfSeason == '2024':
                     url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
                     response = requests.get(url)
                     responseData = response.json()
@@ -336,7 +336,7 @@ def getPlayers(request):
             if weekOfSeason == 100:
                 #print("We Get here")
                 endRangeWeek = 19
-                if int(yearOfSeason) == 2023:
+                if int(yearOfSeason) == 2024:
 
                     endRangeWeek = 12
                 athleteAvailabilitySeason = []
@@ -967,7 +967,7 @@ def getPlays(request):
                 selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
                 teamId = selectedTeam.espnId
                 
-                if yearOfSeason == '2023':
+                if yearOfSeason == '2024':
                     url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
                     response = requests.get(url)
                     responseData = response.json()
