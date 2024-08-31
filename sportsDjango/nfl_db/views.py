@@ -59,6 +59,7 @@ def getData(request):
                 gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
                 oddsUrl = gameData['competitions'][0]['odds']['$ref']
+                print(oddsUrl)
                 oddsResponse = requests.get(oddsUrl)
                 oddsData = oddsResponse.json()
 
