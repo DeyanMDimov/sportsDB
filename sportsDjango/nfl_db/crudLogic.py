@@ -1204,7 +1204,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     playType = setPlayType(individualPlay['type']['text'], individualPlay)
 
     if playType == 40:
-        print(individualPlay['text'])
+        print("playType is other. playText is: " + individualPlay['text'])
    
     try:
         if playObject == None:
@@ -1258,7 +1258,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     if 'scoringType' in individualPlay:
         if individualPlay['scoringType']['abbreviation'] == "TD":
             try:
-                extraPointOutcome = individualPlay['pointAfterAttempt']['text']
+                createdPlay.extraPointOutcome = individualPlay['pointAfterAttempt']['text']
             
             except:
                 pass
@@ -1286,6 +1286,9 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     
     createdPlay.save()
     
+
+    # for athlete in individualPlay['participants']:
+        
     
     
 

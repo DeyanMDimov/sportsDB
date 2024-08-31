@@ -431,23 +431,95 @@ class playerWeekStatus(models.Model):
 class playerPlayParticipant(models.Model):
     play = models.ForeignKey(playByPlay, on_delete = models.CASCADE)
     player = models.ForeignKey(player, on_delete = models.CASCADE)
+    currentTenure = models.ForeignKey(playerTeamTenure, on_delete = models.CASCADE, blank = True, null = True)
     playerRoles = (
-        (1, "rusher"),
-        (2, "passer"),
+        (1, "passer"),
+        (2, "rusher"),
         (3, "receiver"),
-        (4, "kicker"),
-        (5, "returner"),
+        (4, "returner"),
+        (5, "kicker"), 
         (6, "punter"),
         (7, "sackedby"),
         (8, "tackledby"),
-        (9, "assistedby"),
+        (9, "tackle_assistedby"),
         (10, "interceptedby"),
-        (11, "fumbledby"), 
-        (12, "recoveredby"),
-        (13, "penalized"),
+        (11, "fumbledby"),
+        (12, "forcedby"), 
+        (13, "recoveredby"),
+        (14, "penalized"),
         (20, "other")
     )
     playerRole = models.SmallIntegerField(choices = playerRoles, default = 1)
+    playerPositions = (
+        (1, "passer"),
+        (2, "rusher"),
+        (3, "receiver"),
+        (4, "returner"),
+        (5, "kicker"), 
+        (6, "punter"),
+        (7, "defender"),
+    )
+    playerPosition = models.SmallIntegerField(choices = playerPositions, default = 1)
+    
+    class Meta:
+        abstract = True
+
+class passerStatSplit(playerPlayParticipant):
+    passingYards = models.SmallIntegerField(blank = True, null = True)
+    interception = models.BooleanField(default = False)
+    fumble = models.BooleanField(default = False)
+    fumbleLost = models.BooleanField(default = False)
+    passingTdScored = models.BooleanField(default = False)
+
+class rusherStatSplit(playerPlayParticipant):
+    rushingYards = models.SmallIntegerField(blank = True, null = True)
+    fumble = models.BooleanField(default = False)
+    fumbleLost = models.BooleanField(default = False)
+    rushingTdScored = models.BooleanField(default = False)
+
+class receiverStatSplit(playerPlayParticipant):
+    receivingYards = models.SmallIntegerField(blank = True, null = True)
+    yardsAfterCatch = models.SmallIntegerField(blank = True, null = True) 
+    fumble = models.BooleanField(default = False)
+    fumbleLost = models.BooleanField(default = False)
+    receivingTdScored = models.BooleanField(default = False)
+
+class returnerStatSplit(playerPlayParticipant):
+    returnYards = models.SmallIntegerField(blank = True, null = True)
+    fumble = models.BooleanField(default = False)
+    fumbleLost = models.BooleanField(default = False)
+    returnTypes = (
+        (1, "kickoff"),
+        (2, "punt"),
+        (3, "fieldGoal"),
+        (4, "interception"),
+        (5, "fumbleRecovery"),
+    )
+    returnType = models.SmallIntegerField(choices = returnTypes, default = 1)
+
+class kickerFgStatSplit(playerPlayParticipant):
+    isPointAfterAttempt = models.BooleanField(default = False)
+    attemptDistance = models.SmallIntegerField(blank = True, null = True)
+    kickMade = models.BooleanField(default = False)
+
+class punterStatSplit(playerPlayParticipant):
+    puntYards = models.SmallIntegerField(blank = True, null = True)
+    isTouchBack = models.BooleanField(default = False)
+
+class defenderStatSplit(playerPlayParticipant):
+    tackle = models.SmallIntegerField(blank = True, null = True)
+    soloTackle = models.BooleanField(default = False)
+    sack = models.BooleanField(default = False)
+    tackleForLoss = models.BooleanField(default = False)
+    intercepted = models.BooleanField(default = False)
+    fumbleForced = models.BooleanField(default = False)
+    fumbleRecovered = models.BooleanField(default = False)
+    passDefended = models.BooleanField(default = False)
+    hitOpposingQB = models.BooleanField(default = False)
+
+class penalizedStatSplit(playerPlayParticipant):
+    penaltyYards = models.SmallIntegerField(blank = True, null = True)
+    
 
 
 class nflMatchOdds(models.Model):
