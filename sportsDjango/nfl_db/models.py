@@ -333,6 +333,9 @@ class playByPlay(models.Model):
     secondsRemainingInPeriod = models.SmallIntegerField(null=True, blank=True)
     sequenceNumber = models.IntegerField(null=True, blank=True)
 
+
+#-------Player Models-------#
+
 class player(models.Model):
     espnId = models.IntegerField(unique = True)
     name = models.CharField(max_length = 60, default = "-")
@@ -528,7 +531,7 @@ class defenderStatSplit(playerPlayParticipant):
 class penalizedStatSplit(playerPlayParticipant):
     penaltyYards = models.SmallIntegerField(blank = True, null = True)
     
-
+#-------Odds Models-------#
 
 class nflMatchOdds(models.Model):
     nflMatch                            = models.ForeignKey(nflMatch, on_delete = models.CASCADE)

@@ -309,7 +309,7 @@ def getPlayers(request):
                     rosterData = responseData['athletes']
 
                     for subsection in rosterData:
-                        players.createPlayerAthletesFromTeamRoster(subsection, teamId)
+                        players.updatePlayerAthletesFromTeamRoster(subsection, teamId)
 
 
                     playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')

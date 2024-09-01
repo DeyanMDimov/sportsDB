@@ -88,6 +88,87 @@ def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
     print("Successfully loaded player w/ ESPN ID: " + str(playerObj.espnId) + " - " + playerObj.name)
 
     return playerObj
+
+def updatePlayerAthletesFromTeamRoster(rosterData, teamId):
+    
+    athlete_ids = []
+
+    for athlete in rosterData['items']:
+        athlete_ids.append(athlete['id'])
+        playerObj = None
+        try:
+            playerObj = player.objects.get(espnId = athlete['id'])
+        except:
+            pass
+        
+        
+        if playerObj == None:
+            playerObj = player.objects.create(
+                    espnId = athlete['id'],
+                    name = athlete['displayName'],
+                    firstSeason = getFirstSeasonYear(athlete['experience']['years']),
+                    team = nflTeam.objects.get(espnId = teamId),
+                    playerHeightInches = athlete['height'],
+                    playerWeightPounds = athlete['weight'],
+                    playerPosition = getAthletePosition(athlete['position']['abbreviation']), 
+                    sideOfBall = getAthleteSideOfBall(athlete['position'])
+                )
+            
+
+            if athlete['experience']['years'] == 0:
+                playerTeamTenure.objects.create(
+                    player = playerObj,
+                    team = nflTeam.objects.get(espnId = teamId),
+                    startDate = datetime(2024, 9, 8)
+                )
+                print("Player tenure created for ROOKIE.")
+            print("Successfully loaded player " + str(playerObj.espnId))
+
+        else:
+            print("Player " + str(playerObj.espnId) + " already in system.")
+            playerObj.firstSeason = getFirstSeasonYear(athlete['experience']['years'])
+            currentPlayerTeam = nflTeam.objects.get(espnId = teamId)
+            
+            if playerObj.team != currentPlayerTeam:
+                updatePlayerTenure(playerObj, teamId)   
+                playerObj.team = currentPlayerTeam
+                playerObj.save()    
+
+            latestPlayerTenure = None
+            latestPlayerTenureList = playerTeamTenure.objects.filter(player = playerObj, endDate = None)
+            
+            if len(latestPlayerTenureList) != 0:
+                latestPlayerTenure = latestPlayerTenureList[0]
+            else:
+                latestPlayerTenureList = playerTeamTenure.objects.filter(player = playerObj).order_by('-endDate')
+                if len(latestPlayerTenureList) != 0:
+                    latestPlayerTenure = latestPlayerTenureList[0]
+                
+            if latestPlayerTenure != None:
+                latestplayerTenureTeam = latestPlayerTenure.team
+                if latestplayerTenureTeam.espnId != teamId:
+                    #latestPlayerTenure.endDate = datetime(2024, 2, 12)
+                    playerTeamTenure.objects.create(
+                            player = playerObj,
+                            team = nflTeam.objects.get(espnId = teamId),
+                            startDate = datetime(2024, 9, 1)
+                    )
+           
+
+            playerTenures = playerTeamTenure.objects.filter(player = playerObj)
+            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2024, playerTenures))
+            if athlete['experience']['years'] == 0:    
+                if len(list(currentSeasonTenures)) == 0:
+                    playerTeamTenure.objects.create(
+                        player = playerObj,
+                        team = nflTeam.objects.get(espnId = teamId),
+                        startDate = datetime(2024, 9, 8)
+                    )
+                    print()
+                    print("Player tenure created for rookie.")
+                    print()
+            else:
+               getPlayerTenures(playerObj)
     
 def getPlayerTenures(playerObj):
     yearToStart = playerObj.firstSeason
@@ -174,6 +255,38 @@ def getPlayerTenures(playerObj):
             print(e)
     else: 
         return
+
+def updatePlayerTenure(playerObj, teamId):
+    latestPlayerTenure = None
+    latestPlayerTenureList = playerTeamTenure.objects.filter(player = playerObj, endDate = None)
+
+    if len(latestPlayerTenureList) != 0:
+        latestPlayerTenure = playerTeamTenure.objects.filter(player = playerObj, endDate = None)[0]
+    else:
+        latestPlayerTenure = playerTeamTenure.objects.filter(player = playerObj).order_by('-endDate')[0]
+
+    if len(latestPlayerTenure) != 0:
+        playerTenureTeam = latestPlayerTenure.team
+
+        lastPlayerStatus = playerWeekStatus.objects.filter(player = playerObj, team = playerTenureTeam).order_by('-yearOfSeason', '-weekOfSeason')[0]
+
+        if lastPlayerStatus.weekOfSeason == 18:
+            latestPlayerTenure.endDate = datetime(2024, 2, 12)
+        else:    
+            lastDayOfSeasonWeek = nflMatch.objects.filter(weekOfSeason = lastPlayerStatus.weekOfSeason).order_by('-date')[0].date
+            latestPlayerTenure.endDate = lastDayOfSeasonWeek
+        latestPlayerTenure.save()
+
+        if teamId != None:
+            playerTeamTenure.objects.create(
+                        player = playerObj,
+                        team = nflTeam.objects.get(espnId = teamId),
+                        startDate = datetime.now().date
+                    )
+
+    
+
+
 
 def getAthletePosition(abbreviation):
     if abbreviation == "QB":

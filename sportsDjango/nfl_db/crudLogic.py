@@ -1784,6 +1784,8 @@ def getCurrentWeekAthletesStatus(teamId):
         for athlete in subsection['items']:
             playerObj = None
             thisPlayerWeekStatus = None
+            alreadyCapturedPlayerWeekStatus = None
+
             try:
                 playerObj = player.objects.get(espnId = athlete['id'])
                 countOfPlayers += 1
@@ -1796,29 +1798,47 @@ def getCurrentWeekAthletesStatus(teamId):
                 except Exception as e: 
                     print("No player status for today yet.")
 
+                try:
+                    alreadyCapturedPlayerWeekStatus = playerWeekStatus.objects.get(player = playerObj, weekOfSeason = currentWeekOfSeason, yearOfSeason = currentYear, reportDate = (currentDate - timedelta(days=1)))
+                except Exception as e:
+                    pass
+                
+                thisPlayerWeekStatusDict = {}
                 if thisPlayerWeekStatus == None:
-                    thisPlayerWeekStatus = playerWeekStatus.objects.create(
-                        player = playerObj,
-                        weekOfSeason = currentWeekOfSeason,
-                        yearOfSeason = currentYear
-                    )
-                    thisPlayerWeekStatus.team = nflTeam.objects.get(espnId = teamId)
-                    thisPlayerWeekStatus.reportDate = currentDate
+                    # thisPlayerWeekStatus = playerWeekStatus.objects.create(
+                    #     player = playerObj,
+                    #     weekOfSeason = currentWeekOfSeason,
+                    #     yearOfSeason = currentYear
+                    # )
+                    # thisPlayerWeekStatus.team = nflTeam.objects.get(espnId = teamId)
+                    # thisPlayerWeekStatus.reportDate = currentDate
+
+                    thisPlayerWeekStatusDict['player'] = playerObj
+                    thisPlayerWeekStatusDict['weekOfSeason'] = currentWeekOfSeason
+                    thisPlayerWeekStatusDict['yearOfSeason'] = currentYear
+                    thisPlayerWeekStatusDict['team'] = nflTeam.objects.get(espnId = teamId)
+                    thisPlayerWeekStatusDict['reportDate'] = currentDate
+                        
                 if 'injuries' in athlete:
                     if len(athlete['injuries']) != 0:
                         if 'status' in athlete['injuries'][0]:
                             if athlete['injuries'][0]['status'] == "Injured Reserve":
-                                thisPlayerWeekStatus.playerStatus = 6
+                                # thisPlayerWeekStatus.playerStatus = 6
+                                thisPlayerWeekStatusDict['playerStatus'] = 6
                             elif athlete['injuries'][0]['status'] == "Out":
-                                thisPlayerWeekStatus.playerStatus = 4
+                                # thisPlayerWeekStatus.playerStatus = 4
+                                thisPlayerWeekStatusDict['playerStatus'] = 4
                             elif athlete['injuries'][0]['status'] == "Questionable":
-                                thisPlayerWeekStatus.playerStatus = 2
+                                # thisPlayerWeekStatus.playerStatus = 2
+                                thisPlayerWeekStatusDict['playerStatus'] = 2
                             elif athlete['injuries'][0]['status'] == "Doubtful":
-                                thisPlayerWeekStatus.playerStatus = 3
+                                # thisPlayerWeekStatus.playerStatus = 3
+                                thisPlayerWeekStatusDict['playerStatus'] = 3
                     else:
                         if 'status' in athlete:
                             if athlete['status']['id'] == '1':
-                                thisPlayerWeekStatus.playerStatus = 1
+                                # thisPlayerWeekStatus.playerStatus = 1
+                                thisPlayerWeekStatusDict['playerStatus'] = 1
                             else:
                                 print("Player w/ ID: " + str(playerObj.espnId) + " has an unexpected status. Status ID: " + str(athlete['status']['id']) + "  Status Name: " + athlete['status']['name'])
                                 athleteJSON = athlete
@@ -1827,11 +1847,34 @@ def getCurrentWeekAthletesStatus(teamId):
                 else:
                     if 'status' in athlete:
                             if athlete['status']['id'] == '1':
-                                thisPlayerWeekStatus.playerStatus = 1
+                                # thisPlayerWeekStatus.playerStatus = 1
+                                thisPlayerWeekStatusDict['playerStatus'] = 1
 
                     
+                if alreadyCapturedPlayerWeekStatus != None:
+                    if alreadyCapturedPlayerWeekStatus.playerStatus != thisPlayerWeekStatusDict['playerStatus']:
+                        thisPlayerWeekStatus = playerWeekStatus.objects.create(
+                            player = thisPlayerWeekStatusDict['player'],
+                            weekOfSeason = thisPlayerWeekStatusDict['weekOfSeason'],
+                            yearOfSeason = thisPlayerWeekStatusDict['yearOfSeason'],
+                            team = thisPlayerWeekStatusDict['team'],
+                            reportDate = currentDate,
+                            playerStatus = thisPlayerWeekStatusDict['playerStatus']
+                        )
+                        thisPlayerWeekStatus.save()
+                        
+                else:
+                    thisPlayerWeekStatus = playerWeekStatus.objects.create(
+                            player = thisPlayerWeekStatusDict['player'],
+                            weekOfSeason = thisPlayerWeekStatusDict['weekOfSeason'],
+                            yearOfSeason = thisPlayerWeekStatusDict['yearOfSeason'],
+                            team = thisPlayerWeekStatusDict['team'],
+                            reportDate = currentDate,
+                            playerStatus = thisPlayerWeekStatusDict['playerStatus']
+                        )
+                    thisPlayerWeekStatus.save()
 
-                thisPlayerWeekStatus.save()
+
 
             else:
                 print("PlayerObj not found in system. Player ID: " + str(athlete['id']) + " Details: ")
