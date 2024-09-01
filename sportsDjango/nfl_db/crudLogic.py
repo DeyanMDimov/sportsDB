@@ -1721,19 +1721,22 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
 def scheduledInjuryPull():
     thisDayUTC = datetime.now()
     
-    utc_zone = ZoneInfo('UTC')
-    central_zone = ZoneInfo('America/Chicago')  
+    if thisDayUTC.month >= 8 or thisDayUTC.month <= 2:
+        utc_zone = ZoneInfo('UTC')
+        central_zone = ZoneInfo('America/Chicago')  
 
-    thisDayUTC = thisDayUTC.replace(tzinfo = utc_zone)
+        thisDayUTC = thisDayUTC.replace(tzinfo = utc_zone)
 
-    thisDay = thisDayUTC.astimezone(central_zone)
+        thisDay = thisDayUTC.astimezone(central_zone)
 
-    if (thisDay.weekday() == 6 and (thisDay.hour == 12 or thisDay.hour == 15 or thisDay.hour == 19)) or thisDayUTC.hour == 16:
-        activeTeams = nflTeam.objects.all()
-        for team in activeTeams:
-            getCurrentWeekAthletesStatus(team.espnId)
+        if (thisDay.weekday() == 6 and (thisDay.hour == 12 or thisDay.hour == 15 or thisDay.hour == 19)) or thisDayUTC.hour == 16:
+            activeTeams = nflTeam.objects.all()
+            for team in activeTeams:
+                getCurrentWeekAthletesStatus(team.espnId)
+        else:
+            print("Ran at " + str(thisDay.hour) + ":" + str(thisDay.minute) + " and did not pull the injuries as it was not the right time.")
     else:
-        print("Ran at " + str(thisDay.hour) + ":" + str(thisDay.minute) + " and did not pull the injuries as it was not the right time.") 
+        pass 
     
 
     

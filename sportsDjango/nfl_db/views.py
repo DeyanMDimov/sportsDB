@@ -287,6 +287,7 @@ def getPlayers(request):
     weeksOnPage = weeksOnPage_Helper()
     weeksOnPage.insert(0, ["100", "ALL"])
     
+    
 
     pageDictionary = {}
     pageDictionary['weeks'] = weeksOnPage
@@ -294,6 +295,7 @@ def getPlayers(request):
     pageDictionary['teams'] = nflTeams
 
     if(request.method == 'GET'):
+        
         if 'teamName' in request.GET and 'season' in request.GET:
                 inputReq = request.GET
                 yearOfSeason = inputReq['season'].strip()
@@ -325,7 +327,8 @@ def getPlayers(request):
         elif 'position' in request.GET:
             inputReq = request.GET
             selectedPosition = inputReq['position'].strip()
-
+            listAllStatus = len(playerWeekStatus.objects.all())
+            print(listAllStatus)
             playersLoaded = sorted(player.objects.filter(playerPosition = selectedPosition), key = lambda x: x.team.abbreviation)
 
             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'allPlayers': playersLoaded})
