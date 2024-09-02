@@ -347,7 +347,7 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
         matchData.homeTeam.add(models.nflTeam.objects.get(espnId=homeTeamEspnId))
         matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
         
-        if len(oddsData['items']) >= 2:
+        if len(oddsData['items']) >= 1:
             if seasonYear == 2024:
                 for i in range(1, len(oddsData['items'])):
                     if oddsData[i]['provider']['name'] == "ESPN BET":
@@ -379,7 +379,7 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
         matchData.save()    
     else:
         matchData = nflMatchObject
-        if len(oddsData['items']) >= 2:
+        if len(oddsData['items']) >= 1:
             if int(seasonYear) == 2024:
                 
 
@@ -388,7 +388,8 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
                     if oddsData['items'][i]['provider']['name'] == "ESPN BET":
                         print()
                         print("Odds Data from ESPN BET for " + homeTeamAbrv + " vs. " + awayTeamAbrv)
-                        print(oddsData['items'][i])
+                        print(oddsData['items'][i]['$ref'])
+                        #print(oddsData['items'][i])
                         print()
 
                         if 'spread' in oddsData['items'][i]:
@@ -2031,7 +2032,7 @@ def createOrUpdateFinishedNflMatch_old(nflMatchObject, gameData, gameCompleted, 
             exceptionThrown = True
             exceptions.append([problem_text, gameData])
         
-        if len(oddsData['items']) > 2:
+        if len(oddsData['items']) >= 1:
             if seasonYear == 2024:
                 for i in range(1, len(oddsData['items'])):
                     if oddsData[i]['provider']['name'] == "ESPN BET":
