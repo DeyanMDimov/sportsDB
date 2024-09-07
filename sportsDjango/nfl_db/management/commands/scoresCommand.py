@@ -14,4 +14,4 @@ class Command(BaseCommand):
             
         except Exception as e:
             CommandError(repr(e))
-            print("Error: " + e)
+            print("Error: " + str(e))

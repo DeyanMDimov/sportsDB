@@ -2,6 +2,7 @@ from nfl_db import models, players
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
 from django.db import IntegrityError
 from datetime import datetime, date, time, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 import json, requests, traceback
 
