@@ -1243,11 +1243,14 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
         playObject = playByPlay.objects.get(espnId = individualPlay['id'])
     except:
         pass
+    
+
+    
     try:
         playType = setPlayType(individualPlay['type']['text'], individualPlay)
     except:
         print(individualPlay['$ref'])
-        setPlayType("Unknown", individualPlay)
+        playType = setPlayType("Unknown", individualPlay)
         
         
         
