@@ -40,16 +40,24 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
     try:
         existingMatch = nflMatch.objects.get(espnId = matchEspnId)
     except Exception as e:
+        print("Match ID: " + str(matchEspnId))
+        print("Home Team ID: " + str(homeTeamEspnId))
         print(e)
 
     try:
         existingHomeTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = homeTeamEspnId)
     except Exception as e:
+        print("Match ID: " + str(matchEspnId))
+        print("Home Team ID: " + str(homeTeamEspnId))
         print(e)
 
     try:    
         existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
     except Exception as e:
+        print("Match ID: " + str(matchEspnId))
+
+        print("Away Team ID: " + str(awayTeamEspnId))
+
         print(e)                        
 
     if datetime.now()<dateOfGame or gameCompleted==False:
@@ -210,8 +218,8 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
     matchData.awayTeamFGAllowed             = mappedHomeTeamStats['scoring']['fieldGoals']
     matchData.awayTeamSpecialTeamsPointsScored  = mappedAwayTeamStats['scoring']['kickExtraPoints']
     matchData.awayTeamDefensePointsScored       = int((mappedAwayTeamStats['defensiveInterceptions']['interceptionTouchdowns']+mappedAwayTeamStats['general']['defensiveFumblesTouchdowns'])*6)
-        
-    
+   
+
     theHomeTeam = models.nflTeam.objects.get(espnId=homeTeamEspnId)
     matchData.homeTeam.add(theHomeTeam)
 
@@ -287,6 +295,8 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
             except Exception as e:
                 tback = traceback.extract_tb(e.__traceback__)
                 problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+                print("Odds problem ")
+                print(problem_text)
                 exceptionThrown = True
                 exceptions.append([problem_text, oddsData])
 
@@ -299,14 +309,14 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
     except Exception as e:
         tback = traceback.extract_tb(e.__traceback__)
         problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+        print("Drives problem ")
+        print(problem_text)
         exceptions.append([problem_text, drivesPage])
         exceptionThrown = True
 
     
     if exceptionThrown:
         raise Exception(exceptions)
-
-   
 
     matchData.save()    
 
@@ -435,6 +445,7 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
     mappedOpponentStats = teamStatsJsonMap(opponentStats)
     
     if existingTeamPerformance == None:
+        
         teamPerf = teamMatchPerformance.objects.create(
             matchEspnId     = matchEspnId,
             teamEspnId      = teamId,
@@ -612,6 +623,7 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         existingTeamPerformance.totalTouchdownsScored   = mappedTeamStats['passing']['totalTouchdowns']
         existingTeamPerformance.totalPenalties          = mappedTeamStats['miscellaneous']['totalPenalties']
         existingTeamPerformance.totalPenaltyYards       = mappedTeamStats['miscellaneous']['totalPenaltyYards']
+
         #-----offense
         existingTeamPerformance.totalYardsGained            = mappedTeamStats['passing']['totalYards']
         #totalExplosivePlays         = 
@@ -648,6 +660,7 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         existingTeamPerformance.passingFumblesLost          = mappedTeamStats['passing']['passingFumblesLost']
         existingTeamPerformance.rushingFumbles              = mappedTeamStats['rushing']['rushingFumbles']
         existingTeamPerformance.rushingFumblesLost          = mappedTeamStats['rushing']['rushingFumblesLost']
+
         #-----defense
         # totalPointsAllowed              = 
         # totalYardsAllowedByDefense      = 
@@ -680,6 +693,7 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         
         #opponentPinnedInsideTen     = 
         #opponentPinnedInsideFive    = 
+
         #-----scoring
         existingTeamPerformance.passingTouchdowns           = mappedTeamStats['passing']['passingTouchdowns']
         existingTeamPerformance.rushingTouchdowns           = mappedTeamStats['rushing']['rushingTouchdowns']
@@ -688,6 +702,7 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         existingTeamPerformance.fieldGoalsMade              = mappedTeamStats['kicking']['fieldGoalsMade']
         existingTeamPerformance.extraPointAttempts          = mappedTeamStats['kicking']['extraPointAttempts']
         existingTeamPerformance.extraPointsMade             = mappedTeamStats['kicking']['extraPointsMade']
+
         #-----down and distance
         existingTeamPerformance.firstDowns                  = mappedTeamStats['miscellaneous']['firstDowns']
         existingTeamPerformance.firstDownsRushing           = mappedTeamStats['miscellaneous']['firstDownsRushing']
@@ -697,6 +712,7 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         existingTeamPerformance.thirdDownConvs              = mappedTeamStats['miscellaneous']['thirdDownConvs']
         existingTeamPerformance.fourthDownAttempts          = mappedTeamStats['miscellaneous']['fourthDownAttempts']
         existingTeamPerformance.fourthDownConvs             = mappedTeamStats['miscellaneous']['fourthDownConvs']
+
         #drivePinnedInsideTen        = 
         #drivePinnedInsideFive       = 
         # rushPctFirstDown            = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
@@ -709,8 +725,17 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         # passPctThirdDown            = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
         # completionPctThirdDown      = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
         #miscellaneous
-        existingTeamPerformance.twoPtReturns                = mappedTeamStats['defensive']['twoPtReturns']
-        existingTeamPerformance.onePtSafetiesMade           = mappedTeamStats['defensive']['onePtSafetiesMade']
+
+        if 'twoPtReturns' in mappedTeamStats['defensive']:
+            existingTeamPerformance.twoPtReturns                = mappedTeamStats['defensive']['twoPtReturns']
+        else:
+            existingTeamPerformance.twoPtReturns                = 0
+
+        if 'onePtSafetiesMade' in mappedTeamStats['defensive']:
+            existingTeamPerformance.onePtSafetiesMade           = mappedTeamStats['defensive']['onePtSafetiesMade']
+        else:
+            existingTeamPerformance.onePtSafetiesMade           = 0
+        
         
         
         nflMatchInstance = models.nflMatch.objects.get(espnId=matchEspnId)
@@ -720,7 +745,7 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
         existingTeamPerformance.nflMatch.add(nflMatchInstance)
         existingTeamPerformance.team.add(associatedTeamObject)
         existingTeamPerformance.opponent.add(opponentTeamObject)
-
+    
         if 'punting' in mappedTeamStats:
             existingTeamPerformance.totalPunts = mappedTeamStats['punting']['punts']
         else:
@@ -740,23 +765,30 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             existingTeamPerformance.qbHitsTaken = mappedOpponentStats['defensive']['QBHits']
         else:
             existingTeamPerformance.qbHitsTaken = 0
-        
+ 
         
         
 
-
+        
         if associatedTeamObject.espnId == nflMatchInstance.homeTeamEspnId:
-            existingTeamPerformance.totalPointsAllowed             = nflMatchInstance.awayTeamPoints
-            existingTeamPerformance.totalPointsAllowedByDefense    = nflMatchInstance.awayTeamPoints-nflMatchInstance.awayTeamDefensePointsScored
-            existingTeamPerformance.totalYardsAllowedByDefense     = nflMatchInstance.homeTeamYardsAllowed
-            existingTeamPerformance.totalPassYardsAllowed          = nflMatchInstance.homeTeamReceivingYardsAllowed
-            existingTeamPerformance.totalRushYardsAllowed          = nflMatchInstance.homeTeamRushYardsAllowed
-            existingTeamPerformance.totalExplosivePlays            = nflMatchInstance.homeTeamExplosivePlays
-            existingTeamPerformance.totalTakeaways                 = nflMatchInstance.homeTeamTakeaways
-            if nflMatchInstance.neutralStadium == True:
-                existingTeamPerformance.atHome = False
-            else:
-                existingTeamPerformance.atHome = True
+            try:
+
+                existingTeamPerformance.totalPointsAllowed             = nflMatchInstance.awayTeamPoints
+                existingTeamPerformance.totalPointsAllowedByDefense    = nflMatchInstance.awayTeamPoints-nflMatchInstance.awayTeamDefensePointsScored
+                existingTeamPerformance.totalYardsAllowedByDefense     = nflMatchInstance.homeTeamYardsAllowed
+                existingTeamPerformance.totalPassYardsAllowed          = nflMatchInstance.homeTeamReceivingYardsAllowed
+                existingTeamPerformance.totalRushYardsAllowed          = nflMatchInstance.homeTeamRushYardsAllowed
+                existingTeamPerformance.totalExplosivePlays            = nflMatchInstance.homeTeamExplosivePlays
+                existingTeamPerformance.totalTakeaways                 = nflMatchInstance.homeTeamTakeaways
+                if nflMatchInstance.neutralStadium == True:
+                    existingTeamPerformance.atHome = False
+                else:
+                    existingTeamPerformance.atHome = True
+            except:
+                print("This has to be it")
+                print(nflMatchInstance.awayTeamPoints)
+                print(nflMatchInstance.awayTeamDefensePointsScored)
+
         elif associatedTeamObject.espnId == nflMatchInstance.awayTeamEspnId:
             existingTeamPerformance.totalPointsAllowed             = nflMatchInstance.homeTeamPoints
             existingTeamPerformance.totalPointsAllowedByDefense    = nflMatchInstance.homeTeamPoints-nflMatchInstance.homeTeamDefensePointsScored
@@ -766,8 +798,8 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             existingTeamPerformance.totalExplosivePlays            = nflMatchInstance.awayTeamExplosivePlays
             existingTeamPerformance.totalTakeaways                 = nflMatchInstance.awayTeamTakeaways
             existingTeamPerformance.atHome = False
-
-        existingTeamPerformance.save()
+            existingTeamPerformance.save()
+        
         #print()
         #print("Team Perf saved. MatchID: " + str(existingTeamPerformance.matchEspnId) + " Team ID: " + str(existingTeamPerformance.teamEspnId))
 
@@ -1211,8 +1243,14 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
         playObject = playByPlay.objects.get(espnId = individualPlay['id'])
     except:
         pass
-    
-    playType = setPlayType(individualPlay['type']['text'], individualPlay)
+    try:
+        playType = setPlayType(individualPlay['type']['text'], individualPlay)
+    except:
+        print(individualPlay['$ref'])
+        setPlayType("Unknown", individualPlay)
+        
+        
+        
 
     if playType == 40:
         print("playType is other. playText is: " + individualPlay['text'])
@@ -2177,7 +2215,6 @@ def createOrUpdateFinishedNflMatch_old(nflMatchObject, gameData, gameCompleted, 
 
         #print("Oddsdata items count:" + str(len(oddsData['items'])))
         if len(oddsData['items']) > 2:
-            print(str(seasonYear)) 
             if seasonYear == 2024:
                 pass
                 # for i in range(1, len(oddsData['items'])):
