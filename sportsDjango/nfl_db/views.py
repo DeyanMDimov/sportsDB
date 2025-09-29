@@ -144,6 +144,7 @@ def getData(request):
             pageDictionary['end_week'] = endWeek
 
             exceptionCollection = []
+            exceptionStrings = []
 
             while i <= endWeek:
                 #time.sleep(1)
@@ -168,9 +169,11 @@ def getData(request):
                         crudLogic.processGameData(gameData, weekOfSeason, yearOfSeason)
                     except Exception as e:
                         print(e)
-                        for exceptionArray in e.args[0]:
-                            
-                            exceptionCollection.append(exceptionArray)
+                        for exceptionObj in e.args[0]:
+                            if type(exceptionObj) == str:
+                                exceptionStrings.append(exceptionObj)
+                            else:
+                                exceptionCollection.append(exceptionObj)
 
                             
                 
@@ -183,7 +186,8 @@ def getData(request):
             pageDictionary['message'] = message
            
             if len(exceptionCollection) > 0:
-                pageDictionary['exceptions'] = exceptionCollection
+                pageDictionary['exceptionStrings'] = exceptionStrings
+                pageDictionary['exceptionArrays'] = exceptionCollection
                 print("There were exceptions.")
             
             return render (request, 'nfl/pullData.html', pageDictionary)

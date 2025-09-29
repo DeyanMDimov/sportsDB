@@ -69,8 +69,15 @@
         </div>
         <div>
             <h4>{{ message }}</h4>
-            {% if exceptions %}
-                {% for ex in exceptions%}
+            {% if exceptionStrings %}
+                {% for ex in exceptionArrays%}
+                    <div class="pull_data_exception">
+                        <h5>{{ex}}</h5>
+                    </div>
+                {%endfor%}
+            {%endif%}
+            {% if exceptionArrays %}
+                {% for ex in exceptionArrays%}
                     <div class="pull_data_exception accordion" id="accordion{{ex.3}}">
                         <button class="collapsed btn btn-block" type="button" data-toggle="collapse" data-target="#collapse{{ex.3}}" aria-expanded="true" aria-controls="collapse{{ex.3}}" style="margin-left:0px">
                                        
