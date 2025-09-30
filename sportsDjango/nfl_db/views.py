@@ -1154,7 +1154,7 @@ def populatePlayStatSplits(play, yearOfSeason):
         # Fetch play participant data from ESPN API
         if play.espnId:
             play_url = f'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{play.nflMatch.espnId}/competitions/{play.nflMatch.espnId}/plays/{play.espnId}'
-            
+            print(play_url)
             try:
                 response = requests.get(play_url)
                 if response.status_code == 200:
@@ -1501,6 +1501,8 @@ def getTouchdowns(request):
                     offenseScored=True
                 ).exclude(playType__in=[5, 6, 7, 8, 9, 10, 11, 12])  # Exclude PAT and 2PT conversions
                 
+                print("Number of Touchdown plays:", len(tdPlays))
+
                 for play in tdPlays:
                     tdInfo = {
                         'week': match.weekOfSeason,
