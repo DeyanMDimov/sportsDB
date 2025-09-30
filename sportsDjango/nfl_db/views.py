@@ -3,6 +3,7 @@ from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 import json
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
+from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit
 from django.db import models
 from nfl_db import businessLogic, crudLogic, players
 import datetime, time, requests, traceback
