@@ -1100,10 +1100,12 @@ def getPlays(request):
                 drives = sorted(drives, key=lambda x: x.sequenceNumber)
                 result_drives_array = []
                 
+                print("Number of drives:", len(drives))
                 for s_drive in drives:
                     plays = playByPlay.objects.filter(driveOfPlay=s_drive)
                     result_plays_array = []
                     
+                    print("Number of plays in drive:", len(plays))
                     for play in plays:
                         # Populate stat splits for this play if not already done
                         populatePlayStatSplits(play, yearOfSeason)
