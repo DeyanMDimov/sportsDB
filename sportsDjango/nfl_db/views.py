@@ -1117,12 +1117,13 @@ def populatePlayStatSplits(play, yearOfSeason):
     try:
         # Skip if already populated
         existing_splits = (
-            passerStatSplit.objects.filter(play=play).exists() or
             rusherStatSplit.objects.filter(play=play).exists() or
-            receiverStatSplit.objects.filter(play=play).exists()
+            (passerStatSplit.objects.filter(play=play).exists() and
+            receiverStatSplit.objects.filter(play=play).exists())
         )
         
         if existing_splits:
+            print("Splits exist... uhh What")
             return
         
         # Only process relevant play types
