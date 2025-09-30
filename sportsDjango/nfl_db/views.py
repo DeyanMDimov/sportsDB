@@ -1063,16 +1063,40 @@ def getPlays(request):
     pageDictionary['teams'] = nflTeams
 
     if request.method == 'GET':
-        if 'week' in request.GET:
+        if 'week' in request.GET and 'team' in request.GET:
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = int(inputReq['week'].strip())
+            selectedTeamAbbr = inputReq['team'].strip()
             
-            matches = nflMatch.objects.filter(weekOfSeason=weekOfSeason, yearOfSeason=yearOfSeason)
+            # Filter matches based on team selection
+            if selectedTeamAbbr == "ALL":
+                matches = nflMatch.objects.filter(
+                    weekOfSeason=weekOfSeason, 
+                    yearOfSeason=yearOfSeason
+                )
+                selectedTeam = None
+            else:
+                selectedTeam = nflTeam.objects.get(abbreviation=selectedTeamAbbr)
+                teamId = selectedTeam.espnId
+                
+                # Get matches where the selected team is either home or away
+                matches = nflMatch.objects.filter(
+                    weekOfSeason=weekOfSeason,
+                    yearOfSeason=yearOfSeason
+                ).filter(
+                    models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
+                )
+            
             resultArray = []
             
             for s_match in matches:
                 drives = driveOfPlay.objects.filter(nflMatch=s_match)
+                
+                # If a specific team is selected, filter drives to only show that team's offensive drives
+                if selectedTeam:
+                    drives = drives.filter(teamOnOffense=selectedTeam)
+                
                 drives = sorted(drives, key=lambda x: x.sequenceNumber)
                 result_drives_array = []
                 
@@ -1096,19 +1120,14 @@ def getPlays(request):
                 
                 resultArray.append([s_match, result_drives_array])
             
-            return render(request, 'nfl/plays.html', {
-                "teams": nflTeams, 
-                'years': yearsOnPage, 
-                'weeks': weeksOnPage, 
-                'resultArray': resultArray, 
-                'weekNum': weekOfSeason
-            })
+            pageDictionary['resultArray'] = resultArray
+            pageDictionary['weekNum'] = weekOfSeason
+            pageDictionary['selectedTeam'] = selectedTeamAbbr
+            pageDictionary['selectedYear'] = yearOfSeason
+            
+            return render(request, 'nfl/plays.html', pageDictionary)
         else:
-            return render(request, 'nfl/plays.html', {
-                "teams": nflTeams, 
-                'years': yearsOnPage, 
-                'weeks': weeksOnPage
-            })
+            return render(request, 'nfl/plays.html', pageDictionary)
 
 def populatePlayStatSplits(play, yearOfSeason):
     """
