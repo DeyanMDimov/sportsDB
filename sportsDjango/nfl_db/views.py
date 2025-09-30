@@ -307,7 +307,7 @@ def getPlayers(request):
                 selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
                 teamId = selectedTeam.espnId
                 
-                if yearOfSeason == '2024':
+                if yearOfSeason == '2025':
                     url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
                     response = requests.get(url)
                     responseData = response.json()
@@ -957,11 +957,103 @@ def playerSignificance(request):
 
         return JsonResponse({}, status="200")
 
+# def getPlays(request):
+#     nflTeams = nflTeam.objects.all().order_by('abbreviation')
+
+#     yearsOnPage = yearsOnPage_Helper()
+
+#     weeksOnPage = weeksOnPage_Helper()
+#     weeksOnPage.insert(0, ["100", "ALL"])
+
+#     pageDictionary = {}
+#     pageDictionary['weeks'] = weeksOnPage
+#     pageDictionary['years'] = yearsOnPage
+#     pageDictionary['teams'] = nflTeams
+
+#     if(request.method == 'GET'):
+#         if 'teamName' in request.GET and 'season' in request.GET:
+#                 inputReq = request.GET
+#                 yearOfSeason = inputReq['season'].strip()
+#                 selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
+#                 teamId = selectedTeam.espnId
+                
+#                 if yearOfSeason == '2025':
+#                     url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
+#                     response = requests.get(url)
+#                     responseData = response.json()
+#                     rosterData = responseData['athletes']
+
+#                     for subsection in rosterData:
+#                         players.createPlayerAthletesFromTeamRoster(subsection, teamId)
+
+
+#                     playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
+
+#                     playerTenuresLoaded = []
+#                     for pl in playersLoaded:
+#                         individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
+#                         for ipt in individualPlayerTenures:
+#                             playerTenuresLoaded.append(ipt)
+                    
+#                     # print(playerTenuresLoaded)
+
+#                     return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'selTeam': selectedTeam, 'players': playersLoaded, 'season': inputReq['season'], 'tenures': playerTenuresLoaded})
+
+#         elif 'week' in request.GET:
+#             inputReq = request.GET
+#             yearOfSeason = inputReq['season'].strip()
+#             weekOfSeason = int(inputReq['week'].strip())
+            
+                
+            
+#             # if 'team' in inputReq:
+
+#             #     selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
+#             #     teamId = selectedTeam.espnId
+#             #     selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
+#             #     if(len(selectedMatchQuerySet) == 0):
+#             #         selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
+#             #         if(len(selectedMatchQuerySet) == 0):
+#             #             responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
+#             #             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
+                
+#             #     selectedMatch = selectedMatchQuerySet[0]
+#             #     matchId = selectedMatch.espnId
+                
+#             #     gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
+#             #     gameRosterResponse = requests.get(gameRosterUrl)
+#             #     print(gameRosterUrl)
+#             #     gameRosterData = gameRosterResponse.json()
+
+#             #     athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
+
+#             #     # print(weekOfSeason)
+#             #     return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
+            
+#             matches = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason)
+#             resultArray = []
+#             for s_match in matches:
+#                 drives = driveOfPlay.objects.filter(nflMatch = s_match)
+#                 drives = sorted(drives, key=lambda x: x.sequenceNumber)
+#                 result_drives_array = []
+#                 for s_drive in drives:
+#                     plays = playByPlay.objects.filter(driveOfPlay = s_drive)
+#                     result_plays_array = []
+#                     for play in plays:
+#                         result_plays_array.append(play)
+#                     result_plays_array = sorted(result_plays_array, key=lambda x: x.sequenceNumber)
+#                     result_drives_array.append([s_drive, result_plays_array])
+#                 resultArray.append([s_match, result_drives_array])
+            
+#             return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'resultArray': resultArray, 'weekNum': weekOfSeason})
+#         else:
+            
+#             return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})    
+
+# CLAUDE CODE
 def getPlays(request):
     nflTeams = nflTeam.objects.all().order_by('abbreviation')
-
     yearsOnPage = yearsOnPage_Helper()
-
     weeksOnPage = weeksOnPage_Helper()
     weeksOnPage.insert(0, ["100", "ALL"])
 
@@ -970,85 +1062,376 @@ def getPlays(request):
     pageDictionary['years'] = yearsOnPage
     pageDictionary['teams'] = nflTeams
 
-    if(request.method == 'GET'):
-        if 'teamName' in request.GET and 'season' in request.GET:
-                inputReq = request.GET
-                yearOfSeason = inputReq['season'].strip()
-                selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
-                teamId = selectedTeam.espnId
-                
-                if yearOfSeason == '2024':
-                    url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
-                    response = requests.get(url)
-                    responseData = response.json()
-                    rosterData = responseData['athletes']
-
-                    for subsection in rosterData:
-                        players.createPlayerAthletesFromTeamRoster(subsection, teamId)
-
-
-                    playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
-
-                    playerTenuresLoaded = []
-                    for pl in playersLoaded:
-                        individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
-                        for ipt in individualPlayerTenures:
-                            playerTenuresLoaded.append(ipt)
-                    
-                    # print(playerTenuresLoaded)
-
-                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'selTeam': selectedTeam, 'players': playersLoaded, 'season': inputReq['season'], 'tenures': playerTenuresLoaded})
-
-        elif 'week' in request.GET:
+    if request.method == 'GET':
+        if 'week' in request.GET:
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = int(inputReq['week'].strip())
             
-                
-            
-            # if 'team' in inputReq:
-
-            #     selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
-            #     teamId = selectedTeam.espnId
-            #     selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
-            #     if(len(selectedMatchQuerySet) == 0):
-            #         selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
-            #         if(len(selectedMatchQuerySet) == 0):
-            #             responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
-            #             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
-                
-            #     selectedMatch = selectedMatchQuerySet[0]
-            #     matchId = selectedMatch.espnId
-                
-            #     gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
-            #     gameRosterResponse = requests.get(gameRosterUrl)
-            #     print(gameRosterUrl)
-            #     gameRosterData = gameRosterResponse.json()
-
-            #     athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
-
-            #     # print(weekOfSeason)
-            #     return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
-            
-            matches = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason)
+            matches = nflMatch.objects.filter(weekOfSeason=weekOfSeason, yearOfSeason=yearOfSeason)
             resultArray = []
+            
             for s_match in matches:
-                drives = driveOfPlay.objects.filter(nflMatch = s_match)
+                drives = driveOfPlay.objects.filter(nflMatch=s_match)
                 drives = sorted(drives, key=lambda x: x.sequenceNumber)
                 result_drives_array = []
+                
                 for s_drive in drives:
-                    plays = playByPlay.objects.filter(driveOfPlay = s_drive)
+                    plays = playByPlay.objects.filter(driveOfPlay=s_drive)
                     result_plays_array = []
+                    
                     for play in plays:
+                        # Populate stat splits for this play if not already done
+                        populatePlayStatSplits(play, yearOfSeason)
+                        
+                        # Get existing stat splits for display
+                        play.passer_stats = passerStatSplit.objects.filter(play=play).first()
+                        play.rusher_stats = rusherStatSplit.objects.filter(play=play).first()
+                        play.receiver_stats = receiverStatSplit.objects.filter(play=play).first()
+                        
                         result_plays_array.append(play)
+                    
                     result_plays_array = sorted(result_plays_array, key=lambda x: x.sequenceNumber)
                     result_drives_array.append([s_drive, result_plays_array])
+                
                 resultArray.append([s_match, result_drives_array])
             
-            return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'resultArray': resultArray, 'weekNum': weekOfSeason})
+            return render(request, 'nfl/plays.html', {
+                "teams": nflTeams, 
+                'years': yearsOnPage, 
+                'weeks': weeksOnPage, 
+                'resultArray': resultArray, 
+                'weekNum': weekOfSeason
+            })
         else:
+            return render(request, 'nfl/plays.html', {
+                "teams": nflTeams, 
+                'years': yearsOnPage, 
+                'weeks': weeksOnPage
+            })
+
+def populatePlayStatSplits(play, yearOfSeason):
+    """
+    Populate stat split models for a given play by fetching participant data from ESPN API
+    """
+    try:
+        # Skip if already populated
+        existing_splits = (
+            passerStatSplit.objects.filter(play=play).exists() or
+            rusherStatSplit.objects.filter(play=play).exists() or
+            receiverStatSplit.objects.filter(play=play).exists()
+        )
+        
+        if existing_splits:
+            return
+        
+        # Only process relevant play types
+        if play.playType not in [1, 2, 3, 4]:  # RUSH, COMPLETED PASS, INCOMPLETE PASS, SACK
+            return
+        
+        # Fetch play participant data from ESPN API
+        if play.espnId:
+            play_url = f'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{play.nflMatch.espnId}/competitions/{play.nflMatch.espnId}/plays/{play.espnId}'
             
-            return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})    
+            try:
+                response = requests.get(play_url)
+                if response.status_code == 200:
+                    play_data = response.json()
+                    
+                    # Process participants if available
+                    if 'participants' in play_data:
+                        processPlayParticipants(play, play_data['participants'], yearOfSeason)
+                    
+                    # Alternative: Parse from play description if participants not available
+                    elif play.playDescription:
+                        parsePlayDescription(play, yearOfSeason)
+                        
+            except Exception as e:
+                print(f"Error fetching play data for play {play.espnId}: {e}")
+                # Fallback to parsing play description
+                if play.playDescription:
+                    parsePlayDescription(play, yearOfSeason)
+        
+        # If no ESPN ID, try to parse from description
+        elif play.playDescription:
+            parsePlayDescription(play, yearOfSeason)
+            
+    except Exception as e:
+        print(f"Error populating stat splits for play {play.id}: {e}")
+
+def processPlayParticipants(play, participants_data, yearOfSeason):
+    """
+    Process participant data from ESPN API and create stat split records
+    """
+    for participant in participants_data:
+        try:
+            # Get athlete/player info
+            if 'athlete' in participant:
+                athlete_id = participant['athlete']['id'] if 'id' in participant['athlete'] else None
+                
+                if not athlete_id:
+                    continue
+                
+                # Get or create player
+                try:
+                    player_obj = player.objects.get(espnId=athlete_id)
+                except player.DoesNotExist:
+                    # Try to create player from athlete data
+                    player_obj = createPlayerFromParticipant(participant['athlete'], play.teamOnOffense)
+                    if not player_obj:
+                        continue
+                
+                # Get player tenure
+                tenure = playerTeamTenure.objects.filter(
+                    player=player_obj,
+                    team=play.teamOnOffense
+                ).first()
+                
+                # Determine role and create appropriate stat split
+                role = participant.get('type', {}).get('text', '').lower() if 'type' in participant else ''
+                stats = participant.get('statistics', {})
+                
+                if 'pass' in role or role == 'passer':
+                    createPasserStatSplit(play, player_obj, tenure, stats, participant)
+                    
+                elif 'rush' in role or role == 'rusher':
+                    createRusherStatSplit(play, player_obj, tenure, stats, participant)
+                    
+                elif 'receiv' in role or role == 'receiver':
+                    createReceiverStatSplit(play, player_obj, tenure, stats, participant)
+                    
+        except Exception as e:
+            print(f"Error processing participant for play {play.id}: {e}")
+
+def createPasserStatSplit(play, player_obj, tenure, stats, participant):
+    """
+    Create passer stat split record
+    """
+    try:
+        passer_split = passerStatSplit.objects.create(
+            play=play,
+            player=player_obj,
+            currentTenure=tenure,
+            playerRole=1,  # passer
+            playerPosition=1,  # passer position
+            passingYards=stats.get('passingYards', play.yardsOnPlay) if play.playType in [2, 3] else 0,
+            interception=(play.playType == 15),  # INTERCEPTION
+            fumble=False,  # Would need to check play description
+            fumbleLost=False,
+            passingTdScored=(play.scoringPlay and play.playType == 2)  # COMPLETED PASS and scoring
+        )
+        return passer_split
+    except Exception as e:
+        print(f"Error creating passer stat split: {e}")
+        return None
+
+def createRusherStatSplit(play, player_obj, tenure, stats, participant):
+    """
+    Create rusher stat split record
+    """
+    try:
+        rusher_split = rusherStatSplit.objects.create(
+            play=play,
+            player=player_obj,
+            currentTenure=tenure,
+            playerRole=2,  # rusher
+            playerPosition=2,  # rusher position
+            rushingYards=stats.get('rushingYards', play.yardsOnPlay) if play.playType == 1 else 0,
+            fumble=False,  # Would need to check play description
+            fumbleLost=False,
+            rushingTdScored=(play.scoringPlay and play.playType == 1)  # RUSH and scoring
+        )
+        return rusher_split
+    except Exception as e:
+        print(f"Error creating rusher stat split: {e}")
+        return None
+
+def createReceiverStatSplit(play, player_obj, tenure, stats, participant):
+    """
+    Create receiver stat split record
+    """
+    try:
+        receiver_split = receiverStatSplit.objects.create(
+            play=play,
+            player=player_obj,
+            currentTenure=tenure,
+            playerRole=3,  # receiver
+            playerPosition=3,  # receiver position
+            receivingYards=stats.get('receivingYards', play.yardsOnPlay) if play.playType == 2 else 0,
+            yardsAfterCatch=stats.get('yardsAfterCatch', 0),
+            fumble=False,  # Would need to check play description
+            fumbleLost=False,
+            receivingTdScored=(play.scoringPlay and play.playType == 2)  # COMPLETED PASS and scoring
+        )
+        return receiver_split
+    except Exception as e:
+        print(f"Error creating receiver stat split: {e}")
+        return None
+
+def parsePlayDescription(play, yearOfSeason):
+    """
+    Fallback method to parse play description and extract player names
+    """
+    import re
+    
+    if not play.playDescription:
+        return
+    
+    description = play.playDescription
+    team = play.teamOnOffense
+    
+    try:
+        # Common patterns in play descriptions
+        # Pass plays: "QB_NAME pass complete/incomplete to RECEIVER_NAME"
+        # Rush plays: "RUSHER_NAME rush/run"
+        
+        if play.playType in [2, 3]:  # COMPLETED PASS, INCOMPLETE PASS
+            # Pattern for pass plays
+            pass_pattern = r'(\w+(?:\s+\w+)?)\s+pass\s+(?:complete|incomplete)\s+(?:short|deep)?\s*(?:left|middle|right)?\s*to\s+(\w+(?:\s+\w+)?)'
+            match = re.search(pass_pattern, description, re.IGNORECASE)
+            
+            if match:
+                passer_name = match.group(1).strip()
+                receiver_name = match.group(2).strip()
+                
+                # Try to find players by name
+                passer = findPlayerByName(passer_name, team, 1)  # QB position
+                receiver = findPlayerByName(receiver_name, team, None)  # Any offensive position
+                
+                if passer:
+                    tenure = playerTeamTenure.objects.filter(player=passer, team=team).first()
+                    passerStatSplit.objects.create(
+                        play=play,
+                        player=passer,
+                        currentTenure=tenure,
+                        playerRole=1,
+                        playerPosition=1,
+                        passingYards=play.yardsOnPlay if play.playType == 2 else 0,
+                        interception=False,
+                        fumble=False,
+                        fumbleLost=False,
+                        passingTdScored=(play.scoringPlay and play.playType == 2)
+                    )
+                
+                if receiver and play.playType == 2:  # Only for completed passes
+                    tenure = playerTeamTenure.objects.filter(player=receiver, team=team).first()
+                    receiverStatSplit.objects.create(
+                        play=play,
+                        player=receiver,
+                        currentTenure=tenure,
+                        playerRole=3,
+                        playerPosition=3,
+                        receivingYards=play.yardsOnPlay,
+                        yardsAfterCatch=0,
+                        fumble=False,
+                        fumbleLost=False,
+                        receivingTdScored=play.scoringPlay
+                    )
+        
+        elif play.playType == 1:  # RUSH
+            # Pattern for rush plays
+            rush_pattern = r'(\w+(?:\s+\w+)?)\s+(?:rush|run)'
+            match = re.search(rush_pattern, description, re.IGNORECASE)
+            
+            if match:
+                rusher_name = match.group(1).strip()
+                rusher = findPlayerByName(rusher_name, team, 4)  # RB position
+                
+                if rusher:
+                    tenure = playerTeamTenure.objects.filter(player=rusher, team=team).first()
+                    rusherStatSplit.objects.create(
+                        play=play,
+                        player=rusher,
+                        currentTenure=tenure,
+                        playerRole=2,
+                        playerPosition=2,
+                        rushingYards=play.yardsOnPlay,
+                        fumble=False,
+                        fumbleLost=False,
+                        rushingTdScored=play.scoringPlay
+                    )
+                    
+    except Exception as e:
+        print(f"Error parsing play description for play {play.id}: {e}")
+
+def findPlayerByName(name, team, position_hint=None):
+    """
+    Try to find a player by name and team
+    """
+    try:
+        # First try exact match with team
+        players = player.objects.filter(
+            name__icontains=name,
+            team=team
+        )
+        
+        if position_hint:
+            players = players.filter(playerPosition=position_hint)
+        
+        return players.first()
+        
+    except Exception as e:
+        print(f"Error finding player {name}: {e}")
+        return None
+
+def createPlayerFromParticipant(athlete_data, team):
+    """
+    Create a new player record from ESPN athlete data
+    """
+    try:
+        espn_id = athlete_data.get('id')
+        name = athlete_data.get('displayName', athlete_data.get('fullName', 'Unknown'))
+        
+        if not espn_id:
+            return None
+        
+        # Determine position from athlete data
+        position = 13  # Default to "Other"
+        position_abbr = athlete_data.get('position', {}).get('abbreviation', '')
+        
+        position_map = {
+            'QB': 1, 'WR': 2, 'TE': 3, 'RB': 4, 'FB': 5,
+            'OL': 6, 'DL': 7, 'LB': 8, 'CB': 9, 'S': 10,
+            'K': 11, 'P': 12
+        }
+        
+        if position_abbr in position_map:
+            position = position_map[position_abbr]
+        
+        # Determine side of ball
+        if position in [1, 2, 3, 4, 5, 6]:
+            side_of_ball = 1  # Offense
+        elif position in [7, 8, 9, 10]:
+            side_of_ball = 2  # Defense
+        elif position in [11, 12]:
+            side_of_ball = 3  # Special Teams
+        else:
+            side_of_ball = 4  # Undefined
+        
+        player_obj = player.objects.create(
+            espnId=espn_id,
+            name=name,
+            team=team,
+            playerPosition=position,
+            sideOfBall=side_of_ball,
+            firstSeason=datetime.datetime.now().year
+        )
+        
+        # Create tenure
+        playerTeamTenure.objects.create(
+            player=player_obj,
+            team=team,
+            startDate=datetime.datetime.now()
+        )
+        
+        return player_obj
+        
+    except Exception as e:
+        print(f"Error creating player from participant data: {e}")
+        return None
+
+# END CLAUD CODE
+
 
 def getTouchdowns(request):
     nflTeams = nflTeam.objects.all().order_by('abbreviation')
