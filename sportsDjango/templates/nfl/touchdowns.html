@@ -35,6 +35,21 @@
             </form>
         </div>
         
+        {% if debugInfo %}
+        <div class="alert alert-info mt-3">
+            <h5>Debug Information:</h5>
+            <ul>
+                <li>Total Matches Found: {{ debugInfo.total_matches }}</li>
+                <li>Total Plays Checked: {{ debugInfo.total_plays_checked }}</li>
+                <li>Scoring Plays Found: {{ debugInfo.scoring_plays_found }}</li>
+                <li>Touchdown Plays Found: {{ debugInfo.touchdown_plays_found }}</li>
+            </ul>
+            {% if debugInfo.total_plays_checked == 0 %}
+            <p class="text-danger">No play-by-play data found. You may need to run getData to populate plays first.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
         {% if touchdowns %}
         <div class="mt-4">
             <h3>{{ selectedTeam.fullName }} - {{ yearOfSeason }} Season</h3>
@@ -73,10 +88,9 @@
                 <table class="table table-bordered table-hover">
                     <thead class="thead-dark">
                         <tr>
+                            <th>Link</th>
                             <th>Week</th>
-                            <th>Date</th>
                             <th>Opponent</th>
-                            <th>H/A</th>
                             <th>Quarter</th>
                             <th>Time</th>
                             <th>Type</th>
@@ -89,10 +103,9 @@
                     <tbody>
                         {% for td in touchdowns %}
                         <tr>
+                            <td><a href="{{td.url}}">Link</a></td>
                             <td>{{ td.week }}</td>
-                            <td>{{ td.date|date:"m/d/y" }}</td>
                             <td>{{ td.opponent }}</td>
-                            <td>{{ td.homeAway }}</td>
                             <td>{{ td.quarter }}</td>
                             <td>{{ td.time }}</td>
                             <td>{{ td.playType }}</td>

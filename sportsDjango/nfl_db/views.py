@@ -1081,13 +1081,20 @@ def getPlays(request):
                 teamId = selectedTeam.espnId
                 
                 # Get matches where the selected team is either home or away
-                matches = nflMatch.objects.filter(
-                    weekOfSeason=weekOfSeason,
-                    yearOfSeason=yearOfSeason
-                ).filter(
-                    models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
-                )
-            
+                if weekOfSeason == 100: 
+                    matches = nflMatch.objects.filter(
+                        yearOfSeason=yearOfSeason
+                    ).filter(
+                        models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
+                    )
+                else:        
+                    matches = nflMatch.objects.filter(
+                        weekOfSeason=weekOfSeason,
+                        yearOfSeason=yearOfSeason
+                    ).filter(
+                        models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
+                    )
+            print("Number of matches returned:", len(matches))
             resultArray = []
             
             for s_match in matches:
@@ -1105,6 +1112,17 @@ def getPlays(request):
                     result_plays_array = []
                     
                     for play in plays:
+                        if play.scoringPlay:
+                            print("found touchdown")
+                            print("Team on offense ID:", play.teamOnOffense.espnId, "TeamID: ", teamId)
+                            if play.teamOnOffense.espnId == teamId:
+                                print("Found offensive touchdown")
+                                playToUpdate = playByPlay.objects.get(id=play.id)
+                                playToUpdate.offenseScored = True
+                                play.offenseScored = True
+                                playToUpdate.save()
+                                print("Updated scoring play:")
+                                print()
                         # Populate stat splits for this play if not already done
                         populatePlayStatSplits(play, s_match.espnId)
                         
@@ -1142,7 +1160,7 @@ def populatePlayStatSplits(play, match_espn_id):
         )
         
         if existing_splits:
-            return
+            pass
         
         # Only process relevant play types
         if play.playType not in [1, 2, 3, 4]:  # RUSH, COMPLETED PASS, INCOMPLETE PASS, SACK
@@ -1159,7 +1177,7 @@ def populatePlayStatSplits(play, match_espn_id):
                     
                     # Process participants if available
                     if 'participants' in play_data:
-                        processPlayParticipants(play, play_data['participants'])
+                        processPlayParticipants(play, play_data['participants'], play_url)
                     else:
                         # Fallback to parsing play description
                         if play.playDescription:
@@ -1178,54 +1196,74 @@ def populatePlayStatSplits(play, match_espn_id):
     except Exception as e:
         print(f"Error populating stat splits for play {play.id}: {e}")
 
-def processPlayParticipants(play, participants_data):
+def processPlayParticipants(play, participants_data, play_url):
     """
     Process participant data from ESPN API and create stat split records
     """
     for participant in participants_data:
         try:
-            # Extract athlete ID from the $ref URL
-            athlete_ref = participant.get('athlete', {}).get('$ref', '')
-            athlete_id = extractAthleteIdFromRef(athlete_ref)
-            
-            if not athlete_id:
-                continue
-            
-            # Get or create player
-            try:
-                player_obj = player.objects.get(espnId=athlete_id)
-            except player.DoesNotExist:
-                # Try to fetch and create player from athlete endpoint
-                player_obj = createPlayerFromAthleteRef(athlete_ref, play.teamOnOffense)
-                if not player_obj:
-                    continue
-            
-            # Get player tenure
-            tenure = playerTeamTenure.objects.filter(
-                player=player_obj,
-                team=play.teamOnOffense
-            ).first()
-            
             # Get participant type and stats
             participant_type = participant.get('type', '').lower()
-            stats_array = participant.get('stats', [])
-            
-            # Convert stats array to dict for easier access
-            stats_dict = {}
-            for stat in stats_array:
-                stats_dict[stat['name']] = stat['value']
-            
-            # Create appropriate stat split based on participant type
-            if participant_type == 'passer':
-                createPasserStatSplit(play, player_obj, tenure, stats_dict)
+            if participant_type == 'rusher' or participant_type == 'passer' or participant_type == 'receiver':
+
+                # Extract athlete ID from the $ref URL
+                athlete_ref = participant.get('athlete', {}).get('$ref', '')
+                athlete_id = extractAthleteIdFromRef(athlete_ref)
                 
-            elif participant_type == 'rusher':
-                createRusherStatSplit(play, player_obj, tenure, stats_dict)
+                if not athlete_id:
+                    continue
                 
-            elif participant_type == 'receiver':
-                createReceiverStatSplit(play, player_obj, tenure, stats_dict)
-            
-            # Note: We're not creating defender splits for tacklers, but you could add that if needed
+                # Get or create player
+                try:
+                    player_obj = player.objects.get(espnId=athlete_id)
+                except player.DoesNotExist:
+                    # Try to fetch and create player from athlete endpoint
+                    player_obj = createPlayerFromAthleteRef(athlete_ref, play.teamOnOffense)
+                    if not player_obj:
+                        continue
+                
+                # Get player tenure
+                tenure = playerTeamTenure.objects.filter(
+                    player=player_obj,
+                    team=play.teamOnOffense
+                ).first()
+                
+                
+                
+                stats_array = participant.get('stats', [])
+                
+                # Convert stats array to dict for easier access
+                stats_dict = {}
+                for stat in stats_array:
+                    stats_dict[stat['name']] = stat['value']
+                
+
+                # if play.playType == 1:
+                #     print("Play type 1")
+                #     print(play_url)
+
+                if play.scoringPlay and play.playType == 1:
+                    print("Rushing TD scored:", play_url)
+                    print()
+                # if play.scoringPlay and play.playType == 1:
+                #     print("Rushing play scored:", play_url)
+                #     print()
+                if play.scoringPlay and play.playType == 2:
+                    print("Passing TD scored:", play_url)
+                    print()
+                #print("Rushing TD URL: " + str(play_url))
+
+                # Create appropriate stat split based on participant type
+                if participant_type == 'passer':
+                    createPasserStatSplit(play, player_obj, tenure, stats_dict)
+                    
+                elif participant_type == 'rusher':
+                    createRusherStatSplit(play, player_obj, tenure, stats_dict)
+                    
+                elif participant_type == 'receiver':
+                    createReceiverStatSplit(play, player_obj, tenure, stats_dict)
+                
+                # Note: We're not creating defender splits for tacklers, but you could add that if needed
                 
         except Exception as e:
             print(f"Error processing participant for play {play.id}: {e}")
@@ -1362,6 +1400,7 @@ def createRusherStatSplit(play, player_obj, tenure, stats_dict):
             fumbleLost=(play.playType in [19, 20]),  # Defensive recovery fumbles
             rushingTdScored=(play.scoringPlay and play.playType == 1 and play.offenseScored)
         )
+        
         return rusher_split
     except Exception as e:
         print(f"Error creating rusher stat split: {e}")
@@ -1578,7 +1617,9 @@ def getTouchdowns(request):
                 debugInfo['touchdown_plays_found'] += tdPlays.count()
                 
                 for play in tdPlays:
+                    play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match.espnId}/competitions/{match.espnId}/plays/{play.espnId}?lang=en&region=us'
                     tdInfo = {
+                        'url': play_url,
                         'week': match.weekOfSeason,
                         'date': match.datePlayed,
                         'opponent': opponent.abbreviation,
