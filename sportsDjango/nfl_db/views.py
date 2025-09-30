@@ -1048,7 +1048,136 @@ def getPlays(request):
         else:
             
             return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})    
+
+def getTouchdowns(request):
+    nflTeams = nflTeam.objects.all().order_by('abbreviation')
+    yearsOnPage = yearsOnPage_Helper()
+    
+    pageDictionary = {}
+    pageDictionary['years'] = yearsOnPage
+    pageDictionary['teams'] = nflTeams
+    
+    if request.method == 'GET':
+        if 'teamName' in request.GET and 'season' in request.GET:
+            inputReq = request.GET
+            yearOfSeason = inputReq['season'].strip()
+            selectedTeam = nflTeam.objects.get(abbreviation=inputReq['teamName'])
+            teamId = selectedTeam.espnId
+            
+            # Get all matches for this team in this season
+            homeMatches = nflMatch.objects.filter(
+                homeTeamEspnId=teamId,
+                yearOfSeason=yearOfSeason,
+                completed=True
+            )
+            awayMatches = nflMatch.objects.filter(
+                awayTeamEspnId=teamId,
+                yearOfSeason=yearOfSeason,
+                completed=True
+            )
+            allMatches = homeMatches | awayMatches
+            allMatches = allMatches.order_by('weekOfSeason')
+            
+            touchdownData = []
+            
+            for match in allMatches:
+                # Determine if team was home or away
+                isHome = match.homeTeamEspnId == teamId
+                opponent = nflTeam.objects.get(
+                    espnId=match.awayTeamEspnId if isHome else match.homeTeamEspnId
+                )
                 
+                # Get all touchdown plays for this team in this match
+                tdPlays = playByPlay.objects.filter(
+                    nflMatch=match,
+                    teamOnOffense=selectedTeam,
+                    scoringPlay=True,
+                    offenseScored=True
+                ).exclude(playType__in=[5, 6, 7, 8, 9, 10, 11, 12])  # Exclude PAT and 2PT conversions
+                
+                for play in tdPlays:
+                    tdInfo = {
+                        'week': match.weekOfSeason,
+                        'date': match.datePlayed,
+                        'opponent': opponent.abbreviation,
+                        'homeAway': 'Home' if isHome else 'Away',
+                        'quarter': play.quarter,
+                        'time': play.displayClockTime,
+                        'playType': play.get_playType_display(),
+                        'description': play.playDescription[:200] if play.playDescription else 'N/A',
+                        'yardsOnPlay': play.yardsOnPlay,
+                        'scorer': None,
+                        'passer': None
+                    }
+                    
+                    # Try to identify the scorer from the related stat splits
+                    try:
+                        # Check for rushing TD
+                        rusher = rusherStatSplit.objects.filter(
+                            play=play,
+                            rushingTdScored=True
+                        ).first()
+                        if rusher:
+                            tdInfo['scorer'] = rusher.player.name
+                            tdInfo['scorerPosition'] = rusher.player.get_playerPosition_display()
+                        
+                        # Check for receiving TD
+                        receiver = receiverStatSplit.objects.filter(
+                            play=play,
+                            receivingTdScored=True
+                        ).first()
+                        if receiver:
+                            tdInfo['scorer'] = receiver.player.name
+                            tdInfo['scorerPosition'] = receiver.player.get_playerPosition_display()
+                            
+                            # Get the passer for receiving TDs
+                            passer = passerStatSplit.objects.filter(
+                                play=play,
+                                passingTdScored=True
+                            ).first()
+                            if passer:
+                                tdInfo['passer'] = passer.player.name
+                    except Exception as e:
+                        print(f"Error getting player info for play {play.espnId}: {e}")
+                    
+                    touchdownData.append(tdInfo)
+            
+            # Calculate season totals
+            totalTouchdowns = len(touchdownData)
+            
+            # Group touchdowns by player
+            playerTouchdowns = {}
+            for td in touchdownData:
+                if td['scorer']:
+                    if td['scorer'] not in playerTouchdowns:
+                        playerTouchdowns[td['scorer']] = {
+                            'rushing': 0,
+                            'receiving': 0,
+                            'total': 0
+                        }
+                    if 'RUSH' in td['playType']:
+                        playerTouchdowns[td['scorer']]['rushing'] += 1
+                    elif 'PASS' in td['playType']:
+                        playerTouchdowns[td['scorer']]['receiving'] += 1
+                    playerTouchdowns[td['scorer']]['total'] += 1
+            
+            # Sort players by total touchdowns
+            sortedPlayers = sorted(
+                playerTouchdowns.items(), 
+                key=lambda x: x[1]['total'], 
+                reverse=True
+            )
+            
+            pageDictionary['touchdowns'] = touchdownData
+            pageDictionary['selectedTeam'] = selectedTeam
+            pageDictionary['yearOfSeason'] = yearOfSeason
+            pageDictionary['totalTouchdowns'] = totalTouchdowns
+            pageDictionary['playerTouchdowns'] = sortedPlayers
+            
+            return render(request, 'nfl/touchdowns.html', pageDictionary)
+    
+    return render(request, 'nfl/touchdowns.html', pageDictionary)
+
 def weeksOnPage_Helper():
     weeksOnPage = []
     for w in range(1,19):

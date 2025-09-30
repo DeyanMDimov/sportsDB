@@ -24,8 +24,10 @@
                     <li id="menu-item-weekly-summary" class="menu-item "><a href="/loadModelSummary" class="btn btn-outline-primary" role="button">Weekly Summary</a></li>
                     <li id="menu-item-yearly-summary" class="menu-item "><a href="/loadYearlySummary" class="btn  btn-outline-primary" role="button">Yearly Summary</a></li>
                     <li id="all-team-stats" class="menu-item "><a href="/fullTeamStats" class="btn btn-outline-primary" role="button">Team Stats</a></li>
+                    <li id="tds" class="menu-item"><a href="/touchdowns" class="btn btn-outline-primary" role="button">Touchdowns</a></li>
                     <li id="player-page" class="menu-item "><a href="/players" class="btn btn-outline-primary" role="button">Players</a></li>
                     <li id="plays" class="menu-item"><a href="/plays" class="btn btn-outline-primary" role="button">Plays</a></li>
+
                     {% comment %} <li id="individual-stat" class="menu-item "><a href="/individualStat" class="btn btn-link btn-outline-primary" role="button">Individual Stat</a></li> {% endcomment %}
                     
                 </ul>
@@ -55,6 +57,9 @@
             {% endblock %}   
 
             {% block plays %}
+            {% endblock %}   
+
+            {% block touchdowns %}
             {% endblock %}   
 
         </div>

@@ -12,6 +12,7 @@ urlpatterns = [
     path('individualStat/', views.viewIndividualStat, name="individualStat"),
     path('players/', views.getPlayers, name="getPlayers"),
     path('plays/', views.getPlays, name="getPlays"),
+    path('touchdowns/', views.getTouchdowns, name="getTouchdowns"),
     path('ajax/playerSignificance/', views.playerSignificance, name="playerSignificance"),
     path('ajax/getInjuryStatus/', views.getInjuryStatus, name="getInjuryStatus")
 ]
