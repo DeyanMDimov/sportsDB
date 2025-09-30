@@ -1520,7 +1520,16 @@ def getTouchdowns(request):
             allMatches = homeMatches | awayMatches
             allMatches = allMatches.order_by('weekOfSeason')
             
+            # Debug: Check if we have matches
+            print(f"Found {allMatches.count()} matches for {selectedTeam.abbreviation} in {yearOfSeason}")
+            
             touchdownData = []
+            debugInfo = {
+                'total_matches': allMatches.count(),
+                'total_plays_checked': 0,
+                'scoring_plays_found': 0,
+                'touchdown_plays_found': 0
+            }
             
             for match in allMatches:
                 # Determine if team was home or away
@@ -1529,16 +1538,45 @@ def getTouchdowns(request):
                     espnId=match.awayTeamEspnId if isHome else match.homeTeamEspnId
                 )
                 
-                # Get all touchdown plays for this team in this match
+                # First, let's check all plays for this team (for debugging)
+                all_team_plays = playByPlay.objects.filter(
+                    nflMatch=match,
+                    teamOnOffense=selectedTeam
+                )
+                debugInfo['total_plays_checked'] += all_team_plays.count()
+                
+                # Check for scoring plays
+                scoring_plays = all_team_plays.filter(scoringPlay=True)
+                debugInfo['scoring_plays_found'] += scoring_plays.count()
+                
+                print(f"Match {match.espnId}: {all_team_plays.count()} plays, {scoring_plays.count()} scoring plays")
+                
+                # Method 1: Try using scoringPlay and offenseScored flags
                 tdPlays = playByPlay.objects.filter(
                     nflMatch=match,
                     teamOnOffense=selectedTeam,
                     scoringPlay=True,
-                    offenseScored=True
+                    offenseScored=True,
+                    pointsScored__gte=6  # Touchdowns are worth at least 6 points
                 ).exclude(playType__in=[5, 6, 7, 8, 9, 10, 11, 12])  # Exclude PAT and 2PT conversions
                 
-                print("Number of Touchdown plays:", len(tdPlays))
-
+                # Method 2: If no plays found with flags, try alternative approach
+                if not tdPlays.exists():
+                    # Look for plays with specific TD play types
+                    # Based on the playTypes in your model, touchdown plays would be:
+                    # Where description contains "touchdown" or specific scoring scenarios
+                    tdPlays = playByPlay.objects.filter(
+                        nflMatch=match,
+                        teamOnOffense=selectedTeam
+                    ).filter(
+                        models.Q(playDescription__icontains='touchdown') |
+                        models.Q(playDescription__icontains=' TD') |
+                        models.Q(playType=1, scoringPlay=True) |  # Rushing TD
+                        models.Q(playType=2, scoringPlay=True)    # Passing TD
+                    ).exclude(playType__in=[5, 6, 7, 8, 9, 10, 11, 12])
+                
+                debugInfo['touchdown_plays_found'] += tdPlays.count()
+                
                 for play in tdPlays:
                     tdInfo = {
                         'week': match.weekOfSeason,
@@ -1550,11 +1588,18 @@ def getTouchdowns(request):
                         'playType': play.get_playType_display(),
                         'description': play.playDescription[:200] if play.playDescription else 'N/A',
                         'yardsOnPlay': play.yardsOnPlay,
+                        'pointsScored': play.pointsScored,
                         'scorer': None,
-                        'passer': None
+                        'passer': None,
+                        'playId': play.id,  # For debugging
+                        'playEspnId': play.espnId  # For debugging
                     }
                     
-                    # Try to identify the scorer from the related stat splits
+                    # Try to identify the scorer from the play description if no stat splits
+                    if play.playDescription:
+                        tdInfo['scorer'] = extractPlayerFromDescription(play.playDescription, 'touchdown')
+                    
+                    # Try to get scorer from stat splits
                     try:
                         # Check for rushing TD
                         rusher = rusherStatSplit.objects.filter(
@@ -1582,17 +1627,71 @@ def getTouchdowns(request):
                             if passer:
                                 tdInfo['passer'] = passer.player.name
                     except Exception as e:
-                        print(f"Error getting player info for play {play.espnId}: {e}")
+                        print(f"Error getting player info for play {play.id}: {e}")
                     
                     touchdownData.append(tdInfo)
+            
+            # Alternative: If no touchdown plays found in playByPlay, get from match data
+            if not touchdownData:
+                print("No touchdown plays found in playByPlay table. Trying match-level data...")
+                
+                # Get touchdowns from match statistics
+                for match in allMatches:
+                    isHome = match.homeTeamEspnId == teamId
+                    opponent = nflTeam.objects.get(
+                        espnId=match.awayTeamEspnId if isHome else match.homeTeamEspnId
+                    )
+                    
+                    if isHome:
+                        rushing_tds = match.homeTeamRushingTDScored or 0
+                        receiving_tds = match.homeTeamReceivingTDScored or 0
+                        total_points = match.homeTeamPoints or 0
+                    else:
+                        rushing_tds = match.awayTeamRushingTDScored or 0
+                        receiving_tds = match.awayTeamReceivingTDScored or 0
+                        total_points = match.awayTeamPoints or 0
+                    
+                    # Add summary TD data if available
+                    if rushing_tds > 0 or receiving_tds > 0:
+                        for i in range(rushing_tds):
+                            touchdownData.append({
+                                'week': match.weekOfSeason,
+                                'date': match.datePlayed,
+                                'opponent': opponent.abbreviation,
+                                'homeAway': 'Home' if isHome else 'Away',
+                                'quarter': 'N/A',
+                                'time': 'N/A',
+                                'playType': 'RUSH',
+                                'description': 'Rushing TD (details not available)',
+                                'yardsOnPlay': None,
+                                'pointsScored': 6,
+                                'scorer': 'Unknown',
+                                'passer': None
+                            })
+                        
+                        for i in range(receiving_tds):
+                            touchdownData.append({
+                                'week': match.weekOfSeason,
+                                'date': match.datePlayed,
+                                'opponent': opponent.abbreviation,
+                                'homeAway': 'Home' if isHome else 'Away',
+                                'quarter': 'N/A',
+                                'time': 'N/A',
+                                'playType': 'COMPLETED PASS',
+                                'description': 'Receiving TD (details not available)',
+                                'yardsOnPlay': None,
+                                'pointsScored': 6,
+                                'scorer': 'Unknown',
+                                'passer': 'Unknown'
+                            })
             
             # Calculate season totals
             totalTouchdowns = len(touchdownData)
             
-            # Group touchdowns by player
+            # Group touchdowns by player (skip if all unknowns)
             playerTouchdowns = {}
             for td in touchdownData:
-                if td['scorer']:
+                if td['scorer'] and td['scorer'] != 'Unknown':
                     if td['scorer'] not in playerTouchdowns:
                         playerTouchdowns[td['scorer']] = {
                             'rushing': 0,
@@ -1617,10 +1716,37 @@ def getTouchdowns(request):
             pageDictionary['yearOfSeason'] = yearOfSeason
             pageDictionary['totalTouchdowns'] = totalTouchdowns
             pageDictionary['playerTouchdowns'] = sortedPlayers
+            pageDictionary['debugInfo'] = debugInfo  # Add debug info to context
+            
+            # Print debug info
+            print(f"Debug Info: {debugInfo}")
+            print(f"Total touchdowns found: {totalTouchdowns}")
             
             return render(request, 'nfl/touchdowns.html', pageDictionary)
     
     return render(request, 'nfl/touchdowns.html', pageDictionary)
+
+def extractPlayerFromDescription(description, keyword='touchdown'):
+    """
+    Extract player name from play description
+    """
+    import re
+    
+    # Common patterns for touchdowns
+    patterns = [
+        r'([A-Z]\.\w+)\s+\d+\s+[Yy]d\s+[Rr]un',  # J.Conner 1 Yd Run
+        r'([A-Z]\.\w+)\s+\d+\s+[Yy]ard',  # J.Conner 1 yard
+        r'([A-Z]\.\w+)\s+rush',  # J.Conner rush
+        r'pass.*?to\s+([A-Z]\.\w+)',  # pass to M.Harrison
+        r'([A-Z]\.\w+)\s+pass',  # K.Murray pass
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, description)
+        if match:
+            return match.group(1)
+    
+    return None
 
 def weeksOnPage_Helper():
     weeksOnPage = []
