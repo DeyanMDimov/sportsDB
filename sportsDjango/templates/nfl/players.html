@@ -21,7 +21,8 @@
                     </div>
                     <div class="mb-1 col-auto">
                         <select name="teamName" id="teamName" class="form-control">
-                        {% for team in teams %}
+                            <option value="ALL">ALL</option>
+                            {% for team in teams %}
                             <option value="{{ team.abbreviation }}"
                             {%if selTeam.abbreviation == team.abbreviation %}
                                 selected

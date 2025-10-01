@@ -288,11 +288,8 @@ def getPlayers(request):
 
     yearsOnPage = yearsOnPage_Helper()
    
-
     weeksOnPage = weeksOnPage_Helper()
     weeksOnPage.insert(0, ["100", "ALL"])
-    
-    
 
     pageDictionary = {}
     pageDictionary['weeks'] = weeksOnPage
@@ -304,26 +301,45 @@ def getPlayers(request):
         if 'teamName' in request.GET and 'season' in request.GET:
                 inputReq = request.GET
                 yearOfSeason = inputReq['season'].strip()
-                selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
-                teamId = selectedTeam.espnId
-                
-                if yearOfSeason == '2025':
-                    url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
-                    response = requests.get(url)
-                    responseData = response.json()
-                    rosterData = responseData['athletes']
+                if inputReq['teamName'] == 'ALL':
+                    nflTeams = nflTeam.objects.all()
+                    for s_team in nflTeams:
+                        teamId = s_team.espnId
+                    
+                        if yearOfSeason == '2025':
+                            url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
+                            response = requests.get(url)
+                            responseData = response.json()
+                            rosterData = responseData['athletes']
 
-                    for subsection in rosterData:
-                        players.updatePlayerAthletesFromTeamRoster(subsection, teamId)
+                            for subsection in rosterData:
+                                players.updatePlayerAthletesFromTeamRoster(subsection, teamId)
 
 
-                    playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
+                            playersLoaded = player.objects.filter(team = s_team).order_by('sideOfBall').order_by('playerPosition')
+                    
+                    selectedTeam = None
+                else:
+                    selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
+                    teamId = selectedTeam.espnId
+                    
+                    if yearOfSeason == '2025':
+                        url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
+                        response = requests.get(url)
+                        responseData = response.json()
+                        rosterData = responseData['athletes']
 
-                    playerTenuresLoaded = []
-                    for pl in playersLoaded:
-                        individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
-                        for ipt in individualPlayerTenures:
-                            playerTenuresLoaded.append(ipt)
+                        for subsection in rosterData:
+                            players.updatePlayerAthletesFromTeamRoster(subsection, teamId)
+
+
+                        playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
+
+                        playerTenuresLoaded = []
+                        for pl in playersLoaded:
+                            individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
+                            for ipt in individualPlayerTenures:
+                                playerTenuresLoaded.append(ipt)
                     
                     # print(playerTenuresLoaded)
 
@@ -1060,6 +1076,8 @@ def getPlays(request):
     pageDictionary = {}
     pageDictionary['weeks'] = weeksOnPage
     pageDictionary['years'] = yearsOnPage
+    
+
     pageDictionary['teams'] = nflTeams
 
     if request.method == 'GET':
@@ -1069,16 +1087,21 @@ def getPlays(request):
             weekOfSeason = int(inputReq['week'].strip())
             selectedTeamAbbr = inputReq['team'].strip()
             
+            resultArray = []
+
             # Filter matches based on team selection
             if selectedTeamAbbr == "ALL":
-                matches = nflMatch.objects.filter(
-                    weekOfSeason=weekOfSeason, 
-                    yearOfSeason=yearOfSeason
-                )
-                selectedTeam = None
+                #nflTeams =
+                teamsToProcess = nflTeam.objects.all()
             else:
-                selectedTeam = nflTeam.objects.get(abbreviation=selectedTeamAbbr)
-                teamId = selectedTeam.espnId
+                teamsToProcess = [nflTeam.objects.get(abbreviation=selectedTeamAbbr)]
+            print("Teams to process: ", len(teamsToProcess))
+            for s_team in teamsToProcess:   
+                processingTeam = list(teamsToProcess).index(s_team)
+                print()
+                print()
+                print("Currently processing team #: ", str(processingTeam))
+                teamId = s_team.espnId
                 
                 # Get matches where the selected team is either home or away
                 if weekOfSeason == 100: 
@@ -1094,49 +1117,54 @@ def getPlays(request):
                     ).filter(
                         models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
                     )
-            print("Number of matches returned:", len(matches))
-            resultArray = []
+
+                for s_match in matches: 
+                    resultArray.append(getPlaysSingleTeam(teamId, s_match))
             
-            for s_match in matches:
-                drives = driveOfPlay.objects.filter(nflMatch=s_match)
+            
+            # for s_match in matches:
+            #     drives = driveOfPlay.objects.filter(nflMatch=s_match)
                 
-                # If a specific team is selected, filter drives to only show that team's offensive drives
-                if selectedTeam:
-                    drives = drives.filter(teamOnOffense=selectedTeam)
+            #     # If a specific team is selected, filter drives to only show that team's offensive drives
+            #     if selectedTeam:
+            #         drives = drives.filter(teamOnOffense=selectedTeam)
                 
-                drives = sorted(drives, key=lambda x: x.sequenceNumber)
-                result_drives_array = []
+            #     drives = sorted(drives, key=lambda x: x.sequenceNumber)
+            #     result_drives_array = []
                 
-                for s_drive in drives:
-                    plays = playByPlay.objects.filter(driveOfPlay=s_drive)
-                    result_plays_array = []
+            #     for s_drive in drives:
+            #         plays = playByPlay.objects.filter(driveOfPlay=s_drive)
+            #         result_plays_array = []
                     
-                    for play in plays:
-                        if play.scoringPlay:
-                            print("found touchdown")
-                            print("Team on offense ID:", play.teamOnOffense.espnId, "TeamID: ", teamId)
-                            if play.teamOnOffense.espnId == teamId:
-                                print("Found offensive touchdown")
-                                playToUpdate = playByPlay.objects.get(id=play.id)
-                                playToUpdate.offenseScored = True
-                                play.offenseScored = True
-                                playToUpdate.save()
-                                print("Updated scoring play:")
-                                print()
-                        # Populate stat splits for this play if not already done
-                        populatePlayStatSplits(play, s_match.espnId)
+            #         for play in plays:
+            #             if play.scoringPlay:
+            #                 print("found touchdown")
+            #                 print("Team on offense ID:", play.teamOnOffense.espnId, "TeamID: ", teamId)
+            #                 if play.teamOnOffense.espnId == teamId:
+            #                     print("Found offensive touchdown")
+            #                     playToUpdate = playByPlay.objects.get(id=play.id)
+            #                     playToUpdate.offenseScored = True
+            #                     play.offenseScored = True
+            #                     playToUpdate.save()
+            #                     print("Updated scoring play:")
+            #                     print()
+            #             # Populate stat splits for this play if not already done
+            #             populatePlayStatSplits(play, s_match.espnId)
                         
-                        # Get existing stat splits for display
-                        play.passer_stats = passerStatSplit.objects.filter(play=play).first()
-                        play.rusher_stats = rusherStatSplit.objects.filter(play=play).first()
-                        play.receiver_stats = receiverStatSplit.objects.filter(play=play).first()
+            #             # Get existing stat splits for display
+            #             play.passer_stats = passerStatSplit.objects.filter(play=play).first()
+            #             play.rusher_stats = rusherStatSplit.objects.filter(play=play).first()
+            #             play.receiver_stats = receiverStatSplit.objects.filter(play=play).first()
                         
-                        result_plays_array.append(play)
+            #             result_plays_array.append(play)
                     
-                    result_plays_array = sorted(result_plays_array, key=lambda x: x.sequenceNumber)
-                    result_drives_array.append([s_drive, result_plays_array])
+            #         result_plays_array = sorted(result_plays_array, key=lambda x: x.sequenceNumber)
+            #         result_drives_array.append([s_drive, result_plays_array])
                 
-                resultArray.append([s_match, result_drives_array])
+            #     resultArray.append([s_match, result_drives_array])
+            
+                
+
             
             pageDictionary['resultArray'] = resultArray
             pageDictionary['weekNum'] = weekOfSeason
@@ -1146,6 +1174,63 @@ def getPlays(request):
             return render(request, 'nfl/plays.html', pageDictionary)
         else:
             return render(request, 'nfl/plays.html', pageDictionary)
+
+def getPlaysSingleTeam(teamId, s_match):
+    selectedTeam = nflTeam.objects.get(espnId=teamId)
+    print("Team Name: ", selectedTeam.fullName, "Week of Game: ", s_match.weekOfSeason)
+    drives = driveOfPlay.objects.filter(nflMatch=s_match)
+                
+    drives = drives.filter(teamOnOffense=selectedTeam)
+    
+    drives = sorted(drives, key=lambda x: x.sequenceNumber)
+    result_drives_array = []
+    
+    print("Number of drives: ", len(drives))
+    drive_counter = 0 
+    for s_drive in drives:
+        drive_counter += 1
+        #print("Drive #", drive_counter)
+        plays = playByPlay.objects.filter(driveOfPlay=s_drive)
+        #print("# of Plays in drive: ", len(plays))
+        result_plays_array = []
+        play_counter = 0
+        for play in plays:
+            play_counter += 1
+            
+            if play.scoringPlay:
+                playtypes = dict(play.playTypes)
+                
+                print("Scoring play found. Play number: " + str(play_counter) + "; Play type: ", playtypes.get(play.playType, "Unknown play"))
+                print("Team on offense: ", play.teamOnOffense.espnId)
+                if play.teamOnOffense.espnId == teamId:
+                    if play.playType == 16 or play.playType == 20:
+                        #match_espn_id = s_match.espnId 
+                        #play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match_espn_id}/competitions/{match_espn_id}/plays/{play.espnId}?lang=en&region=us'
+                        #print(play_url)
+                        playToUpdate = playByPlay.objects.get(id=play.id)
+                        playToUpdate.offenseScored = False
+                        play.offenseScored = False
+                    else:
+                        playToUpdate = playByPlay.objects.get(id=play.id)
+                        playToUpdate.offenseScored = True
+                        play.offenseScored = True
+                    playToUpdate.save()
+                    
+                    
+            # Populate stat splits for this play if not already done
+            populatePlayStatSplits(play, s_match.espnId)
+            
+            # Get existing stat splits for display
+            play.passer_stats = passerStatSplit.objects.filter(play=play).first()
+            play.rusher_stats = rusherStatSplit.objects.filter(play=play).first()
+            play.receiver_stats = receiverStatSplit.objects.filter(play=play).first()
+            
+            result_plays_array.append(play)
+        
+        result_plays_array = sorted(result_plays_array, key=lambda x: x.sequenceNumber)
+        result_drives_array.append([s_drive, result_plays_array])
+    
+    return [s_match, result_drives_array]
 
 def populatePlayStatSplits(play, match_espn_id):
     """
@@ -1237,21 +1322,6 @@ def processPlayParticipants(play, participants_data, play_url):
                 for stat in stats_array:
                     stats_dict[stat['name']] = stat['value']
                 
-
-                # if play.playType == 1:
-                #     print("Play type 1")
-                #     print(play_url)
-
-                if play.scoringPlay and play.playType == 1:
-                    print("Rushing TD scored:", play_url)
-                    print()
-                # if play.scoringPlay and play.playType == 1:
-                #     print("Rushing play scored:", play_url)
-                #     print()
-                if play.scoringPlay and play.playType == 2:
-                    print("Passing TD scored:", play_url)
-                    print()
-                #print("Rushing TD URL: " + str(play_url))
 
                 # Create appropriate stat split based on participant type
                 if participant_type == 'passer':

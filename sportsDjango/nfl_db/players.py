@@ -35,7 +35,7 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
                 playerTeamTenure.objects.create(
                     player = playerObj,
                     team = nflTeam.objects.get(espnId = teamId),
-                    startDate = datetime(2024, 9, 8)
+                    startDate = datetime(2025, 9, 8)
                 )
                 print("Player tenure created for ROOKIE.")
             print("Successfully loaded player " + str(playerObj.espnId))
@@ -46,13 +46,13 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
             playerObj.save()
             
             playerTenures = playerTeamTenure.objects.filter(player = playerObj)
-            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2024, playerTenures))
+            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2025, playerTenures))
             if athlete['experience']['years'] == 0:    
                 if len(list(currentSeasonTenures)) == 0:
                     playerTeamTenure.objects.create(
                         player = playerObj,
                         team = nflTeam.objects.get(espnId = teamId),
-                        startDate = datetime(2024, 9, 8)
+                        startDate = datetime(2025, 9, 8)
                     )
                     print()
                     print("Player tenure created for rookie.")
@@ -82,7 +82,7 @@ def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
         playerTeamTenure.objects.create(
             player = playerObj,
             team = nflTeam.objects.get(espnId = teamId),
-            startDate = datetime(2024, 9, 8)
+            startDate = datetime(2025, 9, 8)
         )
         print("Player tenure created for ROOKIE.")
     print("Successfully loaded player w/ ESPN ID: " + str(playerObj.espnId) + " - " + playerObj.name)
@@ -119,7 +119,7 @@ def updatePlayerAthletesFromTeamRoster(rosterData, teamId):
                 playerTeamTenure.objects.create(
                     player = playerObj,
                     team = nflTeam.objects.get(espnId = teamId),
-                    startDate = datetime(2024, 9, 8)
+                    startDate = datetime(2025, 9, 8)
                 )
                 print("Player tenure created for ROOKIE.")
             print("Successfully loaded player " + str(playerObj.espnId))
@@ -147,22 +147,22 @@ def updatePlayerAthletesFromTeamRoster(rosterData, teamId):
             if latestPlayerTenure != None:
                 latestplayerTenureTeam = latestPlayerTenure.team
                 if latestplayerTenureTeam.espnId != teamId:
-                    #latestPlayerTenure.endDate = datetime(2024, 2, 12)
+                    #latestPlayerTenure.endDate = datetime(2025, 2, 12)
                     playerTeamTenure.objects.create(
                             player = playerObj,
                             team = nflTeam.objects.get(espnId = teamId),
-                            startDate = datetime(2024, 9, 1)
+                            startDate = datetime(2025, 9, 1)
                     )
            
 
             playerTenures = playerTeamTenure.objects.filter(player = playerObj)
-            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2024, playerTenures))
+            currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2025, playerTenures))
             if athlete['experience']['years'] == 0:    
                 if len(list(currentSeasonTenures)) == 0:
                     playerTeamTenure.objects.create(
                         player = playerObj,
                         team = nflTeam.objects.get(espnId = teamId),
-                        startDate = datetime(2024, 9, 8)
+                        startDate = datetime(2025, 9, 8)
                     )
                     print()
                     print("Player tenure created for rookie.")
@@ -181,7 +181,7 @@ def getPlayerTenures(playerObj):
     
     if len(playerTenures) == 0:
         try:
-            for yr in range(yearToStart, 2024):
+            for yr in range(yearToStart, 2025):
                 seasonGameLogUrl = "http://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/"+str(playerObj.espnId)+"/gamelog?season="+str(yr)
                 response = requests.get(seasonGameLogUrl)
                 responseData = response.json()
@@ -263,26 +263,39 @@ def updatePlayerTenure(playerObj, teamId):
     if len(latestPlayerTenureList) != 0:
         latestPlayerTenure = playerTeamTenure.objects.filter(player = playerObj, endDate = None)[0]
     else:
-        latestPlayerTenure = playerTeamTenure.objects.filter(player = playerObj).order_by('-endDate')[0]
+        try:
+            latestPlayerTenure = playerTeamTenure.objects.filter(player = playerObj).order_by('-endDate')[0]
+        except:
+            print("Exception line 267 - players.py")
+            print(playerTeamTenure.objects.filter(player = playerObj))
+            return
 
-    if len(latestPlayerTenure) != 0:
-        playerTenureTeam = latestPlayerTenure.team
+    try:
+        if len(latestPlayerTenure) != 0:
+            playerTenureTeam = latestPlayerTenure.team
 
-        lastPlayerStatus = playerWeekStatus.objects.filter(player = playerObj, team = playerTenureTeam).order_by('-yearOfSeason', '-weekOfSeason')[0]
+            lastPlayerStatus = playerWeekStatus.objects.filter(player = playerObj, team = playerTenureTeam).order_by('-yearOfSeason', '-weekOfSeason')[0]
 
-        if lastPlayerStatus.weekOfSeason == 18:
-            latestPlayerTenure.endDate = datetime(2024, 2, 12)
-        else:    
-            lastDayOfSeasonWeek = nflMatch.objects.filter(weekOfSeason = lastPlayerStatus.weekOfSeason).order_by('-date')[0].date
-            latestPlayerTenure.endDate = lastDayOfSeasonWeek
-        latestPlayerTenure.save()
+            if lastPlayerStatus.weekOfSeason == 18:
+                latestPlayerTenure.endDate = datetime(2025, 2, 12)
+            else:
+                try:    
+                    lastDayOfSeasonWeek = nflMatch.objects.filter(weekOfSeason = lastPlayerStatus.weekOfSeason).order_by('-date')[0].date
+                    latestPlayerTenure.endDate = lastDayOfSeasonWeek
+                except:
+                    print("Exception line 282 - players.py")
+                    print("Last player status week of season: ", lastPlayerStatus.weekOfSeason)
+            latestPlayerTenure.save()
 
-        if teamId != None:
-            playerTeamTenure.objects.create(
-                        player = playerObj,
-                        team = nflTeam.objects.get(espnId = teamId),
-                        startDate = datetime.now().date
-                    )
+            if teamId != None:
+                playerTeamTenure.objects.create(
+                            player = playerObj,
+                            team = nflTeam.objects.get(espnId = teamId),
+                            startDate = datetime.now().date
+                        )
+    except:
+        print("latestPlayerTenure has no len")
+        print(latestPlayerTenure)
 
     
 

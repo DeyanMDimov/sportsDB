@@ -31,6 +31,7 @@
                     <div class="mb-1 col-2">
                         Team:
                         <select name="team" id="team" class="form-control">
+                            <option value="ALL">ALL</option>
                         {% for team in teams %}
                             <option value="{{ team.abbreviation }}"
                             {%if sel_Team == team.abbreviation %}

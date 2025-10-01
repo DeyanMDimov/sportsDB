@@ -6,7 +6,7 @@
             <h2>Team Touchdowns</h2>
             <form method="GET" class="p-3">
                 <div class="row g-2">
-                    <div class="mb-1 col-auto">
+                    <div class="mb-1 col-1">
                         <label for="season">Season:</label>
                         <select name="season" id="season" class="form-control">
                             {% for yr in years %}
@@ -17,7 +17,7 @@
                             {% endfor %} 
                         </select> 
                     </div>
-                    <div class="mb-1 col-auto">
+                    <div class="mb-1 col-1">
                         <label for="teamName">Team:</label>
                         <select name="teamName" id="teamName" class="form-control">
                             {% for team in teams %}
@@ -29,33 +29,73 @@
                         </select>
                     </div>
                     <div class="mb-1 col-auto">
-                        <button type="submit" class="btn btn-primary">Load!</button>
+                        
                     </div>
                 </div>
+                <button type="submit" class="btn btn-primary">Load!</button>
             </form>
         </div>
-        
-        {% if debugInfo %}
-        <div class="alert alert-info mt-3">
-            <h5>Debug Information:</h5>
-            <ul>
-                <li>Total Matches Found: {{ debugInfo.total_matches }}</li>
-                <li>Total Plays Checked: {{ debugInfo.total_plays_checked }}</li>
-                <li>Scoring Plays Found: {{ debugInfo.scoring_plays_found }}</li>
-                <li>Touchdown Plays Found: {{ debugInfo.touchdown_plays_found }}</li>
-            </ul>
-            {% if debugInfo.total_plays_checked == 0 %}
-            <p class="text-danger">No play-by-play data found. You may need to run getData to populate plays first.</p>
-            {% endif %}
-        </div>
-        {% endif %}
         
         {% if touchdowns %}
         <div class="mt-4">
             <h3>{{ selectedTeam.fullName }} - {{ yearOfSeason }} Season</h3>
             <p class="lead">Total Touchdowns: {{ totalTouchdowns }}</p>
             
-            <!-- Player Summary Section -->
+            <!-- Detailed Touchdown List -->
+            <h4>All Touchdowns</h4>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>Link</th>
+                            <th>Week</th>
+                            <th>Opponent</th>
+                            <th>Type</th>
+                            <th>Scorer</th>
+                            <th>Position</th>
+                            <th>Yards</th>
+                            <th>Passer</th>
+                            <th>Quarter</th>
+                            <th>Time</th>
+                            {% comment %} <th>Play Description</th> {% endcomment %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for td in touchdowns %}
+                        <tr>
+                            <td><a href="{{td.url}}">Link</a></td>
+                            <td>{{ td.week }}</td>
+                            <td>{{ td.opponent }}</td>
+                            <td>{{ td.playType|title }}</td>
+                            <td>
+                                {% if td.scorer %}
+                                    <strong>{{ td.scorer }}</strong>
+                                {% else %}
+                                    <em>Unknown</em>
+                                {% endif %}
+                            </td>
+                            <td>{% if td.scorerPosition %}
+                                    <strong>({{ td.scorerPosition }})</strong>
+                                {% else %}
+                                    <em>Unknown</em>
+                                {% endif %}
+                            <td>{{ td.yardsOnPlay|default:"-" }}</td>
+                            <td>{{ td.passer|default:"-" }}</td>
+                            <td><small>{{ td.quarter }}</small></td>
+                            <td><small>{{ td.time }}</small></td>
+                            {% comment %} <td><small>{{ td.description }}</small></td> {% endcomment %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% elif selectedTeam %}
+        <div class="alert alert-info mt-4">
+            No touchdown data found for {{ selectedTeam.fullName }} in {{ yearOfSeason }}.
+        </div>
+        {% endif %}
+        <!-- Player Summary Section -->
             {% if playerTouchdowns %}
             <div class="mb-4">
                 <h4>Touchdown Leaders</h4>
@@ -81,56 +121,18 @@
                 </table>
             </div>
             {% endif %}
-            
-            <!-- Detailed Touchdown List -->
-            <h4>All Touchdowns</h4>
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover">
-                    <thead class="thead-dark">
-                        <tr>
-                            <th>Link</th>
-                            <th>Week</th>
-                            <th>Opponent</th>
-                            <th>Quarter</th>
-                            <th>Time</th>
-                            <th>Type</th>
-                            <th>Scorer</th>
-                            <th>Passer</th>
-                            <th>Yards</th>
-                            <th>Play Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for td in touchdowns %}
-                        <tr>
-                            <td><a href="{{td.url}}">Link</a></td>
-                            <td>{{ td.week }}</td>
-                            <td>{{ td.opponent }}</td>
-                            <td>{{ td.quarter }}</td>
-                            <td>{{ td.time }}</td>
-                            <td>{{ td.playType }}</td>
-                            <td>
-                                {% if td.scorer %}
-                                    <strong>{{ td.scorer }}</strong>
-                                    {% if td.scorerPosition %}
-                                        <small>({{ td.scorerPosition }})</small>
-                                    {% endif %}
-                                {% else %}
-                                    <em>Unknown</em>
-                                {% endif %}
-                            </td>
-                            <td>{{ td.passer|default:"-" }}</td>
-                            <td>{{ td.yardsOnPlay|default:"-" }}</td>
-                            <td><small>{{ td.description }}</small></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% elif selectedTeam %}
-        <div class="alert alert-info mt-4">
-            No touchdown data found for {{ selectedTeam.fullName }} in {{ yearOfSeason }}.
+        {% if debugInfo %}
+        <div class="alert alert-info mt-3">
+            <h5>Debug Information:</h5>
+            <ul>
+                <li>Total Matches Found: {{ debugInfo.total_matches }}</li>
+                <li>Total Plays Checked: {{ debugInfo.total_plays_checked }}</li>
+                <li>Scoring Plays Found: {{ debugInfo.scoring_plays_found }}</li>
+                <li>Touchdown Plays Found: {{ debugInfo.touchdown_plays_found }}</li>
+            </ul>
+            {% if debugInfo.total_plays_checked == 0 %}
+            <p class="text-danger">No play-by-play data found. You may need to run getData to populate plays first.</p>
+            {% endif %}
         </div>
         {% endif %}
     </div>
