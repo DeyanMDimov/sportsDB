@@ -3,7 +3,7 @@ from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 import json
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
-from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit
+from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit
 from django.db import models
 from nfl_db import businessLogic, crudLogic, players
 import datetime, time, requests, traceback
@@ -1185,7 +1185,6 @@ def getPlaysSingleTeam(teamId, s_match):
     drives = sorted(drives, key=lambda x: x.sequenceNumber)
     result_drives_array = []
     
-    print("Number of drives: ", len(drives))
     drive_counter = 0 
     for s_drive in drives:
         drive_counter += 1
@@ -1193,20 +1192,17 @@ def getPlaysSingleTeam(teamId, s_match):
         plays = playByPlay.objects.filter(driveOfPlay=s_drive)
         #print("# of Plays in drive: ", len(plays))
         result_plays_array = []
-        play_counter = 0
-        for play in plays:
-            play_counter += 1
-            
+
+        for play in plays:            
             if play.scoringPlay:
                 playtypes = dict(play.playTypes)
-                
-                print("Scoring play found. Play number: " + str(play_counter) + "; Play type: ", playtypes.get(play.playType, "Unknown play"))
+                print("Scoring play found. Play type: ", playtypes.get(play.playType, "Unknown play"))
                 print("Team on offense: ", play.teamOnOffense.espnId)
                 if play.teamOnOffense.espnId == teamId:
-                    if play.playType == 16 or play.playType == 20:
-                        #match_espn_id = s_match.espnId 
-                        #play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match_espn_id}/competitions/{match_espn_id}/plays/{play.espnId}?lang=en&region=us'
-                        #print(play_url)
+                    if play.playType == 16 or play.playType == 20 or play.playType == 40:
+                        match_espn_id = s_match.espnId 
+                        play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match_espn_id}/competitions/{match_espn_id}/plays/{play.espnId}?lang=en&region=us'
+                        print(play_url)
                         playToUpdate = playByPlay.objects.get(id=play.id)
                         playToUpdate.offenseScored = False
                         play.offenseScored = False
@@ -1239,7 +1235,7 @@ def populatePlayStatSplits(play, match_espn_id):
     try:
         # Skip if already populated
         existing_splits = (
-            passerStatSplit.objects.filter(play=play).exists() or
+            #passerStatSplit.objects.filter(play=play).exists() or
             rusherStatSplit.objects.filter(play=play).exists() or
             receiverStatSplit.objects.filter(play=play).exists()
         )
@@ -1248,7 +1244,7 @@ def populatePlayStatSplits(play, match_espn_id):
             pass
         
         # Only process relevant play types
-        if play.playType not in [1, 2, 3, 4]:  # RUSH, COMPLETED PASS, INCOMPLETE PASS, SACK
+        if play.playType not in [1, 2, 3, 4, 16, 20]:  # RUSH, COMPLETED PASS, INCOMPLETE PASS, SACK
             return
         
         # Fetch play participant data from ESPN API
@@ -1332,6 +1328,7 @@ def processPlayParticipants(play, participants_data, play_url):
                     
                 elif participant_type == 'receiver':
                     createReceiverStatSplit(play, player_obj, tenure, stats_dict)
+                
                 
                 # Note: We're not creating defender splits for tacklers, but you could add that if needed
                 
@@ -1500,6 +1497,10 @@ def createReceiverStatSplit(play, player_obj, tenure, stats_dict):
     except Exception as e:
         print(f"Error creating receiver stat split: {e}")
         return None
+
+
+
+
 
 def parsePlayDescription(play):
     """

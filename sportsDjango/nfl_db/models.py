@@ -282,7 +282,6 @@ class playByPlay(models.Model):
         (12, "2PT CONVERSION FAILED OTHER"),
         (13, "FG KICK"),
         (14, "FG KICK MISSED"),
-        (41, "FG KICK BLOCKED"),
         (15, "INTERCEPTION"),
         (16, "INTERCEPTION RETURN TOUCHDOWN"),
         (17, "OFFENSIVE FUMBLE RECOVERY"),
@@ -308,7 +307,8 @@ class playByPlay(models.Model):
         (37, "END OF HALF"),
         (38, "END OF GAME"),
         (39, "END OF REGULATION"),
-        (40, "OTHER")
+        (40, "OTHER"),
+        (41, "FG KICK BLOCKED")
 
     )
     playType = models.SmallIntegerField(choices = playTypes, default = 1)
