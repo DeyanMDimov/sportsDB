@@ -1162,22 +1162,25 @@ def getPlaysForMatch(teamId, s_match):
                 print("Team on offense: ", play.teamOnOffense.espnId)
                 print("Play thinks offense scored: ", play.offenseScored)
                 
-                if play.teamOnOffense.espnId == teamId:
+                #if play.teamOnOffense.espnId == teamId:
                     # Determine if offense scored or defense scored
                     # Defense/Special teams scores: INT TD, Fumble Recovery TD, Punt Return TD, etc.
-                    defensive_scoring_plays = [16, 20, 24, 26]  # INT TD, Fumble Recovery TD, various return TDs
-                    
-                    if play.playType in defensive_scoring_plays:
-                        # This is a defensive/special teams TD against the offense
-                        playToUpdate = playByPlay.objects.get(id=play.id)
-                        playToUpdate.offenseScored = False
-                        play.offenseScored = False
-                    else:
-                        # Regular offensive TD
-                        playToUpdate = playByPlay.objects.get(id=play.id)
-                        playToUpdate.offenseScored = True
-                        play.offenseScored = True
-                    playToUpdate.save()
+                defensive_scoring_plays = [16, 20, 24, 26]  # INT TD, Fumble Recovery TD, various return TDs
+                
+                if play.playType in defensive_scoring_plays:
+                    # This is a defensive/special teams TD against the offense
+                    playToUpdate = playByPlay.objects.get(id=play.id)
+                    playToUpdate.offenseScored = False
+                    play.offenseScored = False
+                else:
+                    # Regular offensive TD
+                    playToUpdate = playByPlay.objects.get(id=play.id)
+                    playToUpdate.offenseScored = True
+                    play.offenseScored = True
+                playToUpdate.save()
+
+                requeryPlay = playByPlay.objects.get(id=play.id)
+                print("Play now thinks team on offense scored? ", requeryPlay.offenseScored)
             
             # Populate stat splits for ALL relevant plays (not just 1-4)
             # This will handle more play types
