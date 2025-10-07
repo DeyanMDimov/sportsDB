@@ -1,20 +1,361 @@
+/* ==========================
+   Refined Dark Mode Theme
+   ========================== */
+
 body {
   font: 16px/1.5em "Overpass", "Open Sans", Helvetica, sans-serif;
-  color: #333;
+  color: #dbeafe;
   font-weight: 300;
+  background: radial-gradient(circle at top left, #121418, #0f1115);
+
 }
 
-.container{ 
-  max-width:1150px;
+.container {
+  max-width: 1150px;
 }
 
-.nav-menu .menu-item{
-    display: inline;
+.nav-menu .menu-item {
+  display: inline;
 }
 
-.nav-menu{
-    padding-inline-start: 0px;
+.nav-menu {
+  padding-inline-start: 0px;
 }
+
+.navbar {
+  --bs-tertiary-bg: #181b21;
+}
+
+.nav-link{
+  border-radius: 4px;
+}
+
+.nav-link:hover{
+  background-color: #3f4756;
+}
+
+.dropdown-item {
+  color: #dbeafe !important;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+/* ==========================
+   Tables
+   ========================== */
+
+table {
+  color: #dbeafe;
+  border-color: #2f3440 !important;
+  background-color: #181b21;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.table {
+  --bs-table-bg: #181b21;
+  --bs-table-striped-bg: #1e222b;
+  --bs-table-hover-bg: #242833;
+  --bs-table-border-color: #2f3440;
+  --bs-table-color: #dbeafe;
+  color: #dbeafe;
+}
+
+.table-bordered td, .table-bordered th {
+  border-color: #2f3440 !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: #1e222b;
+  color: #dbeafe;
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: #242833;
+  color: #fff;
+}
+
+thead th {
+  background-color: #242833 !important;
+  color: #dbeafe !important;
+  border-color: #2f3440 !important;
+}
+
+/* ==========================
+   Buttons
+   ========================== */
+
+.btn {
+  border-color: #2f3440;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 0 6px rgba(37, 99, 235, 0.3);
+}
+.btn-primary:hover {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.btn-success {
+  background-color: #22c55e;
+  border-color: #22c55e;
+  color: #fff;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.25);
+}
+.btn-success:hover {
+  background-color: #4ade80;
+  border-color: #4ade80;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.25);
+}
+.btn-danger:hover {
+  background-color: #f87171;
+  border-color: #f87171;
+}
+
+.btn-warning {
+  background-color: #f59e0b;
+  border-color: #f59e0b;
+  color: #fff;
+}
+.btn-warning:hover {
+  background-color: #fbbf24;
+  border-color: #fbbf24;
+}
+
+.btn-info {
+  background-color: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #fff;
+}
+.btn-info:hover {
+  background-color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.btn-secondary {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+.btn-secondary:hover {
+  background-color: #4b5563;
+  border-color: #6b7280;
+  color: #fff;
+}
+
+.btn-light {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #e5e7eb;
+}
+.btn-light:hover {
+  background-color: #374151;
+  border-color: #4b5563;
+}
+
+.btn-dark {
+  background-color: #111827;
+  border-color: #1f2937;
+  color: #dbeafe;
+}
+.btn-dark:hover {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+/* ==========================
+   Forms and Inputs
+   ========================== */
+
+.form-control, .form-select, textarea {
+  background-color: #1e222b;
+  color: #dbeafe;
+  border-color: #2f3440;
+}
+.form-control:focus, .form-select:focus {
+  background-color: #242833;
+  border-color: #3b82f6;
+  color: #dbeafe;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
+}
+
+.form-floating > label::after {
+  background-color: #323946 !important;   /* slightly lighter than form-select bg (#181b21) */
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.form-floating > label {
+  color: #dbeafe !important; /* your desired text color */
+}
+
+/* ==========================
+   Cards, Modals, Alerts
+   ========================== */
+
+.card, .modal-content, .alert {
+  background-color: #181b21;
+  border-color: #2f3440;
+  color: #dbeafe;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.alert-info {
+  background-color: #0f3d57;
+  border-color: #0ea5e9;
+  color: #7dd3fc;
+}
+
+/* ==========================
+   Links
+   ========================== */
+
+a {
+  color: #38bdf8;
+  transition: all 0.15s ease;
+}
+a:hover {
+  color: #7dd3fc;
+  text-shadow: 0 0 5px rgba(125, 211, 252, 0.3);
+}
+
+a:focus {
+  outline: none;
+}
+
+table a {
+  text-decoration: none;
+  outline: none;
+}
+table a:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ==========================
+   Utility & Layout Adjustments
+   ========================== */
+
+.correctBet { 
+  background-color: #1a4d1a !important;
+  color: #86efac;
+}
+
+.wrongBet { 
+  background-color: #4d1a1a !important;
+  color: #fca5a5;
+}
+
+.card, table, .plays-container, .drives-container {
+  border-radius: 10px;
+}
+
+thead th {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.modal-header, .modal-footer {
+  border-color: #2f3440;
+}
+
+/* --------------------------
+Drive / Play specific styles
+-------------------------- */
+
+
+.match-drive-play {
+border: 1px solid #2f3440;
+padding-left: 10px;
+padding-top: 10px;
+background-color: #181b21;
+border-radius: 8px;
+box-shadow: 0 1px 6px rgba(0,0,0,0.5);
+transition: background-color 0.18s ease, transform 0.12s ease;
+}
+
+
+.match-drive-play:hover {
+background-color: #242833;
+transform: translateY(-1px);
+}
+
+
+.drives-container {
+padding-top: 10px;
+border: 1px solid #2f3440;
+background-color: #181b21;
+border-radius: 10px;
+padding: 12px;
+box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+}
+
+
+.drives-indiv {
+height: 50px;
+border: 1px solid #2f3440;
+padding-left: 10px;
+margin-bottom: 8px;
+background-color: #1e222b;
+display: flex;
+align-items: center;
+border-radius: 6px;
+transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+
+.drives-indiv:hover {
+background-color: #242833;
+box-shadow: 0 2px 6px rgba(37,99,235,0.06);
+}
+
+
+.plays-container {
+padding-left: 10px;
+padding-top: 10px;
+border: 1px solid #2f3440;
+background-color: #181b21;
+border-radius: 10px;
+padding-bottom: 12px;
+}
+
+
+.plays-in-drive-table {
+border: none;
+background: transparent;
+width: 100%;
+border-collapse: collapse;
+}
+
+
+.plays-in-drive-table td, .plays-in-drive-table th {
+border: none;
+padding: 6px 8px;
+color: #dbeafe;
+}
+
+
+.plays-col-quarter {
+width: 50px;
+white-space: nowrap;
+}
+
+
+.plays-col-time {
+width: 90px;
+}
+
 
 #modelSummary tr td{
     text-align: center;
@@ -37,7 +378,8 @@ body {
 }
 
 .modelSummaryContainer{
-  padding: 0px !important
+  padding: 0px !important;
+  background-color: #1f1f1f;
 }
 
 #year_modelSummary{
@@ -49,26 +391,19 @@ body {
   text-align:center;
 }
 
-.correctBet { 
-  background-color: #beb;
-}
-
-.wrongBet { 
-  background-color: #ebb;
-}
-
-.pull_data_exception{
-    border: solid 1px;
-    margin: 20px 0;
-    padding: 20px;
-}
-
 .accordion {
-  --bs-accordion-btn-icon:        url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3e%3cpath fill-rule='evenodd' d='M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+  --bs-accordion-bg: #2a2a2a;
+  --bs-accordion-color: #e0e0e0;
+  --bs-accordion-border-color: #444;
+  --bs-accordion-btn-bg: #2a2a2a;
+  --bs-accordion-btn-color: #e0e0e0;
+  --bs-accordion-active-bg: #333;
+  --bs-accordion-active-color: #fff;
+  --bs-accordion-btn-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3e%3cpath fill-rule='evenodd' d='M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
   --bs-accordion-btn-icon-transform: rotate(90deg);
   --bs-accordion-btn-padding-y: 0.5rem;
   --bs-accordion-btn-padding-x: 0.5rem;
-  --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='black'%3e%3cpath fill-rule='evenodd' d='M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+  --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3e%3cpath fill-rule='evenodd' d='M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
 }
 
 .accordion-button:focus{
@@ -76,16 +411,28 @@ body {
 }
 
 
-textarea{
-  resize: both;
+/* Remove outline from table links */
+table a {
+  text-decoration: none;
+  outline: none;
+}
+
+table a:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Center first column in tables (for link column) */
+table tbody tr td:first-child {
+  text-align: center;
+}
+
+table thead tr th:first-child {
+  text-align: center;
 }
 
 .weekAvailTableCell{
   width: 60px;
-}
-
-.form-select{
-  --bs-border-color: #9d9fa2;
 }
 
 .injury_table tr td{
@@ -113,36 +460,37 @@ textarea{
 } 
 
 .match-drive-play{
-  border: solid 1px #888; 
+  border: solid 1px #555; 
   padding-left:10px;
   padding-top:10px;
+  background-color: #1f1f1f;
 }
 
 .drives-container{
-
   padding-top:10px;
-  border: solid 1px #888; 
+  border: solid 1px #555;
+  background-color: #1f1f1f;
 }
 
 .drives-indiv{
   height: 50px;
-  border:solid 1px #AAA;
+  border:solid 1px #444;
   padding-left:10px;
   margin-bottom:0px;
+  background-color: #2a2a2a;
 }
 
 .plays-container{
   padding-left:10px;
   padding-top:10px;
-  border: solid 1px #888; 
+  border: solid 1px #555;
+  background-color: #1f1f1f;
 }
 
 .plays-in-drive-table
 {
   border: none;
 }
-
-
 
 .plays-col-quarter{
   width:50px;
@@ -165,4 +513,36 @@ textarea{
 
 #prev-week-arrow a, #next-week-arrow a{
   color:#fff !important;
+}
+
+/* Additional Bootstrap component overrides */
+.card {
+  background-color: #2a2a2a;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+.alert {
+  background-color: #2a2a2a;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.alert-info {
+  background-color: #1a3a4a;
+  border-color: #2a5a7a;
+  color: #b3d9ff;
+}
+
+.modal-content {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.modal-header {
+  border-bottom-color: #444;
+}
+
+.modal-footer {
+  border-top-color: #444;
 }
