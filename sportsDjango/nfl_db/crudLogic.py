@@ -1238,21 +1238,18 @@ def setResultOfDrive(inputResult, matchEspnId = ""):
 
 def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     playObject = None
-
+    
     try:
         playObject = playByPlay.objects.get(espnId = individualPlay['id'])
     except:
         pass
     
-
     
     try:
         playType = setPlayType(individualPlay['type']['text'], individualPlay)
     except:
         print(individualPlay['$ref'])
-        playType = setPlayType("Unknown", individualPlay)
-        
-        
+        playType = setPlayType("Unknown", individualPlay)    
         
 
     if playType == 40:
@@ -1409,7 +1406,7 @@ def setPlayType(inputType, indiv_play):
             return 17
         elif str.lower(inputType) == str.lower("OFFENSIVE FUMBLE RECOVERY TOUCHDOWN"):
             return 18
-        elif str.lower(inputType) == str.lower("DEFENSIVE FUMBLE RECOVERY") or str.lower(inputType) == str.lower("Fumble Recovery (Opponent)"):
+        elif str.lower(inputType) == str.lower("DEFENSIVE FUMBLE RECOVERY") or str.lower(inputType) == str.lower("Fumble Recovery (Opponent)") or str.lower(inputType) == str.lower("Sack Opp Fumble Recovery"):
             return 19
         elif str.lower(inputType) == str.lower("DEFENSIVE FUMBLE RECOVERY TOUCHDOWN") or str.lower(inputType) == str.lower("Fumble Return Touchdown"):
             return 20
@@ -1421,7 +1418,7 @@ def setPlayType(inputType, indiv_play):
             return 23
         elif str.lower(inputType) == str.lower("PUNT") or str.lower(inputType) == str.lower("Punt Return Touchdown"):
             return 24
-        elif str.lower(inputType) == str.lower("Blocked Punt"):
+        elif str.lower(inputType) == str.lower("Blocked Punt") or str.lower(inputType) == str.lower("Blocked Punt Touchdown"):
             return 25
         elif str.lower(inputType) == str.lower("PUNT MUFFED PUNTING TEAM RECOVERY"):
             return 26

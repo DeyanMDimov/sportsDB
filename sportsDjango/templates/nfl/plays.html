@@ -12,7 +12,7 @@
                         Season: <select name="season" id="season" class="form-control">
                             {% for yr in years %}
                             <option value="{{yr}}" 
-                            {%if yr|stringformat:"i" == sel_Year %}
+                            {%if yr|stringformat:"i" == selectedYear %}
                                     selected
                                 {% endif %} >{{yr}}</option>    
                             {% endfor %} 
@@ -22,7 +22,7 @@
                         Week: <select name="week" id="week" class="form-control">
                             {% for wk in weeks %}
                             <option value="{{wk.0}}"
-                                {% if wk.0 == sel_Week %}
+                                {% if wk.0 == selectedWeek %}
                                     selected
                                 {% endif %} > {{ wk.1 }}</option>
                             {% endfor %}
@@ -34,7 +34,7 @@
                             <option value="ALL">ALL</option>
                         {% for team in teams %}
                             <option value="{{ team.abbreviation }}"
-                            {%if sel_Team == team.abbreviation %}
+                            {%if selectedTeam == team.abbreviation %}
                                 selected
                             {% endif %}
                             > {{ team.abbreviation }}</option>

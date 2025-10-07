@@ -1,0 +1,514 @@
+body {
+  font: 16px/1.5em "Overpass", "Open Sans", Helvetica, sans-serif;
+  color: #e0e0e0;
+  font-weight: 300;
+  background-color: #1a1a1a;
+}
+
+.container{ 
+  max-width:1150px;
+}
+
+.nav-menu .menu-item{
+    display: inline;
+}
+
+.nav-menu{
+    padding-inline-start: 0px;
+}
+
+/* Tables */
+table {
+  color: #e0e0e0;
+  border-color: #444 !important;
+  background-color: #1f1f1f;
+}
+
+.table {
+  --bs-table-bg: #1f1f1f;
+  --bs-table-striped-bg: #252525;
+  --bs-table-hover-bg: #2a2a2a;
+  --bs-table-border-color: #444;
+  --bs-table-color: #e0e0e0;
+  color: #e0e0e0;
+}
+
+.table-bordered {
+  border-color: #444 !important;
+}
+
+.table-bordered td,
+.table-bordered th {
+  border-color: #444 !important;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: #252525;
+  color: #e0e0e0;
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+}
+
+thead {
+  background-color: #2a2a2a;
+  border-color: #444 !important;
+}
+
+thead th {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+
+.thead-dark th {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+}
+
+tbody tr {
+  background-color: #1f1f1f;
+}
+
+tbody tr:hover {
+  background-color: #2a2a2a;
+}
+
+td, th {
+  border-color: #444 !important;
+  color: #e0e0e0;
+}
+
+#modelSummary tr td{
+    text-align: center;
+}
+
+#modelSummary thead{
+    font-size:16px;
+}
+
+#modelSummary thead td{
+    padding: 0 5px;
+}
+
+.modelSummaryLine {
+    width: 100px;
+}
+
+#year-summary td{
+  padding-left: 20px;
+}
+
+.modelSummaryContainer{
+  padding: 0px !important;
+  background-color: #1f1f1f;
+}
+
+#year_modelSummary{
+  font-size:14px;
+}
+
+#year_modelSummary thead td{
+  padding: 0px;
+  text-align:center;
+}
+
+.correctBet { 
+  background-color: #1a4d1a !important;
+  color: #90ee90;
+}
+
+.wrongBet { 
+  background-color: #4d1a1a !important;
+  color: #ffb3b3;
+}
+
+.pull_data_exception{
+    border: solid 1px #666;
+    margin: 20px 0;
+    padding: 20px;
+    background-color: #2a2a2a;
+}
+
+.accordion {
+  --bs-accordion-bg: #2a2a2a;
+  --bs-accordion-color: #e0e0e0;
+  --bs-accordion-border-color: #444;
+  --bs-accordion-btn-bg: #2a2a2a;
+  --bs-accordion-btn-color: #e0e0e0;
+  --bs-accordion-active-bg: #333;
+  --bs-accordion-active-color: #fff;
+  --bs-accordion-btn-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3e%3cpath fill-rule='evenodd' d='M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+  --bs-accordion-btn-icon-transform: rotate(90deg);
+  --bs-accordion-btn-padding-y: 0.5rem;
+  --bs-accordion-btn-padding-x: 0.5rem;
+  --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3e%3cpath fill-rule='evenodd' d='M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+}
+
+.accordion-button:focus{
+  box-shadow:none !important;
+}
+
+/* Form elements */
+.form-control, .form-select {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+  border-color: #555;
+}
+
+.form-control:focus, .form-select:focus {
+  background-color: #333;
+  color: #e0e0e0;
+  border-color: #777;
+}
+
+.form-select{
+  --bs-border-color: #555;
+}
+
+select option {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+}
+
+textarea{
+  resize: both;
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+  border-color: #555;
+}
+
+/* Buttons */
+.btn {
+  border-color: #555;
+}
+
+.btn-primary {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.btn-outline-primary {
+  color: #60a5fa;
+  border-color: #3b82f6;
+}
+
+.btn-outline-primary:hover {
+  background-color: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.btn-secondary {
+  background-color: #4b5563;
+  border-color: #4b5563;
+  color: #e0e0e0;
+}
+
+.btn-secondary:hover {
+  background-color: #6b7280;
+  border-color: #6b7280;
+  color: #fff;
+}
+
+.btn-outline-secondary {
+  color: #9ca3af;
+  border-color: #6b7280;
+}
+
+.btn-outline-secondary:hover {
+  background-color: #4b5563;
+  border-color: #4b5563;
+  color: #e0e0e0;
+}
+
+.btn-success {
+  background-color: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.btn-success:hover {
+  background-color: #22c55e;
+  border-color: #22c55e;
+}
+
+.btn-outline-success {
+  color: #4ade80;
+  border-color: #22c55e;
+}
+
+.btn-outline-success:hover {
+  background-color: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.btn-danger {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background-color: #ef4444;
+  border-color: #ef4444;
+}
+
+.btn-outline-danger {
+  color: #f87171;
+  border-color: #ef4444;
+}
+
+.btn-outline-danger:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.btn-warning {
+  background-color: #d97706;
+  border-color: #d97706;
+  color: #fff;
+}
+
+.btn-warning:hover {
+  background-color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.btn-outline-warning {
+  color: #fbbf24;
+  border-color: #f59e0b;
+}
+
+.btn-outline-warning:hover {
+  background-color: #d97706;
+  border-color: #d97706;
+  color: #fff;
+}
+
+.btn-info {
+  background-color: #0891b2;
+  border-color: #0891b2;
+  color: #fff;
+}
+
+.btn-info:hover {
+  background-color: #06b6d4;
+  border-color: #06b6d4;
+}
+
+.btn-outline-info {
+  color: #22d3ee;
+  border-color: #06b6d4;
+}
+
+.btn-outline-info:hover {
+  background-color: #0891b2;
+  border-color: #0891b2;
+  color: #fff;
+}
+
+.btn-light {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #e0e0e0;
+}
+
+.btn-light:hover {
+  background-color: #4b5563;
+  border-color: #6b7280;
+  color: #fff;
+}
+
+.btn-outline-light {
+  color: #9ca3af;
+  border-color: #6b7280;
+}
+
+.btn-outline-light:hover {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #e0e0e0;
+}
+
+.btn-dark {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #e0e0e0;
+}
+
+.btn-dark:hover {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #fff;
+}
+
+.btn-outline-dark {
+  color: #6b7280;
+  border-color: #4b5563;
+}
+
+.btn-outline-dark:hover {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #e0e0e0;
+}
+
+/* Links */
+a {
+  color: #60a5fa;
+}
+
+a:hover {
+  color: #93c5fd;
+}
+
+a:focus {
+  outline: none;
+}
+
+/* Remove outline from table links */
+table a {
+  text-decoration: none;
+  outline: none;
+}
+
+table a:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Center first column in tables (for link column) */
+table tbody tr td:first-child {
+  text-align: center;
+}
+
+table thead tr th:first-child {
+  text-align: center;
+}
+
+.weekAvailTableCell{
+  width: 60px;
+}
+
+.injury_table tr td{
+  text-align:left !important;
+}
+
+.injury_player_name{
+  width: 185px;
+}
+
+.injury_player_pos{
+  width:50px;
+}
+
+.injury_player_status{
+  width: 90px;
+}
+
+.model-sum-row td{
+  vertical-align: top;
+}
+
+.weeks-plays{
+  margin-left:0px;
+} 
+
+.match-drive-play{
+  border: solid 1px #555; 
+  padding-left:10px;
+  padding-top:10px;
+  background-color: #1f1f1f;
+}
+
+.drives-container{
+  padding-top:10px;
+  border: solid 1px #555;
+  background-color: #1f1f1f;
+}
+
+.drives-indiv{
+  height: 50px;
+  border:solid 1px #444;
+  padding-left:10px;
+  margin-bottom:0px;
+  background-color: #2a2a2a;
+}
+
+.plays-container{
+  padding-left:10px;
+  padding-top:10px;
+  border: solid 1px #555;
+  background-color: #1f1f1f;
+}
+
+.plays-in-drive-table
+{
+  border: none;
+}
+
+.plays-col-quarter{
+  width:50px;
+}
+.plays-col-time{
+  width:90px;
+}
+.plays-col-type{
+  width: 350px;
+}
+.plays-col-yards{
+  width: 30px;
+  text-align:right;
+}
+
+.plays-col-down{
+  padding-left:30px;
+  width: 42px;
+}
+
+#prev-week-arrow a, #next-week-arrow a{
+  color:#fff !important;
+}
+
+/* Additional Bootstrap component overrides */
+.card {
+  background-color: #2a2a2a;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+.alert {
+  background-color: #2a2a2a;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.alert-info {
+  background-color: #1a3a4a;
+  border-color: #2a5a7a;
+  color: #b3d9ff;
+}
+
+.modal-content {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.modal-header {
+  border-bottom-color: #444;
+}
+
+.modal-footer {
+  border-top-color: #444;
+}

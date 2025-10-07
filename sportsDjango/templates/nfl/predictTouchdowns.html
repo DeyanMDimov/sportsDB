@@ -1,0 +1,262 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% block predictTouchdowns %}
+    <div class="container">
+        <div>
+            <h2>Match Preparation - Touchdown Analysis</h2>
+            <form method="GET" class="p-3">
+                <div class="row g-2">
+                    <div class="mb-1 col-2">
+                        <label for="season">Season:</label>
+                        <select name="season" id="season" class="form-control">
+                            {% for yr in years %}
+                            <option value="{{yr}}" 
+                            {% if yr|stringformat:"i" == yearOfSeason %}
+                                selected
+                            {% endif %}>{{yr}}</option>    
+                            {% endfor %} 
+                        </select> 
+                    </div>
+                    <div class="mb-1 col-2">
+                        <label for="week">Week:</label>
+                        <select name="week" id="week" class="form-control">
+                            {% for wk in weeks %}
+                            <option value="{{wk.0}}"
+                                {% if wk.0 == weekOfSeason %}
+                                    selected
+                                {% endif %} > {{ wk.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-1 col-2">
+                        <label for="teamName">Team:</label>
+                        <select name="teamName" id="teamName" class="form-control">
+                            {% for team in teams %}
+                            <option value="{{ team.abbreviation }}"
+                            {% if selectedTeam.abbreviation == team.abbreviation %}
+                                selected
+                            {% endif %}>{{ team.abbreviation }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Load!</button>
+            </form>
+        </div>
+        
+        {% if error %}
+        <div class="alert alert-warning mt-4">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        {% if selectedTeam and opponent %}
+        <div class="mt-4">
+            <h3>{{ selectedTeam.fullName }} vs {{ opponent.fullName }} - Week {{ weekOfSeason }}, {{ yearOfSeason }}</h3>
+            
+            <!-- Team Touchdowns Scored Section -->
+            <div class="mt-5">
+                <h4>{{ selectedTeam.fullName }} - Touchdowns Scored This Season</h4>
+                <p class="lead">Total Touchdowns: {{ totalTeamTouchdowns }}</p>
+                
+                {% if teamTouchdowns %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover table-sm">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Link</th>
+                                <th>Week</th>
+                                <th>Opponent</th>
+                                <th>Type</th>
+                                <th>TD Type</th>
+                                <th>Scorer</th>
+                                <th>Position</th>
+                                <th>Yards</th>
+                                <th>Passer</th>
+                                <th>Quarter</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for td in teamTouchdowns %}
+                            <tr>
+                                <td><a href="{{td.url}}" target="_blank">Link</a></td>
+                                <td>{{ td.week }}</td>
+                                <td>{{ td.opponent }}</td>
+                                <td><small>{{ td.playType|title }}</small></td>
+                                <td>
+                                    <span class="badge badge-{% if td.tdType == 'Offensive' %}success{% elif td.tdType == 'Defensive' %}info{% else %}warning{% endif %}">
+                                        {{ td.tdType }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if td.scorer %}
+                                        <strong>{{ td.scorer }}</strong>
+                                    {% else %}
+                                        <em>Unknown</em>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if td.scorerPosition %}
+                                        <strong>{{ td.scorerPosition }}</strong>
+                                    {% else %}
+                                        <em>-</em>
+                                    {% endif %}
+                                </td>
+                                <td>{{ td.yardsOnPlay|default:"-" }}</td>
+                                <td>{{ td.passer|default:"-" }}</td>
+                                <td><small>{{ td.quarter }}</small></td>
+                                <td><small>{{ td.time }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    No touchdowns scored by {{ selectedTeam.fullName }} in previous games this season.
+                </div>
+                {% endif %}
+            </div>
+            {% if gameHasBeenPlayed %}
+            <div class="mt-4 mb-4">
+                <div class="accordion" id="actualGameAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingActualGame">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#actualGameTouchdowns" aria-expanded="false" aria-controls="actualGameTouchdowns">
+                                Who Actually Scored TDs in Week {{ weekOfSeason }})
+                            </button>
+                        </h2>
+                        <div id="actualGameTouchdowns" class="accordion-collapse collapse" aria-labelledby="headingActualGame" data-bs-parent="#actualGameAccordion">
+                            <div class="accordion-body">
+                                {% if actualGameTouchdowns %}
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover table-sm">
+                                        <thead class="thead-success">
+                                            <tr>
+                                                <th>Link</th>
+                                                <th>Type</th>
+                                                <th>TD Type</th>
+                                                <th>Scorer</th>
+                                                <th>Position</th>
+                                                <th>Yards</th>
+                                                <th>Passer</th>
+                                                <th>Quarter</th>
+                                                <th>Time</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for td in actualGameTouchdowns %}
+                                            <tr>
+                                                <td><a href="{{td.url}}" target="_blank">Link</a></td>
+                                                <td><small>{{ td.playType|title }}</small></td>
+                                                <td>
+                                                    <span class="badge badge-{% if td.tdType == 'Offensive' %}success{% elif td.tdType == 'Defensive' %}info{% else %}warning{% endif %}">
+                                                        {{ td.tdType }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {% if td.scorer %}
+                                                        <strong>{{ td.scorer }}</strong>
+                                                    {% else %}
+                                                        <em>Unknown</em>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% if td.scorerPosition %}
+                                                        <strong>{{ td.scorerPosition }}</strong>
+                                                    {% else %}
+                                                        <em>-</em>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ td.yardsOnPlay|default:"-" }}</td>
+                                                <td>{{ td.passer|default:"-" }}</td>
+                                                <td><small>{{ td.quarter }}</small></td>
+                                                <td><small>{{ td.time }}</small></td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <div class="alert alert-warning">
+                                    {{ selectedTeam.fullName }} did not score any touchdowns in Week {{ weekOfSeason }}.
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Opponent Touchdowns Allowed Section -->
+            <div class="mt-5 mb-5">
+                <h4>{{ opponent.fullName }} - Touchdowns Allowed This Season</h4>
+                <p class="lead">Total Touchdowns Allowed: {{ totalOpponentTouchdownsAllowed }}</p>
+                
+                {% if opponentTouchdownsAllowed %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover table-sm">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Link</th>
+                                <th>Week</th>
+                                <th>Opponent</th>
+                                <th>Type</th>
+                                <th>TD Type</th>
+                                <th>Scorer</th>
+                                <th>Position</th>
+                                <th>Yards</th>
+                                <th>Passer</th>
+                                <th>Quarter</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for td in opponentTouchdownsAllowed %}
+                            <tr>
+                                <td><a href="{{td.url}}" target="_blank">Link</a></td>
+                                <td>{{ td.week }}</td>
+                                <td>{{ td.opponent }}</td>
+                                <td><small>{{ td.playType|title }}</small></td>
+                                <td>
+                                    <span class="badge badge-{% if td.tdType == 'Offensive' %}success{% elif td.tdType == 'Defensive' %}info{% else %}warning{% endif %}">
+                                        {{ td.tdType }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if td.scorer %}
+                                        <strong>{{ td.scorer }}</strong>
+                                    {% else %}
+                                        <em>Unknown</em>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if td.scorerPosition %}
+                                        <strong>{{ td.scorerPosition }}</strong>
+                                    {% else %}
+                                        <em>-</em>
+                                    {% endif %}
+                                </td>
+                                <td>{{ td.yardsOnPlay|default:"-" }}</td>
+                                <td>{{ td.passer|default:"-" }}</td>
+                                <td><small>{{ td.quarter }}</small></td>
+                                <td><small>{{ td.time }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    No touchdowns allowed by {{ opponent.fullName }} in previous games this season.
+                </div>
+                {% endif %}
+            </div>
+            
+            
+        </div>
+        {% endif %}
+    </div>
+{% endblock %}

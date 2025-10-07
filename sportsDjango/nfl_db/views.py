@@ -1077,6 +1077,7 @@ def getPlays(request):
     pageDictionary['weeks'] = weeksOnPage
     pageDictionary['years'] = yearsOnPage
     pageDictionary['teams'] = nflTeams
+    
 
     if request.method == 'GET':
         if 'week' in request.GET and 'team' in request.GET:
@@ -1085,6 +1086,10 @@ def getPlays(request):
             weekOfSeason = int(inputReq['week'].strip())
             selectedTeamAbbr = inputReq['team'].strip()
             
+            pageDictionary['selectedYear'] = yearOfSeason
+            pageDictionary['selectedWeek'] = weekOfSeason
+            pageDictionary['selectedTeam'] = selectedTeamAbbr
+
             resultArray = []
 
             # Filter matches based on team selection
@@ -1093,40 +1098,37 @@ def getPlays(request):
             else:
                 teamsToProcess = [nflTeam.objects.get(abbreviation=selectedTeamAbbr)]
             
-            print("Teams to process: ", len(teamsToProcess))
-            
-            teamsAlreadyProcessed = []
+            weeksToProcess = range(1, 19, 1) if weekOfSeason == 100 else [weekOfSeason]
 
-            for s_team in teamsToProcess:
-                if s_team.espnId in teamsAlreadyProcessed:
-                    
-                    continue   
-                processingTeam = list(teamsToProcess).index(s_team)
-                print()
-                print()
-                print("Currently processing team #: ", str(processingTeam))
-                teamId = s_team.espnId
+            for s_week in weeksToProcess:
+                print(f"Processing Week {s_week} - {len(teamsToProcess)} teams")
+                
+                teamsAlreadyProcessed = []
+
+                for s_team in teamsToProcess:
+                    if s_team.espnId in teamsAlreadyProcessed:
+                        
+                        continue   
+                    processingTeam = list(teamsToProcess).index(s_team)
+                    print()
+                    print()
+                    print(f'Currently processing match # {len(teamsAlreadyProcessed) + 1}')
+                    teamId = s_team.espnId
                 
                 # Get matches where the selected team is either home or away
-                if weekOfSeason == 100: 
+                     
                     matches = nflMatch.objects.filter(
-                        yearOfSeason=yearOfSeason
+                    yearOfSeason=yearOfSeason,
+                    weekOfSeason=s_week
                     ).filter(
                         models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
                     )
-                else:        
-                    matches = nflMatch.objects.filter(
-                        weekOfSeason=weekOfSeason,
-                        yearOfSeason=yearOfSeason
-                    ).filter(
-                        models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
-                    )
-
-                for s_match in matches:
-                    allMatchPlays = getPlaysForMatch(teamId, s_match)
-                    teamsAlreadyProcessed.append(allMatchPlays[2])
-                    #resultArray.append(getPlaysSingleTeam(teamId, s_match))
-                    resultArray.append(allMatchPlays)
+                    for s_match in matches:
+                        allMatchPlays = getPlaysForMatch(teamId, s_match)
+                        teamsAlreadyProcessed.append(allMatchPlays[2])
+                        #resultArray.append(getPlaysSingleTeam(teamId, s_match))
+                        resultArray.append(allMatchPlays)
+               
             
             pageDictionary['resultArray'] = resultArray
             pageDictionary['weekNum'] = weekOfSeason
@@ -1159,13 +1161,12 @@ def getPlaysForMatch(teamId, s_match):
             if play.scoringPlay:
                 playtypes = dict(play.playTypes)
                 print("Scoring play found. Play type: ", playtypes.get(play.playType, "Unknown play"), play.playType)
-                print("Team on offense: ", play.teamOnOffense.espnId)
-                print("Play thinks offense scored: ", play.offenseScored)
+                print(f'Team on offense: {play.teamOnOffense.espnId}; Play thinks offense scored: {play.offenseScored}')
                 
                 #if play.teamOnOffense.espnId == teamId:
                     # Determine if offense scored or defense scored
                     # Defense/Special teams scores: INT TD, Fumble Recovery TD, Punt Return TD, etc.
-                defensive_scoring_plays = [16, 20, 24, 26]  # INT TD, Fumble Recovery TD, various return TDs
+                defensive_scoring_plays = [16, 19, 20, 21, 23, 24, 25, 27, 41]  # INT TD, Fumble Recovery TD, various return TDs
                 
                 if play.playType in defensive_scoring_plays:
                     # This is a defensive/special teams TD against the offense
@@ -1226,7 +1227,7 @@ def getPlaysSingleTeam(teamId, s_match):
                 if play.teamOnOffense.espnId == teamId:
                     # Determine if offense scored or defense scored
                     # Defense/Special teams scores: INT TD, Fumble Recovery TD, Punt Return TD, etc.
-                    defensive_scoring_plays = [16, 20, 24, 26]  # INT TD, Fumble Recovery TD, various return TDs
+                    defensive_scoring_plays = [16, 19, 20, 21, 23, 24, 25, 27, 41]  # INT TD, Fumble Recovery TD, various return TDs
                     
                     if play.playType in defensive_scoring_plays:
                         # This is a defensive/special teams TD against the offense
@@ -1277,7 +1278,8 @@ def populatePlayStatSplits(play, match_espn_id):
         if play.espnId:
             play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match_espn_id}/competitions/{match_espn_id}/plays/{play.espnId}?lang=en&region=us'
             if play.playType == 40:
-                    print("Play type was set to other. Link: ", play_url)
+                    print("Play type was set to other. Link: ")
+                    print(play_url)
             try:
                 response = requests.get(play_url)
                 if response.status_code == 200:
@@ -1981,6 +1983,124 @@ def getTouchdowns(request):
     
     return render(request, 'nfl/touchdowns.html', pageDictionary)
 
+def predictTouchdowns(request):
+    nflTeams = nflTeam.objects.all().order_by('abbreviation')
+    yearsOnPage = yearsOnPage_Helper()
+    weeksOnPage = weeksOnPage_Helper()
+    
+    pageDictionary = {}
+    pageDictionary['years'] = yearsOnPage
+    pageDictionary['teams'] = nflTeams
+    pageDictionary['weeks'] = weeksOnPage
+    
+    if request.method == 'GET':
+        if 'teamName' in request.GET and 'season' in request.GET and 'week' in request.GET:
+            inputReq = request.GET
+            yearOfSeason = inputReq['season'].strip()
+            weekOfSeason = int(inputReq['week'].strip())
+            selectedTeam = nflTeam.objects.get(abbreviation=inputReq['teamName'])
+            teamId = selectedTeam.espnId
+            
+            # Find the opponent for this week
+            upcomingMatch = nflMatch.objects.filter(
+                yearOfSeason=yearOfSeason,
+                weekOfSeason=weekOfSeason
+            ).filter(
+                models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
+            ).first()
+            
+            if not upcomingMatch:
+                pageDictionary['error'] = f"No match found for {selectedTeam.abbreviation} in Week {weekOfSeason}"
+                return render(request, 'nfl/predictTouchdowns.html', pageDictionary)
+            
+            # Determine opponent
+            opponentId = upcomingMatch.awayTeamEspnId if upcomingMatch.homeTeamEspnId == teamId else upcomingMatch.homeTeamEspnId
+            opponent = nflTeam.objects.get(espnId=opponentId)
+            
+            # Get team's previous matches this season (before selected week)
+            teamMatches = nflMatch.objects.filter(
+                yearOfSeason=yearOfSeason,
+                weekOfSeason__lt=weekOfSeason,
+                completed=True
+            ).filter(
+                models.Q(homeTeamEspnId=teamId) | models.Q(awayTeamEspnId=teamId)
+            ).order_by('weekOfSeason')
+            
+            # Get opponent's previous matches this season (before selected week)
+            opponentMatches = nflMatch.objects.filter(
+                yearOfSeason=yearOfSeason,
+                weekOfSeason__lt=weekOfSeason,
+                completed=True
+            ).filter(
+                models.Q(homeTeamEspnId=opponentId) | models.Q(awayTeamEspnId=opponentId)
+            ).order_by('weekOfSeason')
+            
+            # Get team's touchdowns scored
+            teamTouchdowns = []
+            for match in teamMatches:
+                isHome = match.homeTeamEspnId == teamId
+                matchOpponent = nflTeam.objects.get(
+                    espnId=match.awayTeamEspnId if isHome else match.homeTeamEspnId
+                )
+                tds = extractTouchdownsFromMatch(match, selectedTeam, matchOpponent, isHome)
+                teamTouchdowns.extend(tds)
+            
+            # Sort team touchdowns chronologically
+            teamTouchdowns = sorted(teamTouchdowns, key=lambda x: (
+                x['week'],
+                x['quarter'] if x['quarter'] else 'Z',
+                -x['secondsRemainingInPeriod'] if 'secondsRemainingInPeriod' in x and x['secondsRemainingInPeriod'] else 0
+            ))
+            
+            # Get opponent's touchdowns allowed (touchdowns scored by their opponents)
+            opponentTouchdownsAllowed = []
+            for match in opponentMatches:
+                isHome = match.homeTeamEspnId == opponentId
+                matchOpponent = nflTeam.objects.get(
+                    espnId=match.awayTeamEspnId if isHome else match.homeTeamEspnId
+                )
+                # Get touchdowns scored BY the opponent's opponents (i.e., allowed by the opponent)
+                tds = extractTouchdownsFromMatch(match, matchOpponent, opponent, not isHome)
+                opponentTouchdownsAllowed.extend(tds)
+            
+            # Sort opponent touchdowns allowed chronologically
+            opponentTouchdownsAllowed = sorted(opponentTouchdownsAllowed, key=lambda x: (
+                x['week'],
+                x['quarter'] if x['quarter'] else 'Z',
+                -x['secondsRemainingInPeriod'] if 'secondsRemainingInPeriod' in x and x['secondsRemainingInPeriod'] else 0
+            ))
+            
+            # Check if the selected week's game has been played
+            gameHasBeenPlayed = upcomingMatch.completed
+            actualGameTouchdowns = []
+
+            if gameHasBeenPlayed:
+                # Get touchdowns from the actual game
+                isHome = upcomingMatch.homeTeamEspnId == teamId
+                actualGameTouchdowns = extractTouchdownsFromMatch(upcomingMatch, selectedTeam, opponent, isHome)
+                
+                # Sort chronologically
+                actualGameTouchdowns = sorted(actualGameTouchdowns, key=lambda x: (
+                    x['quarter'] if x['quarter'] else 'Z',
+                    -x['secondsRemainingInPeriod'] if 'secondsRemainingInPeriod' in x and x['secondsRemainingInPeriod'] else 0
+                ))
+
+            pageDictionary['teamTouchdowns'] = teamTouchdowns
+            pageDictionary['opponentTouchdownsAllowed'] = opponentTouchdownsAllowed
+            pageDictionary['selectedTeam'] = selectedTeam
+            pageDictionary['opponent'] = opponent
+            pageDictionary['yearOfSeason'] = yearOfSeason
+            pageDictionary['weekOfSeason'] = weekOfSeason
+            pageDictionary['totalTeamTouchdowns'] = len(teamTouchdowns)
+            pageDictionary['totalOpponentTouchdownsAllowed'] = len(opponentTouchdownsAllowed)
+            pageDictionary['gameHasBeenPlayed'] = gameHasBeenPlayed
+            pageDictionary['actualGameTouchdowns'] = actualGameTouchdowns
+            pageDictionary['totalActualGameTouchdowns'] = len(actualGameTouchdowns)
+            
+            return render(request, 'nfl/predictTouchdowns.html', pageDictionary)
+    
+    return render(request, 'nfl/predictTouchdowns.html', pageDictionary)
+
 def extractTouchdownsFromMatch(match, team, opponent, isHome):
     """
     Extract all touchdowns scored by a team in a match
@@ -1999,7 +2119,7 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
     
     for play in offensive_tds:
         td = createTouchdownDict(play, match, team, opponent, isHome, 'Offensive')
-        print(f"Touchdown. Play type {play.playType}; Team on offense: {play.teamOnOffense}")
+        print(f"Touchdown. Play type {play.playType}; Team on offense: {play.teamOnOffense.espnId}")
         touchdowns.append(td)
     
     # Defensive/Special Teams TDs
@@ -2007,11 +2127,12 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
     # OR specific play types that indicate defensive scores
     
     # Method 1: Defensive TDs during opponent's offensive plays
-    defensive_scoring_plays = [16, 20, 24]  # INT TD, Fumble Recovery TD
+    defensive_scoring_plays = [16, 19, 20, 21, 24, 25, 27, 41]  # INT TD, Fumble Recovery TD
     
     defensive_tds = playByPlay.objects.filter(
         nflMatch=match,
         scoringPlay=True,
+        pointsScored=6,
         playType__in=defensive_scoring_plays
     ).exclude(teamOnOffense=team)  # The scoring team is NOT on offense
     
@@ -2024,7 +2145,7 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
     return_td_drives = driveOfPlay.objects.filter(
         nflMatch=match,
         teamOnOffense=opponent,
-        driveResult=24  # PUNT RETURN TD
+        driveResult__in=[24, 28]   # PUNT RETURN TD
     )
     
     for drive in return_td_drives:

@@ -4,7 +4,7 @@
 {% block loadModel %}
     <div class = "container">
         
-        <div>
+       <div>
             Plug data into model for:
             <form method="GET">
                 <div class="row g-1 mt-3 mb-3">
@@ -86,11 +86,11 @@
 
             <div id="model-desc" class="accordion">
                 
-                <button id="accordion-model-desc" class="accordion-button collapsed" type="button" data-toggle="collapse" data-target="#collapse-model-desc" aria-expanded="true" aria-controls="collapse-model-desc">
+                <button id="accordion-model-desc" class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-model-desc" aria-expanded="false" aria-controls="collapse-model-desc">
                     Model Description
                 </button>
             </div>
-            <div id="collapse-model-desc" class="collapse" aria-labelledby="accordion-model-desc" data-parent="#accordion-model-desc">
+            <div id="collapse-model-desc" class="collapse" aria-labelledby="accordion-model-desc">
                 {% if selectedModel == "v1" %}
                 <ol>
                     <li>Average the team's offensive yards per game with opponents defensive yards allowed per game.</li>
@@ -164,8 +164,8 @@
 
                             <tr id="accordion-{{result.team1Name}}{{result.team2Name}}">
                                 <td class="accordion">
-                                    <button class="accordion-button collapsed" type="button" data-toggle="collapse" data-target="#collapse-{{result.team1Name}}{{result.team2Name}}" aria-expanded="true" aria-controls="collapse-{{result.team1Name}}{{result.team2Name}}">
-                                       
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{result.team1Name}}{{result.team2Name}}" aria-expanded="false" aria-controls="collapse-{{result.team1Name}}{{result.team2Name}}">
+                                    
                                     </button>
                                 </td>
                                 <td>{{ result.team1Name }}</td>
@@ -245,7 +245,7 @@
                                     
                                 {% endif %}
                             </tr>
-                            <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse model-sum-row" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}" data-parent="#accordion-{{result.team1Name}}{{result.team2Name}}">
+                            <tr id="collapse-{{result.team1Name}}{{result.team2Name}}" class="collapse model-sum-row" aria-labelledby="accordion-{{result.team1Name}}{{result.team2Name}}">
                                 <td colspan="5">
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
@@ -422,7 +422,7 @@
                                                     </table>
                                                 </td>
                                             </tr>
-                                           
+                                        
                                             
                                         </tbody>
                                     </table>
@@ -537,7 +537,7 @@
                                                     {{result.team2Name}} DEF
                                                 </td>
                                             </tr>
-                                              <tr>
+                                            <tr>
                                                 <td style="font-size:0.85em">
                                                     {{result.team2Name}} OFF
                                                 </td>
@@ -578,7 +578,7 @@
             {% endif %}
             <script>
                     $('form').on("change", "#model", function(){
-       
+    
                         if ($('#model')[0].value == "v1.5")
                         {
                             $('#form_avg_length_select').css("visibility", "visible")
@@ -590,6 +590,8 @@
                     });
             </script>
         </div>
+
+    </div>
 
     </div>
 {% endblock %}
