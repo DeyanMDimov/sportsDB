@@ -1,21 +1,20 @@
-
 {% load static %}
 {% load templateFilters%}
 {% block matchDrivePlay %}
 <div id="accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" class="match-drive-play">
-    <button class="accordion-button collapsed" type="button" data-toggle="collapse" data-target="#collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" aria-expanded="true" aria-controls="collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}">
+    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" aria-expanded="false" aria-controls="collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}">
         <h3>
             {{result.0.homeTeam.first.abbreviation}} vs {{result.0.awayTeam.first.abbreviation}} 
         </h3>
     </button>
 </div>
-<div id="collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" class="collapse drives-container" aria-labelledby="accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" data-parent="#accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}">
+<div id="collapse-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" class="collapse drives-container" aria-labelledby="accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}" data-bs-parent="#accordion-{{result.0.homeTeamEspnId}}-{{result.0.awayTeamEspnId}}">
     {% for drive in result.1%} 
         <h6 id="accordion-{{drive.0.espnId}}">
-            <button class="accordion-button collapsed drives-indiv" type="button" data-toggle="collapse" data-target="#collapse-{{drive.0.espnId}}" aria-expanded="true" aria-controls="collapse-{{drive.0.espnId}}">
+            <button class="accordion-button collapsed drives-indiv" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{drive.0.espnId}}" aria-expanded="false" aria-controls="collapse-{{drive.0.espnId}}">
             Drive {{drive.0.sequenceNumber}} - {{drive.0.teamOnOffense.abbreviation}} - {{drive.0.get_driveResult_display}}
             </button>
-            <div id="collapse-{{drive.0.espnId}}" class="collapse plays-container" aria-labelledby="accordion-{{drive.0.espnId}}" data-parent="#accordion-{{drive.0.espnId}}">
+            <div id="collapse-{{drive.0.espnId}}" class="collapse plays-container" aria-labelledby="accordion-{{drive.0.espnId}}" data-bs-parent="#accordion-{{drive.0.espnId}}">
                 <table class="plays-in-drive-table">
                     <tbody>
                         {% for play in drive.1 %}

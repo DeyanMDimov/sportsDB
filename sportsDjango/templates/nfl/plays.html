@@ -66,7 +66,7 @@
                     {% for player in players%}
                     <tr>
                         <td id="accordion-{{player.espnId}}">
-                            <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{player.espnId}}" aria-expanded="true" aria-controls="collapse{{player.espnId}}">
+                            <button class="btn btn-link btn-block text-start" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{player.espnId}}" aria-expanded="false" aria-controls="collapse{{player.espnId}}">
                                 {{player.name}}
                             </button>
                         </td>
@@ -76,14 +76,16 @@
                         <td>{{player.firstSeason}}</td>
                         <td>{{player.espnId}}</td>
                     </tr>
-                    <tr id="collapse{{player.espnId}}" class="collapse" aria-labelledby="accordion-{{player.espnId}}" data-parent="#accordion-{{player.espnId}}">
-                        <td colspan="3" class="modelSummaryContainer">
+                    <tr id="collapse{{player.espnId}}" class="collapse" aria-labelledby="accordion-{{player.espnId}}" data-bs-parent="#accordion-{{player.espnId}}">
+                        <td colspan="6" class="modelSummaryContainer">
                             Tenures for player {{player.espnId}}
                             <table class="table-bordered" id="player_tenure">
                                 <thead>
-                                    <td>Team</td>
-                                    <td>Start Date</td>
-                                    <td>End Date</td>
+                                    <tr>
+                                        <td>Team</td>
+                                        <td>Start Date</td>
+                                        <td>End Date</td>
+                                    </tr>
                                 </thead>
                                 <tbody>
                                     {% for tnr in tenures %}
