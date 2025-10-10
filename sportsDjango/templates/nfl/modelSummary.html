@@ -79,9 +79,9 @@
 
             <div>
                 
-                <button type="button" id="prev-week-arrow" class="btn btn-dark btn-md" {% if weekOfSeason == "1"%}disabled{% endif %}><a href="?season={{yearOfSeason}}&#38;week={{ weekOfSeason|add:"-1" }}&#38;model={{selectedModel}}&#38;movingavg={{sel_ma}}"><span class="bi-chevron-left"></span></a></button>
+                <a href="?season={{yearOfSeason}}&#38;week={{ weekOfSeason|add:"-1" }}&#38;model={{selectedModel}}&#38;movingavg={{sel_ma}}"><button type="button" id="prev-week-arrow" class="btn btn-dark btn-md" {% if weekOfSeason == "1"%}disabled{% endif %}><span class="bi-chevron-left"></span></button></a>
                 
-                <button type="button" id="next-week-arrow" class="btn btn-dark btn-md"><a href="?season={{yearOfSeason}}&#38;week={{ weekOfSeason|add:"1" }}&#38;model={{selectedModel}}&#38;movingavg={{sel_ma}}"><span class="bi-chevron-right"></span></a></button>
+                <a href="?season={{yearOfSeason}}&#38;week={{ weekOfSeason|add:"1" }}&#38;model={{selectedModel}}&#38;movingavg={{sel_ma}}"><button type="button" id="next-week-arrow" class="btn btn-dark btn-md"><span class="bi-chevron-right"></span></button></a>
             </div>
 
             <div id="model-desc" class="accordion">
@@ -168,7 +168,7 @@
                                     
                                     </button>
                                 </td>
-                                <td>{{ result.team1Name }}</td>
+                                <td class="team-border team-{{result.team1Name}}">{{ result.team1Name }}</td>
                                 <td>{% if selectedModel == "v2" %}
                                     {{ result.expected_points_from_drives_t1 }}
                                     {% else %} 
@@ -182,7 +182,7 @@
                                     {% endif %}
                                 </td>
                                 <td>vs.</td>
-                                <td>{{ result.team2Name }}</td>
+                                <td class="team-border team-{{result.team2Name}}">{{ result.team2Name }}</td>
                                 <td>{% if selectedModel == "v2" %}
                                     {{ result.expected_points_from_drives_t2 }}
                                     {% else %} 

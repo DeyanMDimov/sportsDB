@@ -29,10 +29,16 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
     gameCompleted = (gameStatus['type']['completed'] == True)
     gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
-    oddsUrl = gameData['competitions'][0]['odds']['$ref']
-    print(oddsUrl)
-    oddsResponse = requests.get(oddsUrl)
-    oddsData = oddsResponse.json()
+    try:
+        oddsUrl = gameData['competitions'][0]['odds']['$ref']
+        oddsResponse = requests.get(oddsUrl)
+        oddsData = oddsResponse.json()
+    except:
+        oddsData = None
+        print("No odds available yet.")
+
+
+    
 
     existingMatch = None
     existingHomeTeamPerf = None
@@ -227,9 +233,9 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
     theAwayTeam = models.nflTeam.objects.get(espnId=awayTeamEspnId)
     matchData.awayTeam.add(theAwayTeam)
         
-    if len(oddsData['items']) > 2:
+    if len(oddsData['items']) >= 2:
         print(str(seasonYear)) 
-        if seasonYear == 2024:
+        if seasonYear == 1999:
             pass
         else:
             try:
@@ -360,7 +366,7 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
         matchData.awayTeam.add(models.nflTeam.objects.get(espnId=awayTeamEspnId))
         
         if len(oddsData['items']) >= 1:
-            if seasonYear == 2024:
+            if seasonYear >= 2024:
                 for i in range(1, len(oddsData['items'])):
                     if oddsData[i]['provider']['name'] == "ESPN BET":
                         if 'spread' in oddsData['items'][i]:
@@ -392,7 +398,7 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
     else:
         matchData = nflMatchObject
         if len(oddsData['items']) >= 1:
-            if int(seasonYear) == 2024:
+            if int(seasonYear) == 2025:
                 
 
                 for i in range(0, len(oddsData['items'])):

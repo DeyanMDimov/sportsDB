@@ -152,7 +152,7 @@ def getData(request):
                 weekOfSeason = i
                 
                 url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
-                
+
                 if(weekOfSeason >= 19):
                     playoffWeekOfSeason = weekOfSeason - 18
                     url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/3/weeks/'+str(playoffWeekOfSeason)+'/events')
@@ -165,7 +165,7 @@ def getData(request):
                     
                     gameDataResponse = requests.get(link['$ref'])
                     gameData = gameDataResponse.json()
-
+                    
                     try:
                         crudLogic.processGameData(gameData, weekOfSeason, yearOfSeason)
                     except Exception as e:
@@ -177,8 +177,9 @@ def getData(request):
                                 exceptionCollection.append(exceptionObj)
 
                             
-                
+                print()
                 print("Week ", str(i), " loaded.")
+                print()
                 i += 1
             if startWeek >= endWeek:
                 message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
@@ -544,11 +545,17 @@ def loadModel(request, target):
                     
                         if match.overUnderLine != 0 and match.overUnderLine != None:
                             individualModelResult = businessLogic.checkModelBets(match.overUnderLine, match.matchLineHomeTeam, individualModelResult, team1.abbreviation, team2.abbreviation)
+                        else:
+                            print("OOOPS!")
+                            print(f'Over under line: {match.overUnderLine};')
                     else:
                         if match.overUnderLine != 0 and match.overUnderLine != None:
                             individualModelResult.bookProvidedTotal = match.overUnderLine
                         if match.matchLineHomeTeam != None:
                             individualModelResult.bookProvidedSpread = match.matchLineHomeTeam
+                        else:
+                            print("OOOPS!")
+                            print(f'Over under line: {match.overUnderLine};')
                     
                     individualModelResult.homeTeamInjuries = sorted(homeTeamInjuries, key= lambda x: x.playerStatus) 
                     individualModelResult.awayTeamInjuries = sorted(awayTeamInjuries, key= lambda x: x.playerStatus) 
