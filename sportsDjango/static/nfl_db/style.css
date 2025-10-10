@@ -38,8 +38,7 @@ body {
   color: #dbeafe !important;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
-
-#main_navigation_menu{
+#site-navigation{
     box-shadow: 1px 4px 12px rgb(0 0 0/ 0.25) !important;
     padding-inline-start: 0px;
     margin: 10px 0;
@@ -399,10 +398,10 @@ width: 90px;
 }
 
 .accordion {
-  --bs-accordion-bg: #2f3440;
+  --bs-accordion-bg: #181b21;
   --bs-accordion-color: #e0e0e0;
   --bs-accordion-border-color: #444;
-  --bs-accordion-btn-bg: #2f3440;
+  --bs-accordion-btn-bg: #181b21;
   --bs-accordion-btn-color: #e0e0e0;
   --bs-accordion-active-bg: #333;
   --bs-accordion-active-color: #fff;
@@ -555,18 +554,19 @@ table thead tr th:first-child {
 }
 
 .team-border {
-    border-bottom: 3px inset;
+    border-bottom: 8px inset;
     border-image-slice: 1;
     position: relative;
+    background-color: #27292c;
 }
 
 .team-border::after {
     content: '';
     position: absolute;
-    bottom: -3px;
+    bottom: 0px;
     left: 0;
     right: 0;
-    height: 3px;
+    height: 8px;
     background: linear-gradient(to right, var(--team-color-1) 50%, var(--team-color-2) 50%);
 }
 
@@ -757,7 +757,7 @@ table thead tr th:first-child {
 }
 
 /* Washington Commanders */
-.team-WAS {
+.team-WSH {
     --team-color-1: #5A1414;
     --team-color-2: #FFB612;
 }
