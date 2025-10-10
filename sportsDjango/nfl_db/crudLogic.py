@@ -1190,9 +1190,6 @@ def createDriveOfPlay (individualDrive, matchData):
 
     for play in individualDrive['plays']['items']:
         created_play = createPlayByPlay(play, addedDrive.espnId, matchData, offenseTeam)
-        
-        # Process play immediately after creation
-        processPlayAfterCreation(created_play, matchData.espnId)
 
     addedDrive.save()
 
@@ -1254,14 +1251,12 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     except:
         pass
     
-    
     try:
         playType = setPlayType(individualPlay['type']['text'], individualPlay)
     except:
         print(individualPlay['$ref'])
         playType = setPlayType("Unknown", individualPlay)    
         
-
     if playType == 40:
         print("playType is other. playText is: " + individualPlay['text'])
    
@@ -1301,29 +1296,39 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
         print("The Json value: " + individualPlay['type']['text'])
         print(e)
         print(individualPlay['text'])
-
         raise(e)
 
-
-
-    if createdPlay.playType in ['INTERCEPTION', 'INTERCEPTION RETURN TOUCHDOWN', 'DEFENSIVE FUMBLE RECOVERY ','DEFENSIVE FUMBLE RECOVERY TOUCHDOWN']:
+    if createdPlay.playType in [15, 16, 19, 20]:  # Interception and fumble plays
         createdPlay.turnover = True
 
+    # NEW LOGIC: For scoring plays, determine who actually scored
     if createdPlay.scoringPlay:
-        if createdPlay.teamOnOffense.espnId == checkTeamFromRefUrl(individualPlay['start']['team']['$ref']):
-            createdPlay.offenseScored = True
+        # Get the team that scored from the play's team field
+        if 'team' in individualPlay:
+            scoring_team_ref = individualPlay['team']['$ref']
+            scoring_team_id = checkTeamFromRefUrl(scoring_team_ref)
+            
+            # Check if the offense scored or defense scored
+            if int(scoring_team_id) == offenseTeam.espnId:
+                createdPlay.offenseScored = True
+            else:
+                createdPlay.offenseScored = False
         else:
-            createdPlay.offenseScored = False
+            # Fallback to old logic if team field doesn't exist
+            defensive_scoring_plays = [16, 19, 20, 21, 23, 24, 25, 27, 41]
+            if createdPlay.playType in defensive_scoring_plays:
+                createdPlay.offenseScored = False
+            else:
+                createdPlay.offenseScored = True
+    
     if 'scoringType' in individualPlay:
         if individualPlay['scoringType']['abbreviation'] == "TD":
             try:
                 createdPlay.extraPointOutcome = individualPlay['pointAfterAttempt']['text']
-            
             except:
                 pass
     
     teamAbbreviation = createdPlay.teamOnOffense.abbreviation
-    
     teamPenaltyText = ("PENALTY on " + teamAbbreviation)
     
     if "No Play" in individualPlay['text']: 
@@ -1331,8 +1336,6 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
             createdPlay.penaltyOnPlay = True
             createdPlay.penaltyIsOnOffense = True
             createdPlay.yardsGainedOrLostOnPenalty = abs(individualPlay['statYardage'])
-
-            # print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
         elif teamAbbreviation == "ARI" and "on ARZ" in individualPlay['text']:
             createdPlay.penaltyOnPlay = True
             createdPlay.penaltyIsOnOffense = True
@@ -1344,33 +1347,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
                 createdPlay.yardsGainedOrLostOnPenalty = abs(individualPlay['statYardage'])
     
     createdPlay.save()
-
     return createdPlay
-    
-
-    # for athlete in individualPlay['participants']:
-        
-    
-    
-
-    
-        
-        
-        
-        # playType = models.SmallIntegerField(choices = playTypes, default = 1)
-        # yardsFromEndzone = models.SmallIntegerField(null = True, blank = True)
-        # yardsOnPlay = models.SmallIntegerField(null = True, blank = True)
-        # playDown = models.SmallIntegerField(validators = [MinValueValidator(1), MaxValueValidator(4)], null = True, blank = True)
-        # # rusher = models.ManyToManyField(player, blank = True, related_name = 'ballCarrier')
-        # # passer = models.ManyToManyField(player, blank = True, related_name = 'passer')
-        # # reciever = models.ManyToManyField(player, blank = True, related_name = 'receiver')
-        # # kickReciever = models.ManyToManyField(player, blank = True, related_name = 'kickReceiver')
-        # turnover = models.BooleanField()
-        # penaltyOnPlay = models.BooleanField()
-        # penaltyIsOnOffense = models.BooleanField(null = True, blank = True)
-        # yardsGainedOrLostOnPenalty = models.SmallIntegerField(null = True, blank = True)
-       
-
 
 def setPlayType(inputType, indiv_play):
     
@@ -1465,6 +1442,91 @@ def setPlayType(inputType, indiv_play):
             return 40
         
     return switch(inputType)
+
+def reprocessMatchPlays(match_espn_id):
+    """
+    Reprocess all plays for a given match to correct scoring flags and update stat splits
+    """
+    try:
+        match = nflMatch.objects.get(espnId=match_espn_id)
+        all_plays = playByPlay.objects.filter(nflMatch=match).order_by('sequenceNumber')
+        
+        plays_updated = 0
+        scoring_plays_corrected = 0
+        
+        print(f"Found {all_plays.count()} plays to reprocess")
+        
+        for play in all_plays:
+            # Update scoring flag if it's a scoring play
+            if play.scoringPlay and play.espnId:
+                # Fetch the play data from ESPN API to get the correct team
+                play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match_espn_id}/competitions/{match_espn_id}/plays/{play.espnId}?lang=en&region=us'
+                
+                try:
+                    play_response = requests.get(play_url)
+                    if play_response.status_code == 200:
+                        play_data = play_response.json()
+                        
+                        old_offense_scored = play.offenseScored
+                        
+                        # Get the team that scored from the API data
+                        if 'team' in play_data:
+                            scoring_team_ref = play_data['team']['$ref']
+                            scoring_team_id = checkTeamFromRefUrl(scoring_team_ref)
+                            scoring_team = nflTeam.objects.get(espnId=scoring_team_id)
+
+                            # Check if the offense scored or defense scored
+                            if int(scoring_team_id) == play.teamOnOffense.espnId:
+                                play.offenseScored = True
+                                print(f"Play {play.espnId}: Offense scored ({scoring_team.abbreviation} was on offense)")
+                            else:
+                                play.offenseScored = False
+                                print(f"Play {play.espnId}: Defense scored ({scoring_team.abbreviation} scored, but {play.teamOnOffense.abbreviation} was on offense)")
+                        else:
+                            # Fallback to play type logic if team field doesn't exist
+                            defensive_scoring_plays = [16, 19, 20, 21, 23, 24, 25, 27, 41]
+                            
+                            if play.playType in defensive_scoring_plays:
+                                play.offenseScored = False
+                                print(f"Play {play.espnId}: Defense scored (based on play type {play.playType})")
+                            else:
+                                play.offenseScored = True
+                                print(f"Play {play.espnId}: Offense scored (based on play type {play.playType})")
+                        
+                        if old_offense_scored != play.offenseScored:
+                            print(f"  -> Corrected play {play.espnId}: offenseScored changed from {old_offense_scored} to {play.offenseScored}")
+                            scoring_plays_corrected += 1
+                        else:
+                            print(f"  -> No change needed (was already {old_offense_scored})")
+                        
+                        play.save()
+                    else:
+                        print(f"Could not fetch play {play.espnId}, status code: {play_response.status_code}")
+                        
+                except Exception as e:
+                    print(f"Error fetching play {play.espnId}: {e}")
+                    # Continue with next play rather than failing entirely
+                    continue
+            
+            # Update stat splits - delete old ones and recreate
+            passerStatSplit.objects.filter(play=play).delete()
+            rusherStatSplit.objects.filter(play=play).delete()
+            receiverStatSplit.objects.filter(play=play).delete()
+            returnerStatSplit.objects.filter(play=play).delete()
+            
+            # Recreate stat splits with correct info
+            populatePlayStatSplits(play, match_espn_id)
+            
+            plays_updated += 1
+        
+        print(f"Reprocessed {plays_updated} plays, corrected {scoring_plays_corrected} scoring flags")
+        return plays_updated, scoring_plays_corrected
+        
+    except Exception as e:
+        print(f"Error in reprocessMatchPlays: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def checkTeamFromRefUrl(refUrl):
     teamEspnId = refUrl[refUrl.index('?')-2:refUrl.index('?')]

@@ -122,10 +122,56 @@ def getData(request):
             return render (request, 'nfl/pullData.html', pageDictionary)
 
         elif 'espnGameId' in request.GET:
-            print("Hit single game endpoint")
             inputReq = request.GET
-            yearOfSeason = inputReq['season'].strip()
-            weekOfSeason = inputReq['week'].strip()
+            matchEspnId = inputReq['espnGameId'].strip()
+            
+            try:
+                # Fetch the match data from ESPN API
+                matchURL = f"http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{matchEspnId}?lang=en&region=us"
+                matchResponse = requests.get(matchURL)
+                
+                if matchResponse.status_code != 200:
+                    pageDictionary['specificMatchMessage'] = f"Error: Could not find match with ID {matchEspnId}"
+                    return render(request, 'nfl/pullData.html', pageDictionary)
+                
+                gameData = matchResponse.json()
+                
+                # Get the week and year from the existing match or game data
+                try:
+                    existingMatch = nflMatch.objects.get(espnId=matchEspnId)
+                    weekOfSeason = existingMatch.weekOfSeason
+                    yearOfSeason = existingMatch.yearOfSeason
+                except nflMatch.DoesNotExist:
+                    # Extract from game data if match doesn't exist
+                    seasonUrl = gameData['season']['$ref']
+                    seasonResponse = requests.get(seasonUrl)
+                    seasonData = seasonResponse.json()
+                    yearOfSeason = seasonData['year']
+                    
+                    weekUrl = gameData['week']['$ref']
+                    weekResponse = requests.get(weekUrl)
+                    weekData = weekResponse.json()
+                    weekOfSeason = weekData['number']
+                
+                # Process the game
+                homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+                awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+                homeTeamAbbr = nflTeam.objects.get(espnId=homeTeamEspnId).abbreviation
+                awayTeamAbbr = nflTeam.objects.get(espnId=awayTeamEspnId).abbreviation
+                
+                print(f"Reprocessing match {matchEspnId}: {homeTeamAbbr} vs {awayTeamAbbr}")
+                
+                crudLogic.processGameData(gameData, weekOfSeason, yearOfSeason)
+
+                plays_updated, scoring_corrected = crudLogic.reprocessMatchPlays(matchEspnId)
+        
+                pageDictionary['specificMatchMessage'] = f"Successfully reprocessed match {matchEspnId}: {homeTeamAbbr} vs {awayTeamAbbr} (Week {weekOfSeason}, {yearOfSeason}). Updated {plays_updated} plays, corrected {scoring_corrected} scoring flags."
+                
+            except Exception as e:
+                print(f"Error reprocessing match {matchEspnId}: {e}")
+                pageDictionary['specificMatchMessage'] = f"Error reprocessing match {matchEspnId}: {str(e)}"
+            
+            return render(request, 'nfl/pullData.html', pageDictionary)
         
         elif 'season' in request.GET and 'startWeek' in request.GET and 'endWeek' in request.GET:
             inputReq = request.GET
@@ -1632,33 +1678,30 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
     
     for play in offensive_tds:
         td = createTouchdownDict(play, match, team, opponent, isHome, 'Offensive')
-        print(f"Touchdown. Play type {play.playType}; Team on offense: {play.teamOnOffense.espnId}")
         touchdowns.append(td)
     
     # Defensive/Special Teams TDs
-    # These are plays where the team scored but was NOT on offense
-    # OR specific play types that indicate defensive scores
-    
-    # Method 1: Defensive TDs during opponent's offensive plays
-    defensive_scoring_plays = [16, 19, 20, 21, 24, 25, 27, 41]  # INT TD, Fumble Recovery TD
+    # For defensive TDs, the teamOnOffense is the OPPONENT (they had the ball)
+    # and offenseScored should be False (because the DEFENSE scored)
+    defensive_scoring_plays = [16, 19, 20, 21, 24, 25, 27, 41]
     
     defensive_tds = playByPlay.objects.filter(
         nflMatch=match,
+        teamOnOffense=opponent,  # OPPONENT had the ball
         scoringPlay=True,
-        pointsScored=6,
+        offenseScored=False,  # But DEFENSE scored
         playType__in=defensive_scoring_plays
-    ).exclude(teamOnOffense=team)  # The scoring team is NOT on offense
+    )
     
     for play in defensive_tds:
-        print(f"DEF Touchdown. Play type {play.playType}; Team on offense: {play.teamOnOffense}")
         td = createTouchdownDict(play, match, team, opponent, isHome, 'Defensive')
         touchdowns.append(td)
     
-    # Method 2: Punt/Kick return TDs
+    # Method 2: Punt/Kick return TDs (these are recorded in drives)
     return_td_drives = driveOfPlay.objects.filter(
         nflMatch=match,
         teamOnOffense=opponent,
-        driveResult__in=[24, 28]   # PUNT RETURN TD
+        driveResult__in=[21]  # PUNT RETURN TD
     )
     
     for drive in return_td_drives:
@@ -1672,6 +1715,17 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
             td = createTouchdownDict(scoring_play, match, team, opponent, isHome, 'Return')
             touchdowns.append(td)
     
+    all_scoring_plays = playByPlay.objects.filter(
+        nflMatch=match,
+        scoringPlay=True,
+        pointsScored__gte=6
+    ).exclude(playType__in=[5, 6, 7, 8, 9, 10, 11, 12])
+
+    print(f"\n=== All scoring plays for {team.abbreviation} vs {opponent.abbreviation} ===")
+    for play in all_scoring_plays:
+        print(f"Play {play.espnId}: Type={play.playType}, TeamOnOffense={play.teamOnOffense.abbreviation}, "
+            f"OffenseScored={play.offenseScored}, Points={play.pointsScored}")
+
     return touchdowns
 
 def createTouchdownDict(play, match, team, opponent, isHome, td_type):

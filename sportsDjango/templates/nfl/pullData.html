@@ -62,6 +62,34 @@
                 
             </form>
             <br>
+            <div class="mt-4">
+                {% if specificMatchMessage %}
+                    <div class="alert alert-info mt-3">
+                        {{ specificMatchMessage }}
+                    </div>
+                {% endif %}
+                <div class="accordion" id="specificMatchAccordion">
+                    <div class="accordion-item">
+                        
+                        <h2 class="accordion-header" id="headingSpecificMatch">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSpecificMatch" aria-expanded="false" aria-controls="collapseSpecificMatch">
+                                Pull Specific Match
+                            </button>
+                        </h2>
+                        <div id="collapseSpecificMatch" class="accordion-collapse collapse" aria-labelledby="headingSpecificMatch" data-bs-parent="#specificMatchAccordion">
+                            <div class="accordion-body">
+                                <form method="GET">
+                                    <div class="mb-3">
+                                        <label for="espnGameId" class="form-label">Match ESPN ID:</label>
+                                        <input type="text" class="form-control" id="espnGameId" name="espnGameId" placeholder="Enter ESPN Game ID" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Reprocess Match</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             {% comment %} <form method="GET">
                 <input type="hidden" name="deleteDrives" value ="allDrives">
                 <button type="submit" disabled>Delete All Drives</button>
