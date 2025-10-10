@@ -1507,7 +1507,7 @@ def getTouchdowns(request):
                     touchdownData.extend(teamTds)
                     touchdownData = sorted(touchdownData, key=lambda x: (
                         x['week'],
-                        x['quarter'] if x['quarter'] else 'Z',  # Put N/A quarters at the end
+                        x['quarter'] if x['quarter'] else 'Z',
                         -x['secondsRemainingInPeriod'] if 'secondsRemainingInPeriod' in x and x['secondsRemainingInPeriod'] else 0
                     ))
                 
@@ -1517,7 +1517,7 @@ def getTouchdowns(request):
                     opponentTouchdownData.extend(opponentTds)
                     opponentTouchdownData = sorted(opponentTouchdownData, key=lambda x: (
                         x['week'],
-                        x['quarter'] if x['quarter'] else 'Z',  # Put N/A quarters at the end
+                        x['quarter'] if x['quarter'] else 'Z',
                         -x['secondsRemainingInPeriod'] if 'secondsRemainingInPeriod' in x and x['secondsRemainingInPeriod'] else 0
                     ))
             
@@ -1526,7 +1526,8 @@ def getTouchdowns(request):
             playerTouchdowns = calculatePlayerTouchdowns(touchdownData)
             
             totalOpponentTouchdowns = len(opponentTouchdownData)
-            opponentPlayerTouchdowns = calculatePlayerTouchdowns(opponentTouchdownData)
+            # Use position-based calculation for opponent touchdowns
+            opponentPositionTouchdowns = calculateTouchdownsByPosition(opponentTouchdownData)
             
             pageDictionary['touchdowns'] = touchdownData
             pageDictionary['opponentTouchdowns'] = opponentTouchdownData
@@ -1535,7 +1536,7 @@ def getTouchdowns(request):
             pageDictionary['totalTouchdowns'] = totalTouchdowns
             pageDictionary['playerTouchdowns'] = playerTouchdowns
             pageDictionary['totalOpponentTouchdowns'] = totalOpponentTouchdowns
-            pageDictionary['opponentPlayerTouchdowns'] = opponentPlayerTouchdowns
+            pageDictionary['opponentPositionTouchdowns'] = opponentPositionTouchdowns
             pageDictionary['loadType'] = load_type
             
             return render(request, 'nfl/touchdowns.html', pageDictionary)
@@ -1803,7 +1804,8 @@ def calculatePlayerTouchdowns(touchdown_list):
                     'receiving': 0,
                     'defensive': 0,
                     'return': 0,
-                    'total': 0
+                    'total': 0,
+                    'position': td.get('scorerPosition', '-')
                 }
             
             if td['tdType'] == 'Offensive':
@@ -1820,6 +1822,59 @@ def calculatePlayerTouchdowns(touchdown_list):
     
     # Sort by total touchdowns
     return sorted(playerTouchdowns.items(), key=lambda x: x[1]['total'], reverse=True)
+
+def calculateTouchdownsByPosition(touchdown_list):
+    """
+    Calculate touchdown statistics by position group
+    """
+    positionTouchdowns = {}
+    
+    # Define position groups
+    position_groups = {
+        'QB': 'QB',
+        'RB': 'RB', 'FB': 'RB',
+        'WR': 'WR',
+        'TE': 'TE',
+        'OL': 'OL', 'C': 'OL', 'G': 'OL', 'T': 'OL',
+        'DL': 'DL', 'DE': 'DL', 'DT': 'DL', 'NT': 'DL',
+        'LB': 'LB', 'ILB': 'LB', 'OLB': 'LB', 'MLB': 'LB',
+        'CB': 'CB', 'DB': 'CB',
+        'S': 'S', 'SS': 'S', 'FS': 'S',
+        'ST': 'ST',  # Special Teams
+        'K': 'K',
+        'P': 'P'
+    }
+    
+    for td in touchdown_list:
+        if td['scorer'] and td['scorer'] != 'Unknown':
+            position = td.get('scorerPosition', '-')
+            
+            # Map to position group
+            pos_group = position_groups.get(position, position)
+            
+            if pos_group not in positionTouchdowns:
+                positionTouchdowns[pos_group] = {
+                    'rushing': 0,
+                    'receiving': 0,
+                    'defensive': 0,
+                    'return': 0,
+                    'total': 0
+                }
+            
+            if td['tdType'] == 'Offensive':
+                if 'RUSH' in td['playType']:
+                    positionTouchdowns[pos_group]['rushing'] += 1
+                elif 'PASS' in td['playType']:
+                    positionTouchdowns[pos_group]['receiving'] += 1
+            elif td['tdType'] == 'Defensive':
+                positionTouchdowns[pos_group]['defensive'] += 1
+            elif td['tdType'] == 'Return':
+                positionTouchdowns[pos_group]['return'] += 1
+            
+            positionTouchdowns[pos_group]['total'] += 1
+    
+    # Sort by total touchdowns
+    return sorted(positionTouchdowns.items(), key=lambda x: x[1]['total'], reverse=True)
 
 def extractPlayerFromDescription(description, keyword='touchdown'):
     """

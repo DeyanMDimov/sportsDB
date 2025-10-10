@@ -1853,8 +1853,6 @@ def scheduledInjuryPull():
         pass 
     
 
-    
-
 def getCurrentWeekAthletesStatus(teamId):
     
     print("Running at " + str(datetime.now()))
@@ -1996,10 +1994,6 @@ def getCurrentWeekAthletesStatus(teamId):
                 athleteJSON['links'] = ""
                 print(athleteJSON)
     
-
-    
-
-
 def resetAllMatchAssociationsForClearing():
     for match in models.nflMatch.objects.all():
         match.homeTeam.clear()
@@ -2487,45 +2481,90 @@ def processPlayParticipants(play, participants_data):
     """
     Process participant data from ESPN API and create stat split records
     """
+    # Check if this is a defensive/special teams TD
+    is_defensive_score = play.scoringPlay and not play.offenseScored
+    
     for participant in participants_data:
         try:
             participant_type = participant.get('type', '').lower()
             
-            if participant_type in ['rusher', 'passer', 'receiver', 'returner']:
-                athlete_ref = participant.get('athlete', {}).get('$ref', '')
-                athlete_id = extractAthleteIdFromRef(athlete_ref)
-                
-                if not athlete_id:
-                    continue
-                
-                # Get or create player
-                try:
-                    player_obj = player.objects.get(espnId=athlete_id)
-                except player.DoesNotExist:
-                    player_obj = createPlayerFromAthleteRef(athlete_ref, play.teamOnOffense)
-                    if not player_obj:
+            # For defensive TDs, focus on the scorer/recoverer, not the offensive players
+            if is_defensive_score:
+                # Only process the defensive player who scored
+                if participant_type in ['scorer', 'recoverer', 'returner']:
+                    athlete_ref = participant.get('athlete', {}).get('$ref', '')
+                    athlete_id = extractAthleteIdFromRef(athlete_ref)
+                    
+                    if not athlete_id:
                         continue
-                
-                # Get player tenure
-                tenure = playerTeamTenure.objects.filter(
-                    player=player_obj,
-                    team=play.teamOnOffense
-                ).first()
-                
-                stats_array = participant.get('stats', [])
-                stats_dict = {}
-                for stat in stats_array:
-                    stats_dict[stat['name']] = stat['value']
-                
-                # Create appropriate stat split
-                if participant_type == 'passer':
-                    createPasserStatSplit(play, player_obj, tenure, stats_dict)
-                elif participant_type == 'rusher':
-                    createRusherStatSplit(play, player_obj, tenure, stats_dict)
-                elif participant_type == 'receiver':
-                    createReceiverStatSplit(play, player_obj, tenure, stats_dict)
-                elif participant_type == 'returner':
+                    
+                    # Get or create player
+                    try:
+                        player_obj = player.objects.get(espnId=athlete_id)
+                    except player.DoesNotExist:
+                        player_obj = createPlayerFromAthleteRef(athlete_ref, play.teamOnOffense)
+                        if not player_obj:
+                            continue
+                    
+                    # Get player tenure - for defensive TD, they're on the OTHER team
+                    # Figure out which team the scorer is on
+                    scorer_team = None
+                    match = play.nflMatch
+                    if play.teamOnOffense.espnId == match.homeTeamEspnId:
+                        scorer_team = nflTeam.objects.get(espnId=match.awayTeamEspnId)
+                    else:
+                        scorer_team = nflTeam.objects.get(espnId=match.homeTeamEspnId)
+                    
+                    tenure = playerTeamTenure.objects.filter(
+                        player=player_obj,
+                        team=scorer_team
+                    ).first()
+                    
+                    stats_array = participant.get('stats', [])
+                    stats_dict = {}
+                    for stat in stats_array:
+                        stats_dict[stat['name']] = stat['value']
+                    
+                    # Create returner stat split for defensive TD
                     createReturnerStatSplit(play, player_obj, tenure, stats_dict)
+                    
+            else:
+                # Normal offensive play - process offensive players
+                if participant_type in ['rusher', 'passer', 'receiver', 'returner']:
+                    athlete_ref = participant.get('athlete', {}).get('$ref', '')
+                    athlete_id = extractAthleteIdFromRef(athlete_ref)
+                    
+                    if not athlete_id:
+                        continue
+                    
+                    # Get or create player
+                    try:
+                        player_obj = player.objects.get(espnId=athlete_id)
+                    except player.DoesNotExist:
+                        player_obj = createPlayerFromAthleteRef(athlete_ref, play.teamOnOffense)
+                        if not player_obj:
+                            continue
+                    
+                    # Get player tenure
+                    tenure = playerTeamTenure.objects.filter(
+                        player=player_obj,
+                        team=play.teamOnOffense
+                    ).first()
+                    
+                    stats_array = participant.get('stats', [])
+                    stats_dict = {}
+                    for stat in stats_array:
+                        stats_dict[stat['name']] = stat['value']
+                    
+                    # Create appropriate stat split
+                    if participant_type == 'passer':
+                        createPasserStatSplit(play, player_obj, tenure, stats_dict)
+                    elif participant_type == 'rusher':
+                        createRusherStatSplit(play, player_obj, tenure, stats_dict)
+                    elif participant_type == 'receiver':
+                        createReceiverStatSplit(play, player_obj, tenure, stats_dict)
+                    elif participant_type == 'returner':
+                        createReturnerStatSplit(play, player_obj, tenure, stats_dict)
                 
         except Exception as e:
             print(f"Error processing participant for play {play.id}: {e}")
