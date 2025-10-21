@@ -1,0 +1,355 @@
+{# NFL Team Dropdown Component - Dark Theme #}
+{# Usage: {% include 'nfl/includes/team_dropdown.html' %} #}
+
+<style>
+    .team-dropdown-container {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
+
+    .team-dropdown-selected {
+        background-color: #1e222b;
+        color: #dbeafe;
+        border: 1px solid #2f3440;
+        padding: 0.375rem 0.75rem;
+        cursor: pointer;
+        border-radius: 0.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 1rem;
+        min-height: calc(3.5rem + 2px);
+        transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .team-dropdown-selected:hover {
+        background-color: #242833;
+        border-color: #3b82f6;
+    }
+
+    .team-dropdown-selected:focus {
+        background-color: #242833;
+        border-color: #3b82f6;
+        outline: 0;
+        box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
+    }
+
+    .team-dropdown-arrow {
+        transition: transform 0.3s;
+        margin-left: 10px;
+        color: #9ca3af;
+    }
+
+    .team-dropdown-arrow.open {
+        transform: rotate(180deg);
+    }
+
+    .team-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background-color: #181b21;
+        border: 1px solid #2f3440;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        margin-top: 4px;
+        width: 1200px;
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 20px;
+    }
+
+    .team-dropdown-menu.open {
+        display: block;
+    }
+
+    .divisions-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+    }
+
+    .division {
+        min-width: 0;
+    }
+
+    .division-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: #dbeafe;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #2f3440;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .team-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .team-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #dbeafe;
+        transition: background-color 0.15s ease, transform 0.12s ease;
+    }
+
+    .team-item:hover {
+        background-color: #242833;
+        transform: translateY(-1px);
+    }
+
+    /* Floating label support */
+    .form-floating {
+        position: relative;
+    }
+
+    .form-floating > .team-dropdown-container .team-dropdown-selected {
+        padding-top: 1.625rem;
+        padding-bottom: 0.625rem;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        height: 58px;
+    }
+
+    /* Style the label that comes after the dropdown */
+    .form-floating > label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 2;
+        height: 100%;
+        padding: 1rem 0.75rem;
+        overflow: hidden;
+        text-align: start;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        pointer-events: none;
+        border: 1px solid transparent;
+        transform-origin: 0 0;
+        transition: opacity 0.1s ease-in-out, transform 0.1s ease-in-out;
+        color: rgba(219, 234, 254, 0.65);
+    }
+
+    /* When the dropdown exists, float the label */
+    .form-floating > .team-dropdown-container ~ label {
+        opacity: 1;
+        transform: scale(0.85) translateY(-0.5rem) translateX(0.15rem);
+        color: rgba(219, 234, 254, 0.65);
+    }
+
+    @media (max-width: 1250px) {
+        .team-dropdown-menu {
+            width: 900px;
+        }
+        .divisions-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    @media (max-width: 950px) {
+        .team-dropdown-menu {
+            width: 600px;
+        }
+        .divisions-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 650px) {
+        .team-dropdown-menu {
+            width: 300px;
+        }
+        .divisions-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<!-- Hidden select for form submission -->
+<select name="teamName" id="team_hidden_select_{{ forloop.counter0|default:'0' }}" class="d-none">
+    {% for team in teams %}
+    <option value="{{ team.abbreviation }}"
+    {% if selectedTeam == team.abbreviation or sel_Team == team.abbreviation or teamName == team.abbreviation %}
+        selected
+    {% endif %}>
+        {{ team.abbreviation }}
+    </option>
+    {% endfor %}
+</select>
+
+<!-- Custom Dropdown UI -->
+<div class="team-dropdown-container" data-dropdown-id="{{ forloop.counter0|default:'0' }}">
+    <div class="team-dropdown-selected" id="teamDropdownSelected_{{ forloop.counter0|default:'0' }}" tabindex="0">
+        <span id="teamSelectedText_{{ forloop.counter0|default:'0' }}">
+            {% if selectedTeam %}
+                {{ selectedTeam.abbreviation }}
+            {% elif sel_Team %}
+                {{ sel_Team.abbreviation }}
+            {% elif teamName %}
+                {{ teamName.abbreviation }}
+            {% else %}
+                Select a team...
+            {% endif %}
+        </span>
+        <span class="team-dropdown-arrow" id="teamDropdownArrow_{{ forloop.counter0|default:'0' }}">▼</span>
+    </div>
+    
+    <div class="team-dropdown-menu" id="teamDropdownMenu_{{ forloop.counter0|default:'0' }}">
+        <div class="divisions-grid">
+            <!-- AFC East -->
+            <div class="division">
+                <div class="division-title">AFC East</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="BUF">Buffalo Bills</li>
+                    <li class="team-item" data-abbr="MIA">Miami Dolphins</li>
+                    <li class="team-item" data-abbr="NE">New England Patriots</li>
+                    <li class="team-item" data-abbr="NYJ">New York Jets</li>
+                </ul>
+            </div>
+
+            <!-- AFC North -->
+            <div class="division">
+                <div class="division-title">AFC North</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="BAL">Baltimore Ravens</li>
+                    <li class="team-item" data-abbr="CIN">Cincinnati Bengals</li>
+                    <li class="team-item" data-abbr="CLE">Cleveland Browns</li>
+                    <li class="team-item" data-abbr="PIT">Pittsburgh Steelers</li>
+                </ul>
+            </div>
+
+            <!-- AFC South -->
+            <div class="division">
+                <div class="division-title">AFC South</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="HOU">Houston Texans</li>
+                    <li class="team-item" data-abbr="IND">Indianapolis Colts</li>
+                    <li class="team-item" data-abbr="JAX">Jacksonville Jaguars</li>
+                    <li class="team-item" data-abbr="TEN">Tennessee Titans</li>
+                </ul>
+            </div>
+
+            <!-- AFC West -->
+            <div class="division">
+                <div class="division-title">AFC West</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="DEN">Denver Broncos</li>
+                    <li class="team-item" data-abbr="KC">Kansas City Chiefs</li>
+                    <li class="team-item" data-abbr="LV">Las Vegas Raiders</li>
+                    <li class="team-item" data-abbr="LAC">Los Angeles Chargers</li>
+                </ul>
+            </div>
+
+            <!-- NFC East -->
+            <div class="division">
+                <div class="division-title">NFC East</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="DAL">Dallas Cowboys</li>
+                    <li class="team-item" data-abbr="NYG">New York Giants</li>
+                    <li class="team-item" data-abbr="PHI">Philadelphia Eagles</li>
+                    <li class="team-item" data-abbr="WSH">Washington Commanders</li>
+                </ul>
+            </div>
+
+            <!-- NFC North -->
+            <div class="division">
+                <div class="division-title">NFC North</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="CHI">Chicago Bears</li>
+                    <li class="team-item" data-abbr="DET">Detroit Lions</li>
+                    <li class="team-item" data-abbr="GB">Green Bay Packers</li>
+                    <li class="team-item" data-abbr="MIN">Minnesota Vikings</li>
+                </ul>
+            </div>
+
+            <!-- NFC South -->
+            <div class="division">
+                <div class="division-title">NFC South</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="ATL">Atlanta Falcons</li>
+                    <li class="team-item" data-abbr="CAR">Carolina Panthers</li>
+                    <li class="team-item" data-abbr="NO">New Orleans Saints</li>
+                    <li class="team-item" data-abbr="TB">Tampa Bay Buccaneers</li>
+                </ul>
+            </div>
+
+            <!-- NFC West -->
+            <div class="division">
+                <div class="division-title">NFC West</div>
+                <ul class="team-list">
+                    <li class="team-item" data-abbr="ARI">Arizona Cardinals</li>
+                    <li class="team-item" data-abbr="LAR">Los Angeles Rams</li>
+                    <li class="team-item" data-abbr="SF">San Francisco 49ers</li>
+                    <li class="team-item" data-abbr="SEA">Seattle Seahawks</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const dropdownId = '{{ forloop.counter0|default:"0" }}';
+        const dropdownSelected = document.getElementById('teamDropdownSelected_' + dropdownId);
+        const dropdownMenu = document.getElementById('teamDropdownMenu_' + dropdownId);
+        const dropdownArrow = document.getElementById('teamDropdownArrow_' + dropdownId);
+        const selectedText = document.getElementById('teamSelectedText_' + dropdownId);
+        const teamItems = dropdownMenu.querySelectorAll('.team-item');
+        const hiddenSelect = document.getElementById('team_hidden_select_' + dropdownId);
+
+        // Toggle dropdown
+        dropdownSelected.addEventListener('click', function(e) {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle('open');
+            dropdownArrow.classList.toggle('open');
+        });
+
+        // Keyboard support
+        dropdownSelected.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                dropdownMenu.classList.toggle('open');
+                dropdownArrow.classList.toggle('open');
+            }
+        });
+
+        // Select team
+        teamItems.forEach(function(item) {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const abbr = item.getAttribute('data-abbr');
+                const teamName = item.textContent;
+                
+                // Update display text
+                selectedText.textContent = abbr;
+                
+                // Update hidden select
+                hiddenSelect.value = abbr;
+                
+                // Close dropdown
+                dropdownMenu.classList.remove('open');
+                dropdownArrow.classList.remove('open');
+            });
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function() {
+            dropdownMenu.classList.remove('open');
+            dropdownArrow.classList.remove('open');
+        });
+
+        // Prevent closing when clicking inside the menu
+        dropdownMenu.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    })();
+</script>

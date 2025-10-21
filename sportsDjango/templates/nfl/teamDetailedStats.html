@@ -24,12 +24,13 @@
 
                     <div class="col-2">
                         <div class="form-floating">
-                            <select class="form-select" name="teamName" id="select_team" aria-label="Floating label">
+                            {% comment %} <select class="form-select" name="teamName" id="select_team" aria-label="Floating label">
                                 {% for team in teams %}
                                     <option value="{{ team.abbreviation }}"
                                         {%if team.abbreviation == teamName %} selected {% endif %}> {{ team.abbreviation }}</option>
                                 {% endfor %}
-                            </select>
+                            </select> {% endcomment %}
+                            {% include 'nfl/teamDropdown.html' %}
                             <label for="select_team">Team:</label>
                         </div>
                     </div>

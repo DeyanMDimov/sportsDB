@@ -19,7 +19,7 @@
                     </div>
                     <div class="mb-1 col-2">
                         <label for="teamName">Team:</label>
-                        <div class="d-flex align-items-center">
+                        {% comment %} <div class="d-flex align-items-center">
                             <select name="teamName" id="teamName" class="form-control">
                                 {% for team in teams %}
                                 <option value="{{ team.abbreviation }}"
@@ -34,11 +34,10 @@
                             <button type="button" class="btn btn-outline-primary btn-sm ms-1" id="nextTeamBtn" style="padding: 0.25rem 0.5rem;">
                                 <span>&#9660;</span>
                             </button>
-                        </div>
+                        </div> {% endcomment %}
+                        {% include 'nfl/teamDropdown.html' %}
                     </div>
-                    <div class="mb-1 col-auto">
-                        
-                    </div>
+                   
                 </div>
                 <div class="row mt-2">
                     <div class="col-auto">

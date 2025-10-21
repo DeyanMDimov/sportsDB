@@ -1132,11 +1132,11 @@ def getPlays(request):
     pageDictionary['teams'] = nflTeams
     
     if request.method == 'GET':
-        if 'week' in request.GET and 'team' in request.GET:
+        if 'week' in request.GET and 'teamName' in request.GET:
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = int(inputReq['week'].strip())
-            selectedTeamAbbr = inputReq['team'].strip()
+            selectedTeamAbbr = inputReq['teamName'].strip()
             
             pageDictionary['selectedYear'] = yearOfSeason
             pageDictionary['selectedWeek'] = weekOfSeason
@@ -1684,7 +1684,7 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
     # Defensive/Special Teams TDs
     # For defensive TDs, the teamOnOffense is the OPPONENT (they had the ball)
     # and offenseScored should be False (because the DEFENSE scored)
-    defensive_scoring_plays = [16, 19, 20, 21, 24, 25, 27, 41]
+    defensive_scoring_plays = [16, 19, 20, 21, 25, 27, 41]
     
     defensive_tds = playByPlay.objects.filter(
         nflMatch=match,
@@ -1698,12 +1698,22 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
         td = createTouchdownDict(play, match, team, opponent, isHome, 'Defensive')
         touchdowns.append(td)
     
-    # Method 2: Punt/Kick return TDs (these are recorded in drives)
-    return_td_drives = driveOfPlay.objects.filter(
+    # For return TDs
+    punt_return_td_drives = driveOfPlay.objects.filter(
         nflMatch=match,
         teamOnOffense=opponent,
         driveResult__in=[21]  # PUNT RETURN TD
     )
+    kickoff_return_td_drives = driveOfPlay.objects.filter(
+        nflMatch=match,
+        teamOnOffense=opponent,
+        driveResult__in=[1],  # PUNT RETURN TD
+        numberOffensivePlays=0
+    )
+    return_td_drives = []
+    return_td_drives.extend(punt_return_td_drives)
+    return_td_drives.extend(kickoff_return_td_drives)
+
     
     for drive in return_td_drives:
         # Find the scoring play in this drive

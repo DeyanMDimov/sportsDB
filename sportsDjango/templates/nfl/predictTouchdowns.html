@@ -30,14 +30,7 @@
                     </div>
                     <div class="mb-1 col-2">
                         <label for="teamName">Team:</label>
-                        <select name="teamName" id="teamName" class="form-control">
-                            {% for team in teams %}
-                            <option value="{{ team.abbreviation }}"
-                            {% if selectedTeam.abbreviation == team.abbreviation %}
-                                selected
-                            {% endif %}>{{ team.abbreviation }}</option>
-                            {% endfor %}
-                        </select>
+                        {% include 'nfl/teamDropdown.html' %}
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Load!</button>
