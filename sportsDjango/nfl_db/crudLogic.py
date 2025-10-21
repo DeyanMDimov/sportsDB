@@ -2460,9 +2460,14 @@ def populatePlayStatSplits(play, match_espn_id):
                     play_data = response.json()
                     
                     if 'participants' in play_data:
+                        if len(play_data['participants']) == 0:
+                            print("UH-OHH X_X")
+                            print(f"⚠️ Play {play.espnId}: API returned empty participants array")
                         processPlayParticipants(play, play_data['participants'])
                     else:
                         # Fallback to parsing description
+                        print("UH-OHH X_X")
+                        print(f"⚠️ Play {play.espnId}: No 'participants' field in API response - falling back to description parsing")
                         if play.playDescription:
                             parsePlayDescription(play)
                         
@@ -2470,6 +2475,9 @@ def populatePlayStatSplits(play, match_espn_id):
                 print(f"Error fetching play data for play {play.espnId}: {e}")
                 if play.playDescription:
                     parsePlayDescription(play)
+                else:
+                    print("UH-OHH X_X")
+                    print(f"❌ Play {play.espnId}: No play description available for parsing")
         
         elif play.playDescription:
             parsePlayDescription(play)
