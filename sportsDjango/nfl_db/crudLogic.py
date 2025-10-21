@@ -2461,16 +2461,24 @@ def populatePlayStatSplits(play, match_espn_id):
                     
                     if 'participants' in play_data:
                         if len(play_data['participants']) == 0:
-                            print("UH-OHH X_X")
-                            print(f"⚠️ Play {play.espnId}: API returned empty participants array")
+                            if 'type' in play_data:
+                                if int(play_data['type']['id']) not in [2, 8, 21, 65, 66, 74, 75]:
+                                    print("UH-OHH X_X")
+                                    print(f"⚠️ Play {play.espnId}: API returned empty participants array")
+                            else:
+                                
+                                print(f"⚠️ Weird Play {play.espnId}: API returned empty participants array - Review.")
                         processPlayParticipants(play, play_data['participants'])
                     else:
-                        # Fallback to parsing description
-                        print("UH-OHH X_X")
-                        print(f"⚠️ Play {play.espnId}: No 'participants' field in API response - falling back to description parsing")
-                        if play.playDescription:
-                            parsePlayDescription(play)
-                        
+                        if 'type' in play_data:
+                            if int(play_data['type']['id']) not in [2, 8, 21, 65, 66, 74, 75]:
+                                print("UH-OHH X_X")
+                                print(f"⚠️ Play {play.espnId}: No 'participants' field in API response - falling back to description parsing")
+                                if play.playDescription:
+                                    parsePlayDescription(play)
+                        else: 
+                            print(play_data)
+                            print(f"⚠️ Weird Play {play.espnId}: API returned empty participants array - Review.")
             except Exception as e:
                 print(f"Error fetching play data for play {play.espnId}: {e}")
                 if play.playDescription:
