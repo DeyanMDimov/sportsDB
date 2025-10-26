@@ -6,35 +6,21 @@
             <h2>Team Touchdowns</h2>
             <form method="GET" class="p-3" id="touchdownsForm">
                 <div class="row g-2">
-                    <div class="mb-1 col-1">
-                        <label for="season">Season:</label>
-                        <select name="season" id="season" class="form-control">
-                            {% for yr in years %}
-                            <option value="{{yr}}" 
-                            {% if yr|stringformat:"i" == yearOfSeason %}
-                                selected
-                            {% endif %}>{{yr}}</option>    
-                            {% endfor %} 
-                        </select> 
+                    <div class="mb-1 col-2">
+                        <div class="form-floating">
+                            
+                            <select name="season" id="season" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}" 
+                                {% if yr|stringformat:"i" == yearOfSeason %}
+                                    selected
+                                {% endif %}>{{yr}}</option>    
+                                {% endfor %} 
+                            </select> 
+                            <label for="season">Season:</label>
+                        </div>
                     </div>
                     <div class="mb-1 col-2">
-                        <label for="teamName">Team:</label>
-                        {% comment %} <div class="d-flex align-items-center">
-                            <select name="teamName" id="teamName" class="form-control">
-                                {% for team in teams %}
-                                <option value="{{ team.abbreviation }}"
-                                {% if selectedTeam.abbreviation == team.abbreviation %}
-                                    selected
-                                {% endif %}>{{ team.abbreviation }}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="button" class="btn btn-outline-primary btn-sm me-1" id="prevTeamBtn" style="padding: 0.25rem 0.5rem;">
-                                <span>&#9650;</span>
-                            </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm ms-1" id="nextTeamBtn" style="padding: 0.25rem 0.5rem;">
-                                <span>&#9660;</span>
-                            </button>
-                        </div> {% endcomment %}
                         {% include 'nfl/teamDropdown.html' %}
                     </div>
                    
@@ -59,7 +45,7 @@
             </form>
         </div>
         
-        {% if touchdowns %}
+        {% if touchdowns  %}
         <div class="mt-4">
             <h3>{{ selectedTeam.fullName }} - {{ yearOfSeason }} Season</h3>
             <p class="lead">Total Touchdowns Scored: {{ totalTouchdowns }}</p>
@@ -121,6 +107,7 @@
                             <th>Position</th>
                             <th>Yards</th>
                             <th>Passer</th>
+                            <th>Down</th>
                             <th>Quarter</th>
                             <th>Time</th>
                         </tr>
@@ -149,6 +136,7 @@
                             </td>
                             <td>{{ td.yardsOnPlay|default:"-" }}</td>
                             <td>{{ td.passer|default:"-" }}</td>
+                            <td>{{ td.playDown|default:"-" }}</td>
                             <td><small>{{ td.quarter }}</small></td>
                             <td><small>{{ td.time }}</small></td>
                         </tr>
@@ -157,7 +145,7 @@
                 </table>
             </div>
         </div>
-        {% elif selectedTeam %}
+        {% elif selectedTeam and loadType != "opponent"%}
         <div class="alert alert-info mt-4">
             No touchdown data found for {{ selectedTeam.fullName }} in {{ yearOfSeason }}.
         </div>
@@ -223,6 +211,7 @@
                             <th>Position</th>
                             <th>Yards</th>
                             <th>Passer</th>
+                            <th>Down</th>
                             <th>Quarter</th>
                             <th>Time</th>
                         </tr>
@@ -232,7 +221,7 @@
                         <tr>
                             <td><a href="{{td.url}}" target="_blank">Link</a></td>
                             <td>{{ td.week }}</td>
-                            <td>{{ td.opponent }}</td>
+                            <td>{{ td.team }}</td>
                             <td>{{ td.tdType }}</td>
                             <td>{{ td.playType|title }}</td>
                             <td>
@@ -251,6 +240,7 @@
                             </td>
                             <td>{{ td.yardsOnPlay|default:"-" }}</td>
                             <td>{{ td.passer|default:"-" }}</td>
+                            <td>{{ td.playDown|default:"-" }}</td>
                             <td><small>{{ td.quarter }}</small></td>
                             <td><small>{{ td.time }}</small></td>
                         </tr>

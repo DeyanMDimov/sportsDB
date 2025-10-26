@@ -178,7 +178,7 @@
 <select name="teamName" id="team_hidden_select_{{ forloop.counter0|default:'0' }}" class="d-none">
     {% for team in teams %}
     <option value="{{ team.abbreviation }}"
-    {% if selectedTeam == team.abbreviation or sel_Team == team.abbreviation or teamName == team.abbreviation %}
+    {% if selectedTeam.abbreviation == team.abbreviation or sel_Team.abbreviation == team.abbreviation or teamName.abbreviation == team.abbreviation %}
         selected
     {% endif %}>
         {{ team.abbreviation }}
@@ -187,8 +187,8 @@
 </select>
 
 <!-- Custom Dropdown UI -->
-<div class="team-dropdown-container" data-dropdown-id="{{ forloop.counter0|default:'0' }}">
-    <div class="team-dropdown-selected" id="teamDropdownSelected_{{ forloop.counter0|default:'0' }}" tabindex="0">
+<div class="team-dropdown-container form-floating" data-dropdown-id="{{ forloop.counter0|default:'0' }}">
+    <div class="team-dropdown-selected form-control" id="teamDropdownSelected_{{ forloop.counter0|default:'0' }}" tabindex="0">
         <span id="teamSelectedText_{{ forloop.counter0|default:'0' }}">
             {% if selectedTeam %}
                 {{ selectedTeam.abbreviation }}
@@ -294,6 +294,7 @@
             </div>
         </div>
     </div>
+    <label for="teamDropdownSelected_0">Team:</label>
 </div>
 
 <script>

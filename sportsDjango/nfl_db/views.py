@@ -1297,6 +1297,7 @@ def getTouchdowns(request):
             
             # Calculate totals and player summaries
             totalTouchdowns = len(touchdownData)
+
             playerTouchdowns = calculatePlayerTouchdowns(touchdownData)
             
             totalOpponentTouchdowns = len(opponentTouchdownData)
@@ -1511,6 +1512,11 @@ def extractTouchdownsFromMatch(match, team, opponent, isHome):
         print(f"Play {play.espnId}: Type={play.playType}, TeamOnOffense={play.teamOnOffense.abbreviation}, "
             f"OffenseScored={play.offenseScored}, Points={play.pointsScored}")
 
+    print(f"\n=== All TDs for {team.abbreviation} vs {opponent.abbreviation} ===")
+    for play in touchdowns:
+        print(f"Play {play['espnId']}: Type={play['playType']}, TD Type={play['tdType']}, TeamOnOffense={play['teamOnOffense']}, "
+            f"Off_Scored={play['offenseScored']}, Points={play['pointsScored']}, Desc={play['description']}")
+    
     return touchdowns
 
 def createTouchdownDict(play, match, team, opponent, isHome, td_type):
@@ -1523,9 +1529,12 @@ def createTouchdownDict(play, match, team, opponent, isHome, td_type):
         'url': play_url,
         'week': match.weekOfSeason,
         'date': match.datePlayed,
+        'espnId': play.espnId,
         'team': team.abbreviation,
         'opponent': opponent.abbreviation,
         'homeAway': 'Home' if isHome else 'Away',
+        'teamOnOffense': play.teamOnOffense.abbreviation,
+        'offenseScored': play.offenseScored,
         'quarter': play.quarter,
         'time': play.displayClockTime,
         'secondsRemainingInPeriod': play.secondsRemainingInPeriod,
@@ -1534,6 +1543,7 @@ def createTouchdownDict(play, match, team, opponent, isHome, td_type):
         'description': play.playDescription[:200] if play.playDescription else 'N/A',
         'yardsOnPlay': play.yardsOnPlay,
         'pointsScored': play.pointsScored,
+        'down': play.playDown,
         'scorer': None,
         'scorerPosition': None,
         'passer': None,
