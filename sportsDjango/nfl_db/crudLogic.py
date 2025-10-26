@@ -62,9 +62,7 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
         existingAwayTeamPerf = teamMatchPerformance.objects.get(matchEspnId = matchEspnId, teamEspnId = awayTeamEspnId)
     except Exception as e:
         print("Match ID: " + str(matchEspnId))
-
         print("Away Team ID: " + str(awayTeamEspnId))
-
         print(e)                        
 
     if datetime.now()<dateOfGame or gameCompleted==False:
@@ -178,10 +176,6 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
                         indoorStadium = gameData['competitions'][0]['venue']['indoor'],
                         preseason= True if int(weekOfSeason) < 0 else False,
                     )
-
-        
-        
-        
         
     else:
         matchData = nflMatchObject
@@ -307,7 +301,6 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
                 exceptionThrown = True
                 exceptions.append([problem_text, oddsData])
 
-    
     
     try:
         for drivesPage in drivesData.drivesPages:
@@ -1172,7 +1165,6 @@ def createDriveOfPlay (individualDrive, matchData):
         addedDrive.timeElapsedInSeconds = individualDrive['timeElapsed']['value']
         addedDrive.driveResult = resultOfDrive
 
-        
         addedDrive.startOfDriveYardLine = individualDrive['start']['yardLine']
         addedDrive.endOfDriveYardLine = individualDrive['end']['yardLine']
         addedDrive.numberOffensivePlays = individualDrive['offensivePlays']
@@ -1180,16 +1172,11 @@ def createDriveOfPlay (individualDrive, matchData):
         addedDrive.reachedRedZone = True if (individualDrive['plays']['items'][-1]['start']['yardLine'] <= 25) else False
     
 
-    
-
     for play in individualDrive['plays']['items']:
+        created_play = createPlayByPlay(play, addedDrive.espnId, matchData, offenseTeam)
         if(play['start']['yardsToEndzone'] <= 25):
             addedDrive.reachedRedZone = True
         
-        
-
-    for play in individualDrive['plays']['items']:
-        created_play = createPlayByPlay(play, addedDrive.espnId, matchData, offenseTeam)
 
     addedDrive.save()
 
@@ -1245,6 +1232,7 @@ def setResultOfDrive(inputResult, matchEspnId = ""):
 
 def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     playObject = None
+    playAlreadyExists = False
     
     try:
         playObject = playByPlay.objects.get(espnId = individualPlay['id'])
@@ -1283,6 +1271,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
                 sequenceNumber = individualPlay['sequenceNumber']
             )
         else:
+            playAlreadyExists = True
             createdPlay = playObject
             createdPlay.playType = playType
             createdPlay.quarter = individualPlay['period']['number']
@@ -1320,6 +1309,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
                 createdPlay.offenseScored = False
             else:
                 createdPlay.offenseScored = True
+        
     
     if 'scoringType' in individualPlay:
         if individualPlay['scoringType']['abbreviation'] == "TD":
@@ -1347,6 +1337,9 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
                 createdPlay.yardsGainedOrLostOnPenalty = abs(individualPlay['statYardage'])
     
     createdPlay.save()
+
+    populatePlayStatSplits(createdPlay, matchData.espnId)
+
     return createdPlay
 
 def setPlayType(inputType, indiv_play):
@@ -1671,6 +1664,65 @@ def getExplosivePlays(playByPlayData, teamId):
                 teamExplosivePlays += 1
     
     return teamExplosivePlays
+          
+def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekNum):
+    if len(seasonAvailability) == 0:
+        for playerRecord in weekAvailability:
+            seasonAvailability.append([playerRecord[0], [playerRecord[1]]])
+        
+        return seasonAvailability
+    else:
+        #seasonAvailability.sort(key= lambda x: x[0].name)
+        
+        for player in weekAvailability:
+            playerRow = list(filter(lambda y: y[0] == player[0], seasonAvailability))
+           
+            if len(playerRow) != 0:
+                indexOfPlayer = seasonAvailability.index(playerRow[0])
+                seasonAvailability[indexOfPlayer][1].append(player[1])
+            else:
+                availabilityArray = []
+                for i in range(1, weekNum):
+                    availabilityArray.append("Not in Roster")
+                availabilityArray.append(player[1])
+                seasonAvailability.append([player[0], availabilityArray])
+        
+        for player in seasonAvailability:
+            if len(player[1]) != weekNum:
+                player[1].append("Not in Roster")
+
+        return seasonAvailability
+            
+def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
+    athletesAndAvailability = []
+    print(seasonWeek)
+    for athlete in rosterData['entries']:
+
+        playerObj = None
+        try:
+            playerObj = player.objects.get(espnId = athlete['playerId'])
+        except:
+                pass
+        if playerObj == None:
+            playerObj = players.createPlayerAthletesFromGameRoster(athlete, team.espnId)
+        
+        try:
+            playerWeekStatusObj = playerWeekStatus.objects.get(player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek)
+        except:
+            playerWeekStatusObj = playerWeekStatus.objects.create(
+                player = playerObj,
+                team = team,
+                weekOfSeason = seasonWeek,
+                yearOfSeason = seasonYear,
+            )
+            if athlete['didNotPlay'] == True or athlete['valid'] == False:
+                playerWeekStatusObj.playerStatus = 4
+                playerWeekStatusObj.save()
+        
+        athletesAndAvailability.append([playerObj, playerWeekStatusObj])
+    
+    athletesAndAvailability = sorted(athletesAndAvailability, key = lambda x: x[0].playerPosition)
+    return athletesAndAvailability
 
 def scheduledScorePull():
     thisDayUTC = datetime.now()
@@ -1772,65 +1824,6 @@ def scheduledScorePull():
     else:
         print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and we did not check for games.")
         return
-            
-def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekNum):
-    if len(seasonAvailability) == 0:
-        for playerRecord in weekAvailability:
-            seasonAvailability.append([playerRecord[0], [playerRecord[1]]])
-        
-        return seasonAvailability
-    else:
-        #seasonAvailability.sort(key= lambda x: x[0].name)
-        
-        for player in weekAvailability:
-            playerRow = list(filter(lambda y: y[0] == player[0], seasonAvailability))
-           
-            if len(playerRow) != 0:
-                indexOfPlayer = seasonAvailability.index(playerRow[0])
-                seasonAvailability[indexOfPlayer][1].append(player[1])
-            else:
-                availabilityArray = []
-                for i in range(1, weekNum):
-                    availabilityArray.append("Not in Roster")
-                availabilityArray.append(player[1])
-                seasonAvailability.append([player[0], availabilityArray])
-        
-        for player in seasonAvailability:
-            if len(player[1]) != weekNum:
-                player[1].append("Not in Roster")
-
-        return seasonAvailability
-            
-def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
-    athletesAndAvailability = []
-    print(seasonWeek)
-    for athlete in rosterData['entries']:
-
-        playerObj = None
-        try:
-            playerObj = player.objects.get(espnId = athlete['playerId'])
-        except:
-                pass
-        if playerObj == None:
-            playerObj = players.createPlayerAthletesFromGameRoster(athlete, team.espnId)
-        
-        try:
-            playerWeekStatusObj = playerWeekStatus.objects.get(player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek)
-        except:
-            playerWeekStatusObj = playerWeekStatus.objects.create(
-                player = playerObj,
-                team = team,
-                weekOfSeason = seasonWeek,
-                yearOfSeason = seasonYear,
-            )
-            if athlete['didNotPlay'] == True or athlete['valid'] == False:
-                playerWeekStatusObj.playerStatus = 4
-                playerWeekStatusObj.save()
-        
-        athletesAndAvailability.append([playerObj, playerWeekStatusObj])
-    
-    athletesAndAvailability = sorted(athletesAndAvailability, key = lambda x: x[0].playerPosition)
-    return athletesAndAvailability
 
 def scheduledInjuryPull():
     thisDayUTC = datetime.now()

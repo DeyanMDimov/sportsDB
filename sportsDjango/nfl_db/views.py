@@ -25,104 +25,105 @@ def getData(request):
 
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
-            inputReq = request.GET
-            yearOfSeason = inputReq['season'].strip()
-            weekOfSeason = inputReq['week'].strip()
+        #     inputReq = request.GET
+        #     yearOfSeason = inputReq['season'].strip()
+        #     weekOfSeason = inputReq['week'].strip()
 
-            pageDictionary['sel_year'] = yearOfSeason
-            pageDictionary['start_week'] = weekOfSeason
+        #     pageDictionary['sel_year'] = yearOfSeason
+        #     pageDictionary['start_week'] = weekOfSeason
             
-            url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
-            response = requests.get(url)
-            data = response.json()
-            gameLinks = data['items']
+        #     url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+yearOfSeason+'/types/2/weeks/'+weekOfSeason+'/events')
+        #     response = requests.get(url)
+        #     data = response.json()
+        #     gameLinks = data['items']
 
-            for link in gameLinks:
+        #     for link in gameLinks:
                 
-                gameDataResponse = requests.get(link['$ref'])
-                gameData = gameDataResponse.json()
+        #         gameDataResponse = requests.get(link['$ref'])
+        #         gameData = gameDataResponse.json()
 
-                matchEspnId = gameData['id']
-                dateOfGameFromApi = gameData['date']
-                dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
+        #         matchEspnId = gameData['id']
+        #         dateOfGameFromApi = gameData['date']
+        #         dateOfGame = datetime.datetime.fromisoformat(dateOfGameFromApi.replace("Z", ":00"))
 
-                homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
-                awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
-                homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
-                awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
-                print()
-                print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
+        #         homeTeamEspnId = gameData['competitions'][0]['competitors'][0]['id']
+        #         awayTeamEspnId = gameData['competitions'][0]['competitors'][1]['id']
+        #         homeTeamAbbr = nflTeam.objects.get(espnId = homeTeamEspnId).abbreviation
+        #         awayTeamAbbr = nflTeam.objects.get(espnId = awayTeamEspnId).abbreviation
+        #         print()
+        #         print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
 
-                gameStatusUrl = gameData['competitions'][0]['status']['$ref']
-                gameStatusResponse = requests.get(gameStatusUrl)
-                gameStatus = gameStatusResponse.json()
+        #         gameStatusUrl = gameData['competitions'][0]['status']['$ref']
+        #         gameStatusResponse = requests.get(gameStatusUrl)
+        #         gameStatus = gameStatusResponse.json()
 
-                gameCompleted = (gameStatus['type']['completed'] == True)
-                gameOvertime = ("OT" in gameStatus['type']['detail']) 
+        #         gameCompleted = (gameStatus['type']['completed'] == True)
+        #         gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
-                oddsUrl = gameData['competitions'][0]['odds']['$ref']
-                print(gameData['competitions'][0]['odds'])
-                oddsResponse = requests.get(oddsUrl)
-                oddsData = oddsResponse.json()
+        #         oddsUrl = gameData['competitions'][0]['odds']['$ref']
+        #         print(gameData['competitions'][0]['odds'])
+        #         oddsResponse = requests.get(oddsUrl)
+        #         oddsData = oddsResponse.json()
 
-                existingMatch = None
-                existingHomeTeamPerf = None
-                existingAwayTeamPerf = None
+        #         existingMatch = None
+        #         existingHomeTeamPerf = None
+        #         existingAwayTeamPerf = None
                 
-                responseMessage = ""
+        #         responseMessage = ""
 
-                try:
-                    existingMatch = nflMatch.objects.get(espnId = matchEspnId)
-                except Exception as e:
-                        print(e)
+        #         try:
+        #             existingMatch = nflMatch.objects.get(espnId = matchEspnId)
+        #         except Exception as e:
+        #                 print(e)
                 
                 
-                if datetime.datetime.now()<dateOfGame or gameCompleted == False:
-                    print("updating scheduled match")
-                    businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, weekOfSeason, yearOfSeason)
-                else:
-                    print("creating or updating matchData")
-                    homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
-                    homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
-                    homeTeamStats = homeTeamStatsResponse.json()
+        #         if datetime.datetime.now()<dateOfGame or gameCompleted == False:
+        #             print("updating scheduled match")
+        #             businessLogic.createOrUpdateScheduledNflMatch(existingMatch, gameData, oddsData, weekOfSeason, yearOfSeason)
+        #         else:
+        #             print("creating or updating matchData")
+        #             homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
+        #             homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
+        #             homeTeamStats = homeTeamStatsResponse.json()
 
-                    homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
-                    homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
-                    homeTeamScore = homeTeamScoreResponse.json()
+        #             homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
+        #             homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
+        #             homeTeamScore = homeTeamScoreResponse.json()
 
-                    awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
-                    awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
-                    awayTeamStats = awayTeamStatsResponse.json()
+        #             awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
+        #             awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
+        #             awayTeamStats = awayTeamStatsResponse.json()
                     
-                    awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
-                    awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
-                    awayTeamScore = awayTeamScoreResponse.json()
+        #             awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
+        #             awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
+        #             awayTeamScore = awayTeamScoreResponse.json()
 
-                    drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
-                    drivesDataResponse = requests.get(drivesDataUrl)
-                    drivesData = drivesDataResponse.json()
+        #             drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
+        #             drivesDataResponse = requests.get(drivesDataUrl)
+        #             drivesData = drivesDataResponse.json()
 
-                    playsDataUrl = gameData['competitions'][0]['details']['$ref']
+        #             playsDataUrl = gameData['competitions'][0]['details']['$ref']
                     
-                    playsDataResponse = requests.get(playsDataUrl)
-                    playsData = playsDataResponse.json()
+        #             playsDataResponse = requests.get(playsDataUrl)
+        #             playsData = playsDataResponse.json()
 
                     
                     
-                    matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, yearOfSeason)
+        #             matchData = businessLogic.createOrUpdateNflMatch(existingMatch, gameData, gameCompleted, gameOvertime, homeTeamScore, homeTeamStats, awayTeamScore, awayTeamStats, oddsData, playsData, drivesData, weekOfSeason, yearOfSeason)
 
-                    try:
-                        businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
-                        businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+        #             try:
+        #                 businessLogic.createTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
+        #                 businessLogic.createTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, seasonWeek=weekOfSeason, seasonYear=yearOfSeason)
 
-                        pageDictionary['responseMessage'] = "Successfully pulled in Week " + str(weekOfSeason) + " for " + str(yearOfSeason)
-                    except Exception as e: 
-                        businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
-                        businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
+        #                 pageDictionary['responseMessage'] = "Successfully pulled in Week " + str(weekOfSeason) + " for " + str(yearOfSeason)
+        #             except Exception as e: 
+        #                 businessLogic.updateTeamPerformance(homeTeamScore, homeTeamStats, matchData.espnId, matchData.homeTeamEspnId, matchData.awayTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
+        #                 businessLogic.updateTeamPerformance(awayTeamScore, awayTeamStats, matchData.espnId, matchData.awayTeamEspnId, matchData.homeTeamEspnId, playsData, drivesData, weekOfSeason, yearOfSeason)
 
-            return render (request, 'nfl/pullData.html', pageDictionary)
-
-        elif 'espnGameId' in request.GET:
+        #     return render (request, 'nfl/pullData.html', pageDictionary)
+            pass
+        
+        if 'espnGameId' in request.GET:
             inputReq = request.GET
             matchEspnId = inputReq['espnGameId'].strip()
             
@@ -1037,98 +1038,7 @@ def playerSignificance(request):
 
         return JsonResponse({}, status="200")
 
-# def getPlays(request):
-#     nflTeams = nflTeam.objects.all().order_by('abbreviation')
 
-#     yearsOnPage = yearsOnPage_Helper()
-
-#     weeksOnPage = weeksOnPage_Helper()
-#     weeksOnPage.insert(0, ["100", "ALL"])
-
-#     pageDictionary = {}
-#     pageDictionary['weeks'] = weeksOnPage
-#     pageDictionary['years'] = yearsOnPage
-#     pageDictionary['teams'] = nflTeams
-
-#     if(request.method == 'GET'):
-#         if 'teamName' in request.GET and 'season' in request.GET:
-#                 inputReq = request.GET
-#                 yearOfSeason = inputReq['season'].strip()
-#                 selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
-#                 teamId = selectedTeam.espnId
-                
-#                 if yearOfSeason == '2025':
-#                     url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
-#                     response = requests.get(url)
-#                     responseData = response.json()
-#                     rosterData = responseData['athletes']
-
-#                     for subsection in rosterData:
-#                         players.createPlayerAthletesFromTeamRoster(subsection, teamId)
-
-
-#                     playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
-
-#                     playerTenuresLoaded = []
-#                     for pl in playersLoaded:
-#                         individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
-#                         for ipt in individualPlayerTenures:
-#                             playerTenuresLoaded.append(ipt)
-                    
-#                     # print(playerTenuresLoaded)
-
-#                     return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'selTeam': selectedTeam, 'players': playersLoaded, 'season': inputReq['season'], 'tenures': playerTenuresLoaded})
-
-#         elif 'week' in request.GET:
-#             inputReq = request.GET
-#             yearOfSeason = inputReq['season'].strip()
-#             weekOfSeason = int(inputReq['week'].strip())
-            
-                
-            
-#             # if 'team' in inputReq:
-
-#             #     selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
-#             #     teamId = selectedTeam.espnId
-#             #     selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
-#             #     if(len(selectedMatchQuerySet) == 0):
-#             #         selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
-#             #         if(len(selectedMatchQuerySet) == 0):
-#             #             responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
-#             #             return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
-                
-#             #     selectedMatch = selectedMatchQuerySet[0]
-#             #     matchId = selectedMatch.espnId
-                
-#             #     gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
-#             #     gameRosterResponse = requests.get(gameRosterUrl)
-#             #     print(gameRosterUrl)
-#             #     gameRosterData = gameRosterResponse.json()
-
-#             #     athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
-
-#             #     # print(weekOfSeason)
-#             #     return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
-            
-#             matches = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason)
-#             resultArray = []
-#             for s_match in matches:
-#                 drives = driveOfPlay.objects.filter(nflMatch = s_match)
-#                 drives = sorted(drives, key=lambda x: x.sequenceNumber)
-#                 result_drives_array = []
-#                 for s_drive in drives:
-#                     plays = playByPlay.objects.filter(driveOfPlay = s_drive)
-#                     result_plays_array = []
-#                     for play in plays:
-#                         result_plays_array.append(play)
-#                     result_plays_array = sorted(result_plays_array, key=lambda x: x.sequenceNumber)
-#                     result_drives_array.append([s_drive, result_plays_array])
-#                 resultArray.append([s_match, result_drives_array])
-            
-#             return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'resultArray': resultArray, 'weekNum': weekOfSeason})
-#         else:
-            
-#             return render(request, 'nfl/plays.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage})    
 
 # CLAUDE CODE
 def getPlays(request):

@@ -9,37 +9,33 @@
                 Get plays for:
                 <div class="row g-2">
                     <div class="mb-1 col-2">
-                        Season: <select name="season" id="season" class="form-control">
-                            {% for yr in years %}
-                            <option value="{{yr}}" 
-                            {%if yr|stringformat:"i" == selectedYear %}
-                                    selected
-                                {% endif %} >{{yr}}</option>    
-                            {% endfor %} 
-                        </select> 
+                        <div class="form-floating">
+                            <select name="season" id="season" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}" 
+                                {%if yr|stringformat:"i" == selectedYear %}
+                                        selected
+                                    {% endif %} >{{yr}}</option>    
+                                {% endfor %} 
+                            </select> 
+                            <label for="season">Season:</label>
+                        </div>
                     </div>
                     <div class="mb-1 col-2">
-                        Week: <select name="week" id="week" class="form-control">
-                            {% for wk in weeks %}
-                            <option value="{{wk.0}}"
-                                {% if wk.0 == selectedWeek %}
-                                    selected
-                                {% endif %} > {{ wk.1 }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="form-floating">
+                            <select name="week" id="week" class="form-control">
+                                {% for wk in weeks %}
+                                <option value="{{wk.0}}"
+                                    {% if wk.0 == selectedWeek %}
+                                        selected
+                                    {% endif %} > {{ wk.1 }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="week">Week:</label>
+                        </div>
                     </div>
                     <div class="mb-1 col-2">
-                        Team:
-                        <select name="teamName" id="team" class="form-control">
-                            <option value="ALL">ALL</option>
-                        {% for team in teams %}
-                            <option value="{{ team.abbreviation }}"
-                            {%if selectedTeam == team.abbreviation %}
-                                selected
-                            {% endif %}
-                            > {{ team.abbreviation }}</option>
-                        {% endfor %}
-                        </select>
+                        {% include 'nfl/teamDropdown.html' %}
                     </div>
                 </div>
                 <button type="submit" class="btn btn-outline-primary">Load!</button>
