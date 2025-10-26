@@ -87,9 +87,10 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
 
         drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
         drivesData = drivesDataObj(drivesDataUrl)
-
+        print(f'Drives URL: {drivesDataUrl}')
         playsDataUrl = gameData['competitions'][0]['details']['$ref']
         playsDataResponse = requests.get(playsDataUrl)
+        print(f'Plays URL: {playsDataUrl}')
         playsData = playsDataResponse.json()
 
         playByPlayOfGame = playByPlayData(playsData)
@@ -1338,7 +1339,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     
     createdPlay.save()
 
-    populatePlayStatSplits(createdPlay, matchData.espnId)
+    populatePlayStatSplits(createdPlay, individualPlay, matchData.espnId, False)
 
     return createdPlay
 
@@ -1508,7 +1509,7 @@ def reprocessMatchPlays(match_espn_id):
             returnerStatSplit.objects.filter(play=play).delete()
             
             # Recreate stat splits with correct info
-            populatePlayStatSplits(play, match_espn_id)
+            populatePlayStatSplits(play, None, match_espn_id)
             
             plays_updated += 1
         
@@ -2427,7 +2428,7 @@ def updatePlayScoringFlag(play):
     except Exception as e:
         print(f"Error updating scoring flag for play {play.id}: {e}")
 
-def populatePlayStatSplits(play, match_espn_id):
+def populatePlayStatSplits(play, playJson, match_espn_id, reprocess=False):
     """
     Populate stat split models for a given play by fetching participant data from ESPN API
     """
@@ -2445,43 +2446,68 @@ def populatePlayStatSplits(play, match_espn_id):
         
         # Fetch play participant data from ESPN API
         if play.espnId:
-            play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match_espn_id}/competitions/{match_espn_id}/plays/{play.espnId}?lang=en&region=us'
+            if reprocess:
+                play_url = f'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{match_espn_id}/competitions/{match_espn_id}/plays/{play.espnId}?lang=en&region=us'
             
-            try:
-                response = requests.get(play_url)
-                if response.status_code == 200:
-                    play_data = response.json()
-                    
-                    if 'participants' in play_data:
-                        if len(play_data['participants']) == 0:
+                try:
+                    response = requests.get(play_url)
+                    if response.status_code == 200:
+                        play_data = response.json()
+                        
+                        if 'participants' in play_data:
+                            if len(play_data['participants']) == 0:
+                                if 'type' in play_data:
+                                    if int(play_data['type']['id']) not in [2, 8, 21, 65, 66, 74, 75]:
+                                        print("UH-OHH X_X")
+                                        print(f"⚠️ Play {play.espnId}: API returned empty participants array")
+                                else:
+                                    
+                                    print(f"⚠️ Weird Play {play.espnId}: API returned empty participants array - Review.")
+                            processPlayParticipants(play, play_data['participants'])
+                        else:
                             if 'type' in play_data:
                                 if int(play_data['type']['id']) not in [2, 8, 21, 65, 66, 74, 75]:
                                     print("UH-OHH X_X")
-                                    print(f"⚠️ Play {play.espnId}: API returned empty participants array")
-                            else:
-                                
+                                    print(f"⚠️ Play {play.espnId}: No 'participants' field in API response - falling back to description parsing")
+                                    if play.playDescription:
+                                        parsePlayDescription(play)
+                            else: 
+                                print(play_data)
                                 print(f"⚠️ Weird Play {play.espnId}: API returned empty participants array - Review.")
-                        processPlayParticipants(play, play_data['participants'])
+                except Exception as e:
+                    print(f"Error fetching play data for play {play.espnId}: {e}")
+                    if play.playDescription:
+                        parsePlayDescription(play)
                     else:
+                        print("UH-OHH X_X")
+                        print(f"❌ Play {play.espnId}: No play description available for parsing")
+            else:
+                play_data = playJson
+
+                if 'participants' in play_data:
+                    print("Participants found in plays data from pullData")
+                    if len(play_data['participants']) == 0:
                         if 'type' in play_data:
                             if int(play_data['type']['id']) not in [2, 8, 21, 65, 66, 74, 75]:
                                 print("UH-OHH X_X")
-                                print(f"⚠️ Play {play.espnId}: No 'participants' field in API response - falling back to description parsing")
-                                if play.playDescription:
-                                    parsePlayDescription(play)
-                        else: 
-                            print(play_data)
+                                print(f"⚠️ Play {play.espnId}: API returned empty participants array")
+                        else:
+                            
                             print(f"⚠️ Weird Play {play.espnId}: API returned empty participants array - Review.")
-            except Exception as e:
-                print(f"Error fetching play data for play {play.espnId}: {e}")
-                if play.playDescription:
-                    parsePlayDescription(play)
+                    processPlayParticipants(play, play_data['participants'])
                 else:
-                    print("UH-OHH X_X")
-                    print(f"❌ Play {play.espnId}: No play description available for parsing")
-        
+                    if 'type' in play_data:
+                        if int(play_data['type']['id']) not in [2, 8, 21, 65, 66, 74, 75]:
+                            print("UH-OHH X_X")
+                            print(f"⚠️ Play {play.espnId}: No 'participants' field in API response - falling back to description parsing")
+                            if play.playDescription:
+                                parsePlayDescription(play)
+                    else: 
+                        print(play_data)
+                        print(f"⚠️ Weird Play {play.espnId}: API returned empty participants array - Review.")
         elif play.playDescription:
             parsePlayDescription(play)
+            
             
     except Exception as e:
         print(f"Error populating stat splits for play {play.id}: {e}")

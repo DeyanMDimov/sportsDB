@@ -122,7 +122,7 @@ def getData(request):
 
         #     return render (request, 'nfl/pullData.html', pageDictionary)
             pass
-        
+
         if 'espnGameId' in request.GET:
             inputReq = request.GET
             matchEspnId = inputReq['espnGameId'].strip()
@@ -198,7 +198,7 @@ def getData(request):
             while i <= endWeek:
                 #time.sleep(1)
                 weekOfSeason = i
-                
+                print(f'Procesing Week {i}')
                 url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
 
                 if(weekOfSeason >= 19):
