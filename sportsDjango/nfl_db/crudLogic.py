@@ -943,7 +943,7 @@ def captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId
                             elif teamAbbreviation == "ARI" and "on ARZ" in play['text']:
                                 totalOffensePenalties += 1
                                 totalOffensePenaltyYards += abs(play['statYardage'])
-                                print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
+                                #print(teamAbbreviation + " penalty: " + str(abs(play['statYardage'])))
                         else:
                             if play['start']['down'] == 1:
                                 totalFirstDownPlays += 1
@@ -1338,6 +1338,8 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
                 createdPlay.yardsGainedOrLostOnPenalty = abs(individualPlay['statYardage'])
     
     createdPlay.save()
+
+    print(f'Down of play: {createdPlay.playDown}')
 
     populatePlayStatSplits(createdPlay, individualPlay, matchData.espnId, False)
 
