@@ -1339,7 +1339,7 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
     
     createdPlay.save()
 
-    print(f'Down of play: {createdPlay.playDown}')
+
 
     populatePlayStatSplits(createdPlay, individualPlay, matchData.espnId, False)
 
