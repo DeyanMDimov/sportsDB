@@ -2485,7 +2485,7 @@ def populatePlayStatSplits(play, playJson, match_espn_id, reprocess=False):
                 play_data = playJson
 
                 if 'participants' in play_data:
-                    print("Participants found in plays data from pullData")
+                    
                     if len(play_data['participants']) == 0:
                         if 'type' in play_data:
                             if int(play_data['type']['id']) not in [2, 8, 21, 65, 66, 74, 75]:
