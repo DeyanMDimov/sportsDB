@@ -87,10 +87,10 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
 
         drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
         drivesData = drivesDataObj(drivesDataUrl)
-        print(f'Drives URL: {drivesDataUrl}')
+        #print(f'Drives URL: {drivesDataUrl}')
         playsDataUrl = gameData['competitions'][0]['details']['$ref']
         playsDataResponse = requests.get(playsDataUrl)
-        print(f'Plays URL: {playsDataUrl}')
+        #print(f'Plays URL: {playsDataUrl}')
         playsData = playsDataResponse.json()
 
         playByPlayOfGame = playByPlayData(playsData)
