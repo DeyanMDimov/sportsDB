@@ -321,8 +321,8 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
         exceptionThrown = True
 
     
-    if exceptionThrown:
-        raise Exception(exceptions)
+    # if exceptionThrown:
+    #     raise Exception(exceptions)
 
     matchData.save()    
 
