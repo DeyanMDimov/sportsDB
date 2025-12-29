@@ -301,6 +301,11 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
                 print(problem_text)
                 exceptionThrown = True
                 exceptions.append([problem_text, oddsData])
+                matchData.matchLineHomeTeam = 0
+                matchData.overUnderLine = 0
+                matchData.homeTeamMoneyLine = 0
+                matchData.awayTeamMoneyLine = 0
+                
 
     
     try:
@@ -361,23 +366,30 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
         
         if len(oddsData['items']) >= 1:
             if seasonYear >= 2024:
-                for i in range(1, len(oddsData['items'])):
-                    if oddsData[i]['provider']['name'] == "ESPN BET":
-                        if 'spread' in oddsData['items'][i]:
-                            matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
-                        else:
-                            print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
-                        if 'overUnder' in oddsData['items'][i]:
-                            matchData.overUnderLine = oddsData['items'][i]['overUnder']
-                        else:
-                            print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
-                        if 'homeTeamOdds' in oddsData['items'][i]:
-                            matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
-                        
-                        if 'awayTeamOdds' in oddsData['items'][0]:
-                            matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+                try:
+                    for i in range(1, len(oddsData['items'])):
+                        if oddsData[i]['provider']['name'] == "ESPN BET":
+                            if 'spread' in oddsData['items'][i]:
+                                matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
+                            else:
+                                print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            
+                            if 'overUnder' in oddsData['items'][i]:
+                                matchData.overUnderLine = oddsData['items'][i]['overUnder']
+                            else:
+                                print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            
+                            if 'homeTeamOdds' in oddsData['items'][i]:
+                                matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
+                            
+                            if 'awayTeamOdds' in oddsData['items'][0]:
+                                matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+                except Exception as e:
+                    print(e) 
+                    matchData.matchLineHomeTeam = 0
+                    matchData.overUnderLine = 0
+                    matchData.homeTeamMoneyLine = 0
+                    matchData.awayTeamMoneyLine = 0
             else:
                 
                 try:
@@ -385,8 +397,12 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
                     matchData.homeTeamMoneyLine = oddsData['items'][0]['homeTeamOdds']['moneyLine']
                     matchData.awayTeamMoneyLine = oddsData['items'][0]['awayTeamOdds']['moneyLine']
                     matchData.matchLineHomeTeam = oddsData['items'][0]['spread']
-                except: 
-                    pass
+                except Exception as e:
+                    print(e)
+                    matchData.matchLineHomeTeam = 0
+                    matchData.overUnderLine = 0
+                    matchData.homeTeamMoneyLine = 0
+                    matchData.awayTeamMoneyLine = 0
         
         matchData.save()    
     else:
@@ -394,32 +410,38 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
         if len(oddsData['items']) >= 1:
             if int(seasonYear) == 2025:
                 
+                try:
+                    for i in range(0, len(oddsData['items'])):
+                        
+                        if oddsData['items'][i]['provider']['name'] == "ESPN BET":
+                            print()
+                            print("Odds Data from ESPN BET for " + homeTeamAbrv + " vs. " + awayTeamAbrv)
+                            print(oddsData['items'][i]['$ref'])
+                            #print(oddsData['items'][i])
+                            print()
 
-                for i in range(0, len(oddsData['items'])):
-                    
-                    if oddsData['items'][i]['provider']['name'] == "ESPN BET":
-                        print()
-                        print("Odds Data from ESPN BET for " + homeTeamAbrv + " vs. " + awayTeamAbrv)
-                        print(oddsData['items'][i]['$ref'])
-                        #print(oddsData['items'][i])
-                        print()
-
-                        if 'spread' in oddsData['items'][i]:
-                            matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
-                        else:
-                            print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
-                        if 'overUnder' in oddsData['items'][i]:
-                            matchData.overUnderLine = oddsData['items'][i]['overUnder']
-                        else:
-                            print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
-                        
-                        if 'homeTeamOdds' in oddsData['items'][i]:
-                            matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
-                        
-                        if 'awayTeamOdds' in oddsData['items'][0]:
-                            matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
-                        continue
+                            if 'spread' in oddsData['items'][i]:
+                                matchData.matchLineHomeTeam = oddsData['items'][i]['spread']
+                            else:
+                                print("No Spread Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            
+                            if 'overUnder' in oddsData['items'][i]:
+                                matchData.overUnderLine = oddsData['items'][i]['overUnder']
+                            else:
+                                print("No O/U Data found for ESPN BET for " + homeTeamAbrv + " vs. " +awayTeamAbrv)
+                            
+                            if 'homeTeamOdds' in oddsData['items'][i]:
+                                matchData.homeTeamMoneyLine = oddsData['items'][i]['homeTeamOdds']['moneyLine']
+                            
+                            if 'awayTeamOdds' in oddsData['items'][0]:
+                                matchData.awayTeamMoneyLine = oddsData['items'][i]['awayTeamOdds']['moneyLine']
+                            continue
+                except Exception as e:
+                    print(e)
+                    matchData.matchLineHomeTeam = 0
+                    matchData.overUnderLine = 0
+                    matchData.homeTeamMoneyLine = 0
+                    matchData.awayTeamMoneyLine = 0
             else:
                 try:
 
@@ -433,6 +455,11 @@ def createOrUpdateScheduledNflMatch(nflMatchObject, gameData, oddsData, weekOfSe
                     print("Match Line: " + str(matchData.matchLineHomeTeam))
                 except Exception as e:
                     print(e)
+                    matchData.matchLineHomeTeam = 0
+                    matchData.overUnderLine = 0
+                    matchData.homeTeamMoneyLine = 0
+                    matchData.awayTeamMoneyLine = 0
+
 
             matchData.save()   
 
@@ -2222,6 +2249,7 @@ def createOrUpdateFinishedNflMatch_old(nflMatchObject, gameData, gameCompleted, 
                     problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
                     exceptionThrown = True
                     exceptions.append([problem_text, oddsData])
+
         
         
     else:
@@ -2365,6 +2393,12 @@ def createOrUpdateFinishedNflMatch_old(nflMatchObject, gameData, gameCompleted, 
                     problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
                     exceptionThrown = True
                     exceptions.append([problem_text, oddsData])
+                    print(e)
+                    matchData.matchLineHomeTeam = 0
+                    matchData.overUnderLine = 0
+                    matchData.homeTeamMoneyLine = 0
+                    matchData.awayTeamMoneyLine = 0
+
 
     
     
