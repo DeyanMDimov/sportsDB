@@ -1615,7 +1615,7 @@ def weeksOnPage_Helper():
 
 def yearsOnPage_Helper():
     yearsOnPage = []
-    for y in range(2025, 2016, -1):
+    for y in range(2026, 2016, -1):
         yearsOnPage.append(y)
     
     return yearsOnPage        
