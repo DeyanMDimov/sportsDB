@@ -2108,7 +2108,10 @@ def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear,
 # job row; the page polls for completion and then renders that JSON.
 # ---------------------------------------------------------------------------
 
-TEAM_REQUEST_DELAY_SECONDS = 5
+# Paced so the host's proxy is less likely to rate limit us: every ESPN
+# roster request after the first waits this long, whether the iteration is
+# moving to the next team, the next week, or both.
+AVAILABILITY_REQUEST_DELAY_SECONDS = 6
 
 
 def _availabilityStatusToken(status):
@@ -2143,7 +2146,7 @@ def _buildWeekAvailability(job, seasonYear, weekOfSeason, teamAbbreviation):
     rows = []
     for index, s_team in enumerate(teams):
         if index > 0:
-            clock.sleep(TEAM_REQUEST_DELAY_SECONDS)
+            clock.sleep(AVAILABILITY_REQUEST_DELAY_SECONDS)
         job.progress = str(index + 1) + " / " + str(len(teams)) + " teams"
         job.save()
 
@@ -2182,9 +2185,8 @@ def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
     endRangeWeek = 12 if int(seasonYear) == 2024 else 19
     teams = _teamsForAvailabilityJob(teamAbbreviation)
     rows = []
+    rosterRequestsMade = 0
     for index, s_team in enumerate(teams):
-        if index > 0:
-            clock.sleep(TEAM_REQUEST_DELAY_SECONDS)
         job.progress = str(index + 1) + " / " + str(len(teams)) + " teams"
         job.save()
 
@@ -2200,7 +2202,12 @@ def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
                     continue
 
             matchId = selectedMatchQuerySet[0].espnId
+            # Bye weeks never get here, so this paces actual requests rather than
+            # loop turns - across weeks within a team and on to the next team.
+            if rosterRequestsMade > 0:
+                clock.sleep(AVAILABILITY_REQUEST_DELAY_SECONDS)
             gameRosterData = fetchGameRoster(matchId, teamId)
+            rosterRequestsMade += 1
             if gameRosterData is None:
                 # Nothing published for this week yet, so the rest of the season
                 # won't have rosters either.
