@@ -60,7 +60,7 @@
                             {% endfor %}
                         {% endfor %}
                     </tr>
-                    <tr> 
+                    <tr>
                         <td>Date Played</td>
                         {% for perf in teamPerf %}
                             {% for match in perf.nflMatch.all %}
@@ -68,15 +68,33 @@
                             {% endfor %}
                         {% endfor %}
                     </tr>
-                    {% for fName in fieldNames%}
                     <tr>
-                        <td>{{fName}}</td>
+                        <td>Week</td>
                         {% for perf in teamPerf %}
-                        <td> 
-                            {{ perf|get_obj_attr:fName }}
-                        </td>
+                            <td> {{ perf.weekOfSeason }} </td>
                         {% endfor %}
                     </tr>
+                    {% for group in statGroups %}
+                    <tr class="table-primary">
+                        <td colspan="{{ colSpan }}"><strong>{{ group.name }}</strong></td>
+                    </tr>
+                        {% for sub in group.subGroups %}
+                            {% if sub.name %}
+                            <tr class="table-secondary">
+                                <td colspan="{{ colSpan }}"><em>{{ sub.name }}</em></td>
+                            </tr>
+                            {% endif %}
+                            {% for fName in sub.fields %}
+                            <tr>
+                                <td>{{ fName }}</td>
+                                {% for perf in teamPerf %}
+                                <td>
+                                    {{ perf|get_obj_attr:fName }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
                     {% endfor %}
                 </tbody>
             </table>

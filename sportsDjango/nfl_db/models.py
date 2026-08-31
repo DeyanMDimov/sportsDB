@@ -551,3 +551,25 @@ class nflMatchOdds(models.Model):
 
 
 
+
+#-------Background Job Models-------#
+
+class availabilityJob(models.Model):
+    # Tracks a player-availability pull that runs in a background thread so the
+    # web request can return immediately instead of blocking (and getting killed
+    # by the host's web-worker time limit) while ESPN rosters are fetched.
+    jobStatuses = (
+        ("pending", "Pending"),
+        ("running", "Running"),
+        ("done", "Done"),
+        ("error", "Error"),
+    )
+    status      = models.CharField(max_length = 10, choices = jobStatuses, default = "pending")
+    season      = models.CharField(max_length = 8)
+    week        = models.CharField(max_length = 8)
+    team        = models.CharField(max_length = 8)
+    progress    = models.CharField(max_length = 60, default = "")
+    result      = models.TextField(null = True, blank = True)
+    error       = models.TextField(null = True, blank = True)
+    createdAt   = models.DateTimeField(auto_now_add = True)
+    updatedAt   = models.DateTimeField(auto_now = True)

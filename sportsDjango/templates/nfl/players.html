@@ -4,159 +4,362 @@
 {% block players %}
     <div class = "container">
         
-        <div>
-            
-            <form method="GET" class="p-3">
-                Pull Players for :
-                <div class="row g-2">
-                    <div class="mb-1 col-auto">
-                        <select name="season" id="season" class="form-control">
-                            {% for yr in years %}
-                            <option value="{{yr}}" 
-                            {%if yr|stringformat:"i" == season %}
-                                    selected
-                                {% endif %} >{{yr}}</option>    
-                            {% endfor %} 
-                        </select> 
-                    </div>
-                    <div class="mb-1 col-auto">
-                        <select name="teamName" id="teamName" class="form-control">
-                            <option value="ALL">ALL</option>
-                            {% for team in teams %}
-                            <option value="{{ team.abbreviation }}"
-                            {%if selTeam.abbreviation == team.abbreviation %}
-                                selected
-                            {% endif %}
-                            > {{ team.abbreviation }}</option>
-                        {% endfor %}
-                        </select>
-                    </div>
-                    <input type="hidden" name="manualOverride" value="True">
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Load!</button>
-            </form> 
-            <form method="GET" class="p-3">
-                Get All: 
-                <select name="position" id="position" class="form-control">
-                    <option value="1"> QB's </option>
-                    <option value="4"> RB's </option>
-                    <option value="5"> FB's </option>
-                    <option value="2"> WR's </option>
-                    <option value="3"> TE's </option>
-                    <option value="6"> OL's </option>
-                    <option value="7"> DL's </option>
-                    <option value="8"> LB's </option>
-                    <option value="9"> CB's </option>
-                    <option value="10"> S's </option>
-                    <option value="11"> P's </option>
-                    <option value="12"> K's </option>
+        {% comment %}Which tab opens on load: whichever one produced what is on the page.{% endcomment %}
+        {% firstof athleteAvail jobResult jobError availabilityJobId responseMessage sel_Week as availabilityView %}
+        <ul class="nav nav-tabs" id="playersTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView %}true{% else %}false{% endif %}">View Team Roster</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if allPlayers %}active{% endif %}" id="positionTab" data-bs-toggle="tab" data-bs-target="#positionPane" type="button" role="tab" aria-controls="positionPane" aria-selected="{% if allPlayers %}true{% else %}false{% endif %}">Players by Position</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if not allPlayers and availabilityView %}active{% endif %}" id="availabilityTab" data-bs-toggle="tab" data-bs-target="#availabilityPane" type="button" role="tab" aria-controls="availabilityPane" aria-selected="{% if not allPlayers and availabilityView %}true{% else %}false{% endif %}">Player Availability</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if performanceActive %}active{% endif %}" id="performanceTab" data-bs-toggle="tab" data-bs-target="#performancePane" type="button" role="tab" aria-controls="performancePane" aria-selected="{% if performanceActive %}true{% else %}false{% endif %}">Performances</button>
+            </li>
+        </ul>
 
-                </select>
-                <button type="submit" class="btn btn-outline-primary">Load!</button>
-            </form>
-            <form method="GET" class="p-3">
-                Get player availability for 
-                <div class="row g-2">
-                    <div class="mb-1 col-2">
-                        Season: <select name="season" id="season" class="form-control">
-                            {% for yr in years %}
-                            <option value="{{yr}}" 
-                            {%if yr|stringformat:"i" == sel_Year %}
+        <div class="tab-content border border-top-0 mb-3" id="playersTabsContent">
+            <div class="tab-pane fade {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView %}show active{% endif %}" id="viewRosterPane" role="tabpanel" aria-labelledby="viewRosterTab">
+                <form method="GET" class="p-3">
+                    View the roster a team started the season with
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            Season: <select name="viewRosterSeason" id="viewRosterSeason" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}"
+                                {% if viewRosterYear and yr|stringformat:"i" == viewRosterYear %}
                                     selected
-                                {% endif %} >{{yr}}</option>    
-                            {% endfor %} 
-                        </select> 
-                    </div>
-                    <div class="mb-1 col-2">
-                        Week: <select name="week" id="week" class="form-control">
-                            {% for wk in weeks %}
-                            <option value="{{wk.0}}"
-                                {% if wk.0 == sel_Week %}
+                                {% elif not viewRosterYear and forloop.first %}
                                     selected
-                                {% endif %} > {{ wk.1 }}</option>
+                                {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Team:
+                            <select name="viewRosterTeam" id="viewRosterTeam" class="form-control">
+                            {% for team in teams %}
+                                <option value="{{ team.abbreviation }}"
+                                {%if viewRosterTeam == team.abbreviation %}
+                                    selected
+                                {% endif %}
+                                > {{ team.abbreviation }}</option>
                             {% endfor %}
-                        </select>
+                            </select>
+                        </div>
                     </div>
-                    <div class="mb-1 col-2">
-                        Team:
-                        <select name="team" id="team" class="form-control">
-                        {% for team in teams %}
-                            <option value="{{ team.abbreviation }}"
-                            {%if sel_Team == team.abbreviation %}
-                                selected
-                            {% endif %}
-                            > {{ team.abbreviation }}</option>
-                        {% endfor %}
-                        </select>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+            <div class="tab-pane fade {% if allPlayers %}show active{% endif %}" id="positionPane" role="tabpanel" aria-labelledby="positionTab">
+                <form method="GET" class="p-3">
+                    Get All:
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            Position: <select name="position" id="position" class="form-control">
+                                <option value="1" {% if positionSelected == "1" %}selected{% endif %}> QB's </option>
+                                <option value="4" {% if positionSelected == "4" %}selected{% endif %}> RB's </option>
+                                <option value="5" {% if positionSelected == "5" %}selected{% endif %}> FB's </option>
+                                <option value="2" {% if positionSelected == "2" %}selected{% endif %}> WR's </option>
+                                <option value="3" {% if positionSelected == "3" %}selected{% endif %}> TE's </option>
+                                <option value="6" {% if positionSelected == "6" %}selected{% endif %}> OL's </option>
+                                <option value="7" {% if positionSelected == "7" %}selected{% endif %}> DL's </option>
+                                <option value="8" {% if positionSelected == "8" %}selected{% endif %}> LB's </option>
+                                <option value="9" {% if positionSelected == "9" %}selected{% endif %}> CB's </option>
+                                <option value="10" {% if positionSelected == "10" %}selected{% endif %}> S's </option>
+                                <option value="11" {% if positionSelected == "11" %}selected{% endif %}> K's </option>
+                                <option value="12" {% if positionSelected == "12" %}selected{% endif %}> P's </option>
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Season: <select name="positionSeason" id="positionSeason" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}"
+                                {% if positionYear and yr|stringformat:"i" == positionYear %}
+                                    selected
+                                {% elif not positionYear and forloop.first %}
+                                    selected
+                                {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Load!</button>
-            </form>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+
+            <div class="tab-pane fade {% if not allPlayers and availabilityView %}show active{% endif %}" id="availabilityPane" role="tabpanel" aria-labelledby="availabilityTab">
+                <form method="GET" class="p-3">
+                    Get player availability for 
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            Season: <select name="season" id="availabilitySeason" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}" 
+                                {%if yr|stringformat:"i" == sel_Year %}
+                                        selected
+                                    {% endif %} >{{yr}}</option>    
+                                {% endfor %} 
+                            </select> 
+                        </div>
+                        <div class="mb-1 col-2">
+                            Week: <select name="week" id="week" class="form-control">
+                                {% for wk in weeks %}
+                                <option value="{{wk.0}}"
+                                    {% if wk.0 == sel_Week %}
+                                        selected
+                                    {% endif %} > {{ wk.1 }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Team:
+                            <select name="team" id="team" class="form-control">
+                                <option value="ALL" {% if sel_Team == "ALL" %}selected{% endif %}>ALL</option>
+                            {% for team in teams %}
+                                <option value="{{ team.abbreviation }}"
+                                {%if sel_Team == team.abbreviation %}
+                                    selected
+                                {% endif %}
+                                > {{ team.abbreviation }}</option>
+                            {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+
+            <div class="tab-pane fade {% if performanceActive %}show active{% endif %}" id="performancePane" role="tabpanel" aria-labelledby="performanceTab">
+                <form method="GET" class="p-3">
+                    Weekly performances for
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            Season: <select name="performanceSeason" id="performanceSeason" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}"
+                                {% if performanceYear and yr|stringformat:"i" == performanceYear %}
+                                    selected
+                                {% elif not performanceYear and forloop.first %}
+                                    selected
+                                {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Team: <select name="performanceTeam" id="performanceTeam" class="form-control">
+                            {% for team in teams %}
+                                <option value="{{ team.abbreviation }}"
+                                {% if performanceTeam == team.abbreviation %}
+                                    selected
+                                {% endif %}
+                                > {{ team.abbreviation }}</option>
+                            {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Position: <select name="performancePosition" id="performancePosition" class="form-control">
+                                <option value="1" {% if performancePosition == "1" %}selected{% endif %}> QB </option>
+                                <option value="4" {% if performancePosition == "4" %}selected{% endif %}> RB </option>
+                                <option value="2" {% if performancePosition == "2" %}selected{% endif %}> WR </option>
+                                <option value="3" {% if performancePosition == "3" %}selected{% endif %}> TE </option>
+                            </select>
+                        </div>
+                        <div class="mb-1 col-3">
+                            Player: <select name="performancePlayer" id="performancePlayer" class="form-control">
+                            {% for performancePlayerOption in performancePlayerOptions %}
+                                <option value="{{ performancePlayerOption.espnId }}"
+                                {% if performancePlayerEspnId == performancePlayerOption.espnId|stringformat:"i" %}
+                                    selected
+                                {% endif %}
+                                >{{ performancePlayerOption.name }}</option>
+                            {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+
         </div>
+        {% if performanceActive %}
+        <h3>{{ performancePlayerName }} &mdash; {{ performanceYear }}</h3>
+        {% if performanceRows %}
+        {% if performancePlaysStored %}
+        <p class="text-muted">Team total for that week in parentheses.</p>
+        {% else %}
+        <p class="text-muted">
+            No play-by-play stored for {{ performanceYear }}, so the player columns are
+            all zero. The team totals in parentheses come from the team match stats.
+        </p>
+        {% endif %}
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <td>Week</td>
+                    {% for performanceColumn in performanceColumns %}
+                    <td>{{ performanceColumn.label }}</td>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for performanceRow in performanceRows %}
+                <tr>
+                    <td>Week {{ performanceRow.week }} {% if performanceRow.awayGame %}@{% else %}vs{% endif %} {{ performanceRow.opponentAbbreviation }}</td>
+                    {% for orderedStat in performanceRow.orderedStats %}
+                    <td>{{ orderedStat.playerValue }}{% if orderedStat.teamValue != None %} <span class="team-total">({{ orderedStat.teamValue }})</span>{% endif %}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No matches stored for {{ performanceTeam }} in {{ performanceYear }}.</p>
+        {% endif %}
+        {% endif %}
+
         {% if responseMessage %}
         <h2>{{responseMessage}}</h2>
         {% endif %}
-        {% if players %}
-        <div>
-            <h3> 
-                Roster for {{ selTeam.teamName }} in {{ season }}
-            </h3>
-            <table class="table table-bordered">
+
+        {% if viewRosterTeam %}
+        <h3>
+            {{ viewRosterTeamName }} roster
+            {% if viewRosterSource == "week1" %}
+                at the start of {{ viewRosterYear }}
+            {% elif viewRosterSource == "current" %}
+                &mdash; current roster
+            {% endif %}
+        </h3>
+        {% if viewRosterSource == "current" %}
+        <p class="text-muted">
+            Week 1 of {{ viewRosterYear }} hasn't been pulled yet, so this is the team's
+            current roster from ESPN.
+        </p>
+        {% elif viewRosterSource == "none" %}
+        <p class="text-muted">
+            No stored week 1 roster for {{ viewRosterYear }}, and the current roster
+            couldn't be fetched from ESPN.
+        </p>
+        {% endif %}
+        {% if viewRoster %}
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <td style="width:320px">Name</td>
+                    <td>Position</td>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rosteredPlayer in viewRoster %}
+                <tr>
+                    <td>{{ rosteredPlayer.name }}</td>
+                    <td>{{ rosteredPlayer.get_playerPosition_display }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% endif %}
+
+        {% if availabilityJobId %}
+        <div id="availabilityJobProcessing" class="p-3">
+            <h3>Pulling player availability&hellip;</h3>
+            <p class="text-muted">
+                This runs in the background so the page won't time out. All-team or
+                whole-season pulls take several minutes (there's a short pause between
+                teams). You can leave this tab open; it will load the results when done.
+            </p>
+            <p><strong id="availabilityJobProgress">Starting&hellip;</strong></p>
+            <div class="spinner-border" role="status" aria-label="Loading"></div>
+        </div>
+        <script>
+            (function () {
+                var jobId = "{{ availabilityJobId }}";
+                function pollAvailabilityJob() {
+                    $.getJSON("../ajax/availabilityJobStatus/", { jobId: jobId })
+                        .done(function (data) {
+                            if (data.status === "done") {
+                                window.location = "?jobResult=" + jobId;
+                                return;
+                            }
+                            if (data.status === "error") {
+                                $("#availabilityJobProgress").text("Error: " + (data.error || "something went wrong."));
+                                $("#availabilityJobProcessing .spinner-border").hide();
+                                return;
+                            }
+                            $("#availabilityJobProgress").text(data.progress || data.status);
+                            setTimeout(pollAvailabilityJob, 3000);
+                        })
+                        .fail(function () {
+                            // Transient hiccup (e.g. worker busy) — keep trying.
+                            setTimeout(pollAvailabilityJob, 5000);
+                        });
+                }
+                pollAvailabilityJob();
+            })();
+        </script>
+        {% endif %}
+
+        {% if jobError %}
+        <h2>Availability pull failed: {{ jobError }}</h2>
+        {% endif %}
+
+        {% if jobResult %}
+        <h3>
+            Player Availability{% if jobResult.type == "season" %} for {{ jobResult.season }}{% endif %}
+        </h3>
+        <div class="container" style="overflow:scroll">
+            <table class="table table-bordered" id="player_table">
                 <thead>
                     <tr>
                         <td style="width:320px">Name</td>
+                        <td>Team</td>
                         <td>Position</td>
-                        <td>Weight</td>
-                        <td>Height</td>
-                        <td>Rookie Year</td>
                         <td>Espn ID</td>
-                <tbody>
-                    {% for player in players%}
-                    <tr>
-                        <td id="accordion-{{player.espnId}}">
-                            <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse{{player.espnId}}" aria-expanded="true" aria-controls="collapse{{player.espnId}}">
-                                {{player.name}}
-                            </button>
-                        </td>
-                        <td>{{player.get_playerPosition_display}}</td>
-                        <td>{{player.playerWeightPounds}} pounds</td>
-                        <td>{{player.playerHeightInches}} inches</td>
-                        <td>{{player.firstSeason}}</td>
-                        <td>{{player.espnId}}</td>
+                        <td>Starter</td>
+                        <td>Star Player</td>
+                        {% if jobResult.type == "season" %}
+                        {% for wl in jobResult.weekLabels %}
+                        <td class="weekAvailTableCell">{{ wl }}</td>
+                        {% endfor %}
+                        {% else %}
+                        <td>Status</td>
+                        {% endif %}
                     </tr>
-                    <tr id="collapse{{player.espnId}}" class="collapse" aria-labelledby="accordion-{{player.espnId}}" data-parent="#accordion-{{player.espnId}}">
-                        <td colspan="3" class="modelSummaryContainer">
-                            Tenures for player {{player.espnId}}
-                            <table class="table-bordered" id="player_tenure">
-                                <thead>
-                                    <td>Team</td>
-                                    <td>Start Date</td>
-                                    <td>End Date</td>
-                                </thead>
-                                <tbody>
-                                    {% for tnr in tenures %}
-                                        {% if tnr.player == player%}
-                                        <tr>
-                                            <td>{{tnr.team.fullName}}</td>
-                                            <td>{{tnr.startDate|date:"m/d/Y"}}</td>
-                                            <td>{{tnr.endDate|date:"m/d/Y"}}</td>
-                                        </tr>
-                                        {% endif %}
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </td>
+                </thead>
+                <tbody>
+                    {% for row in jobResult.rows %}
+                    <tr id="{{ row.espnId }}">
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.team }}</td>
+                        <td>{{ row.position }}</td>
+                        <td>{{ row.espnId }}</td>
+                        <td><input type="checkbox" id="{{ row.espnId }}-starter" name="{{ row.espnId }}-starter"
+                            {% if row.isStarter %} checked {% endif %} /></td>
+                        <td><input type="checkbox" id="{{ row.espnId }}-starPlayer" name="{{ row.espnId }}-starPlayer"
+                            {% if row.starPlayer %} checked {% endif %} /></td>
+                        {% for s in row.statuses %}
+                        <td>{% if s == "Bye" %}Bye{% elif s == "Not in Roster" %}Not in Roster{% elif s == "available" %}&#9989;{% else %}&#128683;{% endif %}</td>
+                        {% endfor %}
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         {% endif %}
-        
+
         {% if allPlayers %}
-        <h3> 
-            All Players
-        </h3>
+        <h3>{{ positionName }}s &mdash; {{ positionYear }}</h3>
+        {% if positionSource == "allSeasons" %}
+        <p class="text-muted">
+            No week data stored for {{ positionYear }}, so this lists every {{ positionName }}
+            in the database with their current team.
+        </p>
+        {% endif %}
         <table class="table table-bordered" id="player_table">
             <thead>
                 <tr>
@@ -177,7 +380,7 @@
                             {{player.name}}
                         </button>
                     </td>
-                    <td>{{player.team.abbreviation}}</td>
+                    <td>{{player.seasonTeam.abbreviation}}</td>
                     <td>{{player.get_playerPosition_display}}</td>
                     <td>{{player.firstSeason}}</td>
                     <td>{{player.espnId}}</td>
@@ -318,14 +521,14 @@
                                 {{player.0.name}}
                             {% comment %} </button> {% endcomment %}
                         </td>
-                        <td>{{selTeam}}</td>
+                        <td>{{player.0.team.abbreviation}}</td>
                         <td>{{player.0.get_playerPosition_display}}</td>
                         <td>{{player.0.espnId}}</td>
-                        <td><input type="checkbox" id="{{player.0.espnId}}-starter" name="{{player.0.espnId}}-starter" 
+                        <td><input type="checkbox" id="{{player.0.espnId}}-starter" name="{{player.0.espnId}}-starter"
                             {% if player.0.isStarter %} checked {% endif %} /></td>
-                        <td><input type="checkbox" id="{{player.0.espnId}}-starPlayer" name="{{player.0.espnId}}-starPlayer" 
+                        <td><input type="checkbox" id="{{player.0.espnId}}-starPlayer" name="{{player.0.espnId}}-starPlayer"
                             {% if player.0.starPlayer %} checked {% endif %} /></td>
-                        {% comment %} <td><input type="checkbox" id="{{player.0.espnId}}-bigImpact" name="{{player.0.espnId}}-bigImpact" 
+                        {% comment %} <td><input type="checkbox" id="{{player.0.espnId}}-bigImpact" name="{{player.0.espnId}}-bigImpact"
                             {% if player.0.currentlyHavingBigImpact %} checked {% endif %} /></td> {% endcomment %}
                         {% for playerStatus in player.1 %}
                         <td>{% if playerStatus == "Bye" %}Bye{% elif playerStatus == "Not in Roster" %}Not in Roster{% elif playerStatus.playerStatus == 1%}✅{% else %}🚫{% endif %}</td>
@@ -367,5 +570,41 @@
                     }
                 });
         });
+    </script>
+    <script>
+        // Season, team and position narrow down which players the Performances
+        // tab offers, so refill that dropdown whenever one of them changes.
+        (function () {
+            var filterIds = ["#performanceSeason", "#performanceTeam", "#performancePosition"];
+
+            function reloadPerformancePlayers() {
+                var playerSelect = $("#performancePlayer");
+                var previouslySelected = playerSelect.val();
+
+                $.getJSON("../ajax/performancePlayerOptions/", {
+                    season: $("#performanceSeason").val(),
+                    team: $("#performanceTeam").val(),
+                    position: $("#performancePosition").val()
+                }).done(function (data) {
+                    playerSelect.empty();
+                    $.each(data.players, function (index, playerOption) {
+                        playerSelect.append($("<option>", { value: playerOption.espnId, text: playerOption.name }));
+                    });
+                    if (previouslySelected) {
+                        playerSelect.val(previouslySelected);
+                    }
+                });
+            }
+
+            $(filterIds.join(", ")).on("change", reloadPerformancePlayers);
+
+            // The dropdown is empty until a season/team/position has been asked
+            // for, so fill it once when the tab is first opened.
+            $("#performanceTab").one("shown.bs.tab", function () {
+                if ($("#performancePlayer option").length === 0) {
+                    reloadPerformancePlayers();
+                }
+            });
+        })();
     </script>
 {% endblock %}

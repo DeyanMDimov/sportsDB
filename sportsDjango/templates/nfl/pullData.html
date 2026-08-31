@@ -17,8 +17,17 @@
             <button type="submit">Clear All Performances</button>
         </form> {% endcomment %}
         
-        <br>
-        <div>
+        <ul class="nav nav-tabs" id="pullDataTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if not rosterTeamName %}active{% endif %}" id="gameDataTab" data-bs-toggle="tab" data-bs-target="#gameDataPane" type="button" role="tab" aria-controls="gameDataPane" aria-selected="{% if not rosterTeamName %}true{% else %}false{% endif %}">Game Data</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if rosterTeamName %}active{% endif %}" id="teamRosterTab" data-bs-toggle="tab" data-bs-target="#teamRosterPane" type="button" role="tab" aria-controls="teamRosterPane" aria-selected="{% if rosterTeamName %}true{% else %}false{% endif %}">Team Roster</button>
+            </li>
+        </ul>
+
+        <div class="tab-content border border-top-0 mb-3" id="pullDataTabsContent">
+        <div class="tab-pane fade {% if not rosterTeamName %}show active{% endif %} p-3" id="gameDataPane" role="tabpanel" aria-labelledby="gameDataTab">
             <form method="GET">
                 Load data for:
                 <div class="row g-1 mt-2 mb-2">
@@ -93,6 +102,67 @@
                 <button type="submit" disabled>Delete All Drives</button>
             </form> {% endcomment %}
         </div>
+
+        <div class="tab-pane fade {% if rosterTeamName %}show active{% endif %} p-3" id="teamRosterPane" role="tabpanel" aria-labelledby="teamRosterTab">
+            <form method="GET">
+                Pull the current roster from ESPN for:
+                <div class="row g-1 mt-2 mb-2">
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="teamName" id="select_roster_team" aria-label="Floating label">
+                                <option value="ALL" {% if rosterTeamName == "ALL" %}selected{% endif %}>ALL</option>
+                                {% for team in teams %}
+                                <option value="{{ team.abbreviation }}"
+                                    {% if rosterTeamName == team.abbreviation %}
+                                        selected
+                                    {% endif %} >{{ team.abbreviation }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_roster_team">Team</label>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-muted">
+                    ESPN only publishes each team's current roster, so this always pulls
+                    today's squad. Pulling all 32 takes a while.
+                </p>
+                <button type="submit" class="btn btn-success">Load!</button>
+            </form>
+        </div>
+        </div>
+        {% if rosterTeamName %}
+        <h3>Roster pull &mdash; {{ rosterTeamName }}</h3>
+        <p class="text-muted">{{ rosterMessage }}</p>
+        {% if rosterPlayers %}
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <td style="width:320px">Name</td>
+                    <td>Team</td>
+                    <td>Position</td>
+                    <td>Weight</td>
+                    <td>Height</td>
+                    <td>Rookie Year</td>
+                    <td>Espn ID</td>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rosteredPlayer in rosterPlayers %}
+                <tr>
+                    <td>{{ rosteredPlayer.name }}</td>
+                    <td>{{ rosteredPlayer.team.abbreviation }}</td>
+                    <td>{{ rosteredPlayer.get_playerPosition_display }}</td>
+                    <td>{{ rosteredPlayer.playerWeightPounds }} pounds</td>
+                    <td>{{ rosteredPlayer.playerHeightInches }} inches</td>
+                    <td>{{ rosteredPlayer.firstSeason }}</td>
+                    <td>{{ rosteredPlayer.espnId }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% endif %}
+
         <div>
             <h4>{{ message }}</h4>
             {% if exceptionStrings %}

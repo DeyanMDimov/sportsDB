@@ -2,11 +2,11 @@ from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 import json
-from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay, availabilityJob
 from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit
 from django.db import models
 from nfl_db import businessLogic, crudLogic, players
-import datetime, time, requests, traceback
+import datetime, time, requests, traceback, threading
 from zoneinfo import ZoneInfo
 
 # Create your views here.
@@ -22,6 +22,7 @@ def getData(request):
     pageDictionary = {}
     pageDictionary['weeks'] = weeksOnPage_Helper()
     pageDictionary['years'] = yearsOnPage_Helper()
+    pageDictionary['teams'] = nflTeam.objects.all().order_by('abbreviation')
 
     if request.method == 'GET':
         if 'season' in request.GET and 'week' in request.GET:     
@@ -279,7 +280,7 @@ def getData(request):
                 i += 1
             
             message = "Full " + str(yearOfSeason) + " season loaded."
-            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'message': message})
+            return render (request, 'nfl/pullData.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'teams': nflTeam.objects.all().order_by('abbreviation'), 'message': message})
 
         # elif 'reset' in request.GET:
         #     crudLogic.resetAllMatchAssociationsForClearing()
@@ -292,6 +293,25 @@ def getData(request):
         # elif 'deleteDrives' in request.GET:
         #     deleteDrivesMessage = crudLogic.deleteDriveOfPlay()
         #     return render(request, 'nfl/pullData.html', {"message": deleteDrivesMessage})
+
+        elif 'teamName' in request.GET:
+            inputReq = request.GET
+            rosterTeamAbbreviation = inputReq['teamName'].strip()
+
+            if rosterTeamAbbreviation == 'ALL':
+                teamsToPull = nflTeam.objects.all().order_by('abbreviation')
+            else:
+                teamsToPull = [nflTeam.objects.get(abbreviation = rosterTeamAbbreviation)]
+
+            rosterPlayers = []
+            for rosterTeam in teamsToPull:
+                rosterPlayers.extend(crudLogic.pullTeamRosterFromApi(rosterTeam))
+
+            pageDictionary['rosterTeamName'] = rosterTeamAbbreviation
+            pageDictionary['rosterPlayers'] = rosterPlayers
+            pageDictionary['rosterMessage'] = "Pulled " + str(len(rosterPlayers)) + " players from " + str(len(teamsToPull)) + " roster(s)."
+
+            return render (request, 'nfl/pullData.html', pageDictionary)
 
         elif 'teams' in request.GET:    
             #return render (request, 'nfl/nflhome.html')
@@ -332,6 +352,21 @@ def getData(request):
     else: 
         return HttpResponse('unsuccessful')
 
+def performancePlayerOptions(request):
+    # Feeds the Performances tab's player dropdown when season/team/position change.
+    performanceTeam = nflTeam.objects.filter(abbreviation = request.GET.get('team', '').strip()).first()
+    if performanceTeam == None:
+        return JsonResponse({'players': []})
+
+    playersForFilters = crudLogic.getPlayersForPerformanceFilters(
+        request.GET.get('season', '').strip(),
+        performanceTeam,
+        request.GET.get('position', '1').strip(),
+    )
+
+    return JsonResponse({'players': [{'espnId': playerObj.espnId, 'name': playerObj.name} for playerObj in playersForFilters]})
+
+
 def getPlayers(request):
     nflTeams = nflTeam.objects.all().order_by('abbreviation')
 
@@ -345,151 +380,125 @@ def getPlayers(request):
     pageDictionary['years'] = yearsOnPage
     pageDictionary['teams'] = nflTeams
 
-    thisDayUTC = datetime.datetime.now()
-    
-    utc_zone = ZoneInfo('UTC')
-    central_zone = ZoneInfo('America/Chicago')  
-
-    thisDayUTC = thisDayUTC.replace(tzinfo = utc_zone)
-    thisDay = thisDayUTC.astimezone(central_zone)
-    daysToCheck = [6]
-
     if(request.method == 'GET'):
-        if 'teamName' in request.GET and 'season' in request.GET:
-                inputReq = request.GET
-                
-                yearOfSeason = inputReq['season'].strip()
-                if inputReq['teamName'] == 'ALL':
-                    if inputReq['manualOverride'] or thisDay in daysToCheck:
-                        nflTeams = nflTeam.objects.all()
-                        for s_team in nflTeams:
-                            teamId = s_team.espnId
-                        
-                            if yearOfSeason == '2025':
-                                url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
-                                response = requests.get(url)
-                                responseData = response.json()
-                                rosterData = responseData['athletes']
+        if 'performancePlayer' in request.GET:
+            inputReq = request.GET
+            performanceYear = inputReq.get('performanceSeason', str(yearsOnPage[0])).strip()
+            performanceTeamAbbreviation = inputReq.get('performanceTeam', '').strip()
+            performancePosition = inputReq.get('performancePosition', '1').strip()
+            performancePlayerEspnId = inputReq['performancePlayer'].strip()
 
-                                for subsection in rosterData:
-                                    players.updatePlayerAthletesFromTeamRoster(subsection, teamId)
+            performanceTeam = nflTeam.objects.filter(abbreviation = performanceTeamAbbreviation).first()
+            performancePlayer = player.objects.filter(espnId = performancePlayerEspnId).first()
 
+            performanceRows = []
+            performanceColumns = []
+            if performancePlayer != None and performanceTeam != None:
+                performanceRows = crudLogic.getPlayerPerformancesForSeason(performancePlayer, performanceTeam, performanceYear)
+                for statKey in crudLogic.PERFORMANCE_STATS_BY_POSITION.get(int(performancePosition), []):
+                    performanceColumns.append({'key': statKey, 'label': crudLogic.PERFORMANCE_STAT_LABELS[statKey]})
 
-                                playersLoaded = player.objects.filter(team = s_team).order_by('sideOfBall').order_by('playerPosition')
-                        
-                        selectedTeam = None
-                else:
-                    selectedTeam = nflTeam.objects.get(abbreviation = inputReq['teamName'])
-                    teamId = selectedTeam.espnId
-                    
-                    if yearOfSeason == '2025':
-                        url = ('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(teamId) + '/roster')
-                        response = requests.get(url)
-                        responseData = response.json()
-                        rosterData = responseData['athletes']
+            # Line each row's stats up with the columns so the template just walks them.
+            for performanceRow in performanceRows:
+                orderedStats = []
+                for performanceColumn in performanceColumns:
+                    orderedStats.append({
+                        'playerValue': performanceRow['playerStats'].get(performanceColumn['key'], 0),
+                        'teamValue': performanceRow['teamStats'].get(performanceColumn['key']),
+                    })
+                performanceRow['orderedStats'] = orderedStats
 
-                        for subsection in rosterData:
-                            players.updatePlayerAthletesFromTeamRoster(subsection, teamId)
+            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage,
+                'performanceActive': True, 'performanceRows': performanceRows, 'performanceColumns': performanceColumns,
+                'performancePlayerName': performancePlayer.name if performancePlayer else "",
+                'performancePlayerEspnId': performancePlayerEspnId, 'performanceYear': performanceYear,
+                'performanceTeam': performanceTeamAbbreviation, 'performancePosition': performancePosition,
+                'performancePositions': crudLogic.PERFORMANCE_POSITIONS,
+                'performancePlaysStored': crudLogic.seasonHasStoredPlays(performanceTeam, performanceYear) if performanceTeam else False,
+                'performancePlayerOptions': crudLogic.getPlayersForPerformanceFilters(performanceYear, performanceTeam, performancePosition) if performanceTeam else []})
 
+        elif 'viewRosterTeam' in request.GET:
+            inputReq = request.GET
+            viewRosterTeamAbbreviation = inputReq['viewRosterTeam'].strip()
+            viewRosterYear = inputReq.get('viewRosterSeason', str(yearsOnPage[0])).strip()
+            selectedTeam = nflTeam.objects.get(abbreviation = viewRosterTeamAbbreviation)
 
-                        playersLoaded = player.objects.filter(team = selectedTeam).order_by('sideOfBall').order_by('playerPosition')
+            viewRoster, viewRosterSource = crudLogic.getStartOfSeasonRoster(selectedTeam, viewRosterYear)
 
-                        playerTenuresLoaded = []
-                        for pl in playersLoaded:
-                            individualPlayerTenures = playerTeamTenure.objects.filter(player = pl)
-                            for ipt in individualPlayerTenures:
-                                playerTenuresLoaded.append(ipt)
-                    
-                    # print(playerTenuresLoaded)
-
-                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'selTeam': selectedTeam, 'players': playersLoaded, 'season': inputReq['season'], 'tenures': playerTenuresLoaded})
+            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'viewRoster': viewRoster, 'viewRosterSource': viewRosterSource, 'viewRosterTeam': viewRosterTeamAbbreviation, 'viewRosterTeamName': selectedTeam.teamName, 'viewRosterYear': viewRosterYear})
 
         elif 'position' in request.GET:
             inputReq = request.GET
             selectedPosition = inputReq['position'].strip()
-            listAllStatus = len(playerWeekStatus.objects.all())
-            print(listAllStatus)
-            playersLoaded = sorted(player.objects.filter(playerPosition = selectedPosition), key = lambda x: x.team.abbreviation)
+            positionYear = inputReq.get('positionSeason', str(yearsOnPage[0])).strip()
 
-            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'allPlayers': playersLoaded})
+            playersLoaded, positionSource = crudLogic.getPlayersByPositionForSeason(selectedPosition, positionYear)
+            positionName = dict(player.playerPositions).get(int(selectedPosition), "Players")
+
+            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'allPlayers': playersLoaded, 'positionSelected': selectedPosition, 'positionName': positionName, 'positionYear': positionYear, 'positionSource': positionSource})
+
+        elif 'jobResult' in request.GET:
+            job = availabilityJob.objects.get(id = request.GET['jobResult'])
+            jobResult = json.loads(job.result) if job.result else None
+            jobError = job.error if job.status == 'error' else None
+            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'jobResult': jobResult, 'jobError': jobError, 'sel_Team': job.team, 'sel_Year': job.season, 'sel_Week': job.week})
 
         elif 'week' in request.GET:
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
-            weekOfSeason = int(inputReq['week'].strip())
-            if weekOfSeason == 100:
-                #print("We Get here")
-                endRangeWeek = 19
-                if int(yearOfSeason) == 2024:
+            weekRaw = inputReq['week'].strip()
+            teamParam = inputReq.get('team', '').strip()
 
-                    endRangeWeek = 12
-                athleteAvailabilitySeason = []
-                for wk in range (1, endRangeWeek):
-                    if 'team' in inputReq:
-                        selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
-                        teamId = selectedTeam.espnId
-                        selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
-                        if(len(selectedMatchQuerySet) == 0):
-                            selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
-                            if(len(selectedMatchQuerySet) == 0):
-                                
-                                for plRec in athleteAvailabilitySeason:
-                                    plRec[1].append("Bye")
-                                continue
-                        
-                        selectedMatch = selectedMatchQuerySet[0]
-                        matchId = selectedMatch.espnId
-                        
-                        gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
-                        gameRosterResponse = requests.get(gameRosterUrl)
-                        print(gameRosterUrl)
-                        gameRosterData = gameRosterResponse.json()
+            # Heavy pulls (every team, or the whole season) fire many sequential
+            # ESPN requests and would blow past the host's web-worker time limit,
+            # so hand them to a background thread and let the page poll for the
+            # result. A single team + single week is fast, so it stays inline.
+            if teamParam == 'ALL' or weekRaw == '100':
+                job = availabilityJob.objects.create(season = yearOfSeason, week = weekRaw, team = teamParam)
+                workerThread = threading.Thread(target = crudLogic.runAvailabilityJob, args = (job.id,), daemon = True)
+                workerThread.start()
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'availabilityJobId': job.id, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw})
 
-                        
-                        try:
-                            athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, wk)
-                        except Exception as e:
-                            print("Wk: " + str(wk))
-                            print("EndRangeWeek" + str(endRangeWeek))
-                            break
-                            
-                        athleteAvailabilitySeason = crudLogic.organizeRosterAvailabilityArrays(athleteAvailabilitySeason, athleteAvailability, wk)
-
-
-                    
-                    else:
-                        return render(request, 'nfl/players.html', pageDictionary)
-                
-                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvailSeason': athleteAvailabilitySeason, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason,})
-                
-            else:
-                if 'team' in inputReq:
-
-                    selectedTeam = nflTeam.objects.get(abbreviation = inputReq['team'])
-                    teamId = selectedTeam.espnId
-                    selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
+            weekOfSeason = int(weekRaw)
+            if 'team' in inputReq:
+                selectedTeam = nflTeam.objects.get(abbreviation = teamParam)
+                teamId = selectedTeam.espnId
+                selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, homeTeamEspnId = teamId)
+                if(len(selectedMatchQuerySet) == 0):
+                    selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
                     if(len(selectedMatchQuerySet) == 0):
-                        selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
-                        if(len(selectedMatchQuerySet) == 0):
-                            responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
-                            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage})
-                    
-                    selectedMatch = selectedMatchQuerySet[0]
-                    matchId = selectedMatch.espnId
-                    
-                    gameRosterUrl='http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/'+str(matchId)+'/competitions/'+str(matchId)+'/competitors/'+str(teamId)+'/roster'
-                    gameRosterResponse = requests.get(gameRosterUrl)
-                    print(gameRosterUrl)
-                    gameRosterData = gameRosterResponse.json()
+                        responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
+                        return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
 
-                    athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
+                selectedMatch = selectedMatchQuerySet[0]
+                matchId = selectedMatch.espnId
 
-                    # print(weekOfSeason)
-                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': inputReq['team'], 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
-                
-                
-        
+                gameRosterData = crudLogic.fetchGameRoster(matchId, teamId)
+                if gameRosterData is None:
+                    # ESPN publishes the game roster around kickoff, so an
+                    # upcoming week has nothing to show yet.
+                    responseMessage = "No player availability published yet for " + selectedTeam.abbreviation + " in week " + str(weekOfSeason) + " of " + str(yearOfSeason) + "."
+                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
+
+                athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
+
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
+
     return render(request, 'nfl/players.html', pageDictionary)
+
+def availabilityJobStatus(request):
+    # Polled by the players page while a background availability pull runs.
+    jobId = request.GET.get('jobId')
+    try:
+        job = availabilityJob.objects.get(id = jobId)
+    except availabilityJob.DoesNotExist:
+        return JsonResponse({"status": "error", "progress": "", "error": "Job not found"})
+
+    return JsonResponse({
+        "status": job.status,
+        "progress": job.progress,
+        "error": job.error or "",
+    })
 
 def getInjuryStatus(request):
     print("Hit this")
@@ -953,10 +962,128 @@ def loadModelYear(request):
     else:
         return render(request, 'nfl/yearlySummary.html', {'models': modelsOnPage, 'years': yearsOnPage, 'nrSelect': numResultsSelect, 'topNumResults': topNumResults, 'ma_Len':movingAvgLenOptions})
 
+# Ordered groupings for the Team Stats page. Each entry is
+# (groupName, [(subGroupName or None, [fieldName, ...]), ...]).
+# Field names must match attributes on teamMatchPerformance. Any stat field
+# not listed here (and not in TEAM_STAT_METADATA_FIELDS) is appended to
+# Miscellaneous by buildTeamStatGroups so nothing silently disappears.
+TEAM_STAT_GROUPS = [
+    ("Team / Overall", [
+        (None, [
+            "totalPointsScored", "totalPointsAllowed", "totalTouchdownsScored",
+            "totalPenalties", "totalPenaltyYards",
+        ]),
+    ]),
+    ("Offense", [
+        ("Overall", [
+            "totalYardsGained", "totalExplosivePlays", "totalGiveaways",
+            "totalOffensePenalties", "totalOffensePenaltyYards",
+        ]),
+        ("Passing", [
+            "passCompletions", "passingAttempts", "totalPassingYards",
+            "passPlaysTwentyFivePlus", "qbHitsTaken", "sacksTaken", "sackYardsLost",
+            "twoPtPassConversions", "twoPtPassAttempts", "interceptionsOnOffense",
+            "passingFumbles", "passingFumblesLost",
+        ]),
+        ("Rushing", [
+            "rushingAttempts", "rushingYards", "rushingPlaysTenPlus", "stuffsTaken",
+            "stuffYardsLost", "twoPtRushConversions", "twoPtRushAttempts",
+            "rushingFumbles", "rushingFumblesLost",
+        ]),
+        ("Receiving", [
+            "totalReceivingYards", "receivingYardsAfterCatch",
+        ]),
+        ("Red Zone", [
+            "redZoneAttempts", "redZoneTDConversions", "redZoneFumbles",
+            "redZoneFumblesLost", "redZoneInterceptions",
+        ]),
+        ("Downs & Drives", [
+            "firstDowns", "firstDownsRushing", "firstDownsPassing", "firstDownsByPenalty",
+            "thirdDownAttempts", "thirdDownConvs", "fourthDownAttempts", "fourthDownConvs",
+            "drivePinnedInsideTen", "drivePinnedInsideFive",
+            "rushPctFirstDown", "passPctFirstDown", "completionPctFirstDown",
+            "rushPctSecondDown", "passPctSecondDown", "completionPctSecondDown",
+            "rushPctThirdDown", "passPctThirdDown", "completionPctThirdDown",
+        ]),
+    ]),
+    ("Defense", [
+        (None, [
+            "totalPointsAllowedByDefense", "totalYardsAllowedByDefense",
+            "totalPassYardsAllowed", "totalRushYardsAllowed",
+            "totalTakeaways", "defenseInterceptions", "defenseInterceptionYards",
+            "defenseInterceptionTouchdowns", "defenseForcedFumbles",
+            "defenseFumblesRecovered", "defenseFumbleTouchdowns",
+            "defenseSacks", "sackYardsGained", "qbHits", "defenseStuffs",
+            "passesBattedDown", "defensiveTouchdownsScored", "safetiesScored",
+            "totalDefensePenalties", "totalDefensePenaltyYards", "firstDownsByPenaltyGiven",
+        ]),
+    ]),
+    ("Special Teams", [
+        ("Punting", [
+            "totalPunts", "opponentPinnedInsideTen", "opponentPinnedInsideFive",
+        ]),
+        ("Blocks & Returns", [
+            "blockedFieldGoals", "blockedFieldGoalTouchdowns",
+            "blockedPunts", "blockedPuntTouchdowns",
+        ]),
+        ("Penalties", [
+            "specialTeamsPenalties", "specialTeamsPenaltyYards",
+        ]),
+    ]),
+    ("Scoring", [
+        (None, [
+            "passingTouchdowns", "rushingTouchdowns", "totalTwoPointConvs",
+            "fieldGoalAttempts", "fieldGoalsMade", "extraPointAttempts", "extraPointsMade",
+        ]),
+    ]),
+    ("Miscellaneous", [
+        (None, [
+            "twoPtReturns", "onePtSafetiesMade",
+        ]),
+    ]),
+]
+
+# Fields that are metadata rather than stats: excluded from the stat groups.
+# weekOfSeason is surfaced separately as a metadata row in the template.
+TEAM_STAT_METADATA_FIELDS = {
+    'id', 'matchEspnId', 'nflMatch', 'team', 'teamEspnId', 'opponent',
+    'yearOfSeason', 'atHome', 'weekOfSeason',
+}
+
+
+def buildTeamStatGroups():
+    """Return the Team Stats groupings as template-friendly dicts, appending any
+    teamMatchPerformance stat field not explicitly placed in a group to
+    Miscellaneous so newly added fields are never silently dropped."""
+    groups = []
+    covered = set()
+    for groupName, subGroups in TEAM_STAT_GROUPS:
+        builtSubs = []
+        for subName, fields in subGroups:
+            builtSubs.append({"name": subName, "fields": list(fields)})
+            covered.update(fields)
+        groups.append({"name": groupName, "subGroups": builtSubs})
+
+    uncovered = []
+    for f in teamMatchPerformance._meta.get_fields():
+        if f.name in TEAM_STAT_METADATA_FIELDS or f.name in covered:
+            continue
+        uncovered.append(f.name)
+
+    if uncovered:
+        miscGroup = next((g for g in groups if g["name"] == "Miscellaneous"), None)
+        if miscGroup is None:
+            miscGroup = {"name": "Miscellaneous", "subGroups": []}
+            groups.append(miscGroup)
+        miscGroup["subGroups"].append({"name": "Uncategorized", "fields": uncovered})
+
+    return groups
+
+
 def fullTeamStats(request):
 
     yearsOnPage = yearsOnPage_Helper()
-    
+
     inputReq = request.GET
 
     if(request.method == 'GET'):
@@ -989,15 +1116,9 @@ def fullTeamStats(request):
                 except Exception as e:
                     print(e)
 
-            listOfFieldNames = []
+            statGroups = buildTeamStatGroups()
 
-            for f in teamMatchPerformance._meta.get_fields():
-                if f.name in ['id', 'matchEspnId', "nflMatch", 'team', 'teamEspnId', 'opponent', 'yearOfSeason', 'atHome']:
-                    pass
-                else:
-                    listOfFieldNames.append(f.name)
-
-            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), "season": yearOfSeason, "teamName": inputReq['teamName'], "teamEspnId": selectedTeamEspnId, "teamPerf": listOfPerformances, "fieldNames": listOfFieldNames, 'years': yearsOnPage})
+            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), "season": yearOfSeason, "teamName": inputReq['teamName'], "teamEspnId": selectedTeamEspnId, "teamPerf": listOfPerformances, "statGroups": statGroups, "colSpan": len(listOfPerformances) + 1, 'years': yearsOnPage})
 
             
         else:

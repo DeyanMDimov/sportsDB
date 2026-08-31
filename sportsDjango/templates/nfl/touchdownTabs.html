@@ -1,0 +1,15 @@
+{% comment %}
+Tabs across the two touchdown pages. They are separate views, so these are links
+rather than Bootstrap tab panes; the caller says which one it is with
+{% include 'nfl/touchdownTabs.html' with activeTouchdownTab='team' %}
+{% endcomment %}
+<ul class="nav nav-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if activeTouchdownTab == 'team' %}active{% endif %}" href="/touchdowns"
+           {% if activeTouchdownTab == 'team' %}aria-current="page"{% endif %}>Team Touchdowns</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if activeTouchdownTab == 'matchPrep' %}active{% endif %}" href="/touchdowns-mp"
+           {% if activeTouchdownTab == 'matchPrep' %}aria-current="page"{% endif %}>Match Prep</a>
+    </li>
+</ul>

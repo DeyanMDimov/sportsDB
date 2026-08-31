@@ -2,7 +2,8 @@
 {% load static %}
 {% block touchdowns %}
     <div class="container">
-        <div>
+        {% include 'nfl/touchdownTabs.html' with activeTouchdownTab='team' %}
+        <div class="pt-3">
             <h2>Team Touchdowns</h2>
             <form method="GET" class="p-3" id="touchdownsForm">
                 <div class="row g-2">

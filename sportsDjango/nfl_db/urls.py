@@ -15,5 +15,7 @@ urlpatterns = [
     path('touchdowns/', views.getTouchdowns, name="getTouchdowns"),
     path('touchdowns-mp/', views.predictTouchdowns, name="predictTouchdowns"),
     path('ajax/playerSignificance/', views.playerSignificance, name="playerSignificance"),
-    path('ajax/getInjuryStatus/', views.getInjuryStatus, name="getInjuryStatus")
+    path('ajax/getInjuryStatus/', views.getInjuryStatus, name="getInjuryStatus"),
+    path('ajax/availabilityJobStatus/', views.availabilityJobStatus, name="availabilityJobStatus"),
+    path('ajax/performancePlayerOptions/', views.performancePlayerOptions, name="performancePlayerOptions")
 ]

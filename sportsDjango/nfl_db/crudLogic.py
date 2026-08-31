@@ -2,10 +2,12 @@ from nfl_db import models, players
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
 from nfl_db.models import rusherStatSplit, receiverStatSplit, returnerStatSplit, passerStatSplit
 from django.db import IntegrityError
+from django.db.models import Q, Sum, Count
 from datetime import datetime, date, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 
-import json, requests, traceback
+import json, re, requests, traceback
+import time as clock
 
 def processGameData(gameData, weekOfSeason, yearOfSeason):
     exceptionCollection = []
@@ -1608,6 +1610,360 @@ def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekN
 
         return seasonAvailability
             
+# ---------------------------------------------------------------------------
+# Weekly player performances (Players page -> Performances tab)
+#
+# Three sources, because no single one is complete:
+#   * counts (attempts, receptions, touchdowns, sacks taken) come from the
+#     per-play stat splits, which are reliable row-for-row;
+#   * yardage is read out of the play description ("... for 16 yards"). The
+#     yardage columns on the split rows are not usable - roughly half the
+#     player-game groups repeat the whole-game total on every row while the rest
+#     hold per-play yards - and play.yardsOnPlay includes penalty yardage tacked
+#     onto the play, so it overstates the gain;
+#   * interceptions, fumbles, targets and drops are not recorded at all. The
+#     split rows only exist for the play types that produced them, so their
+#     interception/fumble flags are never set, and receiver rows are only written
+#     for completions. These are read back out of the play descriptions too.
+# Team totals come from teamMatchPerformance, which ESPN populates directly.
+# ---------------------------------------------------------------------------
+
+PERFORMANCE_STAT_LABELS = {
+    "passingYards": "Pass Yds",
+    "passingAttempts": "Pass Att",
+    "passingTds": "Pass TD",
+    "rushingYards": "Rush Yds",
+    "rushingAttempts": "Rush Att",
+    "rushingTds": "Rush TD",
+    "receivingYards": "Rec Yds",
+    "targets": "Targets",
+    "receivingTds": "Rec TD",
+    "interceptions": "INT",
+    "fumbles": "Fumbles",
+    "sacks": "Sacks",
+    "drops": "Drops",
+}
+
+RECEIVER_PERFORMANCE_STATS = ["receivingYards", "targets", "receivingTds", "fumbles", "drops"]
+
+PERFORMANCE_STATS_BY_POSITION = {
+    1: ["passingYards", "passingAttempts", "passingTds", "rushingYards", "rushingAttempts",
+        "rushingTds", "interceptions", "fumbles", "sacks"],
+    4: ["rushingYards", "rushingAttempts", "rushingTds", "receivingYards", "targets",
+        "receivingTds", "fumbles", "drops"],
+    2: RECEIVER_PERFORMANCE_STATS,
+    3: RECEIVER_PERFORMANCE_STATS,
+}
+
+PERFORMANCE_POSITIONS = [(1, "QB"), (4, "RB"), (2, "WR"), (3, "TE")]
+
+PLAY_YARDS_REGEX = re.compile(r"for (-?\d+) yards?|for no gain")
+# Scoring plays sometimes carry ESPN's summary wording instead: "JuJu
+# Smith-Schuster 13 Yd pass from Patrick Mahomes".
+SCORING_PLAY_YARDS_REGEX = re.compile(r"(-?\d+) Yd\b")
+
+
+def yardsGainedOnPlay(playDescription):
+    # The first "for N yards" in a description is the gain on the play itself;
+    # anything after it belongs to a penalty or a return.
+    description = playDescription or ""
+    yardsMatch = PLAY_YARDS_REGEX.search(description)
+    if yardsMatch != None:
+        return int(yardsMatch.group(1)) if yardsMatch.group(1) else 0
+
+    scoringMatch = SCORING_PLAY_YARDS_REGEX.search(description)
+    if scoringMatch != None:
+        return int(scoringMatch.group(1))
+    return 0
+
+
+def playWasNullified(playDescription):
+    # A penalty can wipe out a play entirely. ESPN still lists it, but none of
+    # its yardage or attempts count towards anyone's stats.
+    return "No Play" in (playDescription or "")
+
+
+def abbreviatedNamePattern(playerName):
+    # Play descriptions name players as "P.Mahomes", occasionally "Mi.Wilson".
+    nameParts = [part for part in playerName.split() if part.rstrip('.') not in ("Jr", "Sr", "II", "III", "IV", "V")]
+    if len(nameParts) < 2:
+        return None
+    return r"[A-Z][A-Za-z]?\." + re.escape(nameParts[-1])
+
+
+def getPlayerPerformancesForSeason(playerObj, team, seasonYear):
+    seasonMatches = list(nflMatch.objects.filter(
+        yearOfSeason = int(seasonYear),
+    ).filter(
+        Q(homeTeamEspnId = team.espnId) | Q(awayTeamEspnId = team.espnId)
+    ).order_by('weekOfSeason'))
+
+    if len(seasonMatches) == 0:
+        return []
+
+    playerStatsByMatchId = {}
+    for seasonMatch in seasonMatches:
+        playerStatsByMatchId[seasonMatch.id] = emptyPerformanceStats()
+
+    addSplitPerformanceStats(playerStatsByMatchId, seasonMatches, playerObj)
+    addDescriptionPerformanceStats(playerStatsByMatchId, seasonMatches, team, playerObj)
+    teamStatsByMatchEspnId = getTeamPerformanceStats(seasonMatches, team)
+
+    performanceRows = []
+    for seasonMatch in seasonMatches:
+        opponentEspnId = seasonMatch.awayTeamEspnId if seasonMatch.homeTeamEspnId == team.espnId else seasonMatch.homeTeamEspnId
+        opponent = nflTeam.objects.filter(espnId = opponentEspnId).first()
+
+        performanceRows.append({
+            'week': seasonMatch.weekOfSeason,
+            'opponentAbbreviation': opponent.abbreviation if opponent else "?",
+            'awayGame': seasonMatch.awayTeamEspnId == team.espnId,
+            'playerStats': playerStatsByMatchId[seasonMatch.id],
+            'teamStats': teamStatsByMatchEspnId.get(seasonMatch.espnId, {}),
+        })
+
+    return performanceRows
+
+
+def emptyPerformanceStats():
+    emptyStats = {}
+    for statKey in PERFORMANCE_STAT_LABELS:
+        emptyStats[statKey] = 0
+    return emptyStats
+
+
+def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
+    # Re-pulling a game writes a second set of stat splits for it rather than
+    # replacing the first, so a play can carry several identical rows for the
+    # same player (the 2025 season has thousands). A player only ever throws,
+    # carries or catches a ball once on a given play, so count each play once.
+    countedPasserPlayIds = set()
+    countedRusherPlayIds = set()
+    countedReceiverPlayIds = set()
+
+    for passerSplit in passerStatSplit.objects.filter(player = playerObj, play__nflMatch__in = seasonMatches).select_related('play'):
+        if playWasNullified(passerSplit.play.playDescription) or passerSplit.play_id in countedPasserPlayIds:
+            continue
+        countedPasserPlayIds.add(passerSplit.play_id)
+        matchStats = statsByMatchId[passerSplit.play.nflMatch_id]
+        if passerSplit.play.playType in [2, 3]:
+            matchStats['passingAttempts'] += 1
+        if passerSplit.play.playType == 2:
+            matchStats['passingYards'] += yardsGainedOnPlay(passerSplit.play.playDescription)
+        if passerSplit.play.playType == 4:
+            matchStats['sacks'] += 1
+        if passerSplit.passingTdScored:
+            matchStats['passingTds'] += 1
+
+    for rusherSplit in rusherStatSplit.objects.filter(player = playerObj, play__nflMatch__in = seasonMatches).select_related('play'):
+        if playWasNullified(rusherSplit.play.playDescription) or rusherSplit.play_id in countedRusherPlayIds:
+            continue
+        countedRusherPlayIds.add(rusherSplit.play_id)
+        matchStats = statsByMatchId[rusherSplit.play.nflMatch_id]
+        matchStats['rushingAttempts'] += 1
+        matchStats['rushingYards'] += yardsGainedOnPlay(rusherSplit.play.playDescription)
+        if rusherSplit.rushingTdScored:
+            matchStats['rushingTds'] += 1
+
+    for receiverSplit in receiverStatSplit.objects.filter(player = playerObj, play__nflMatch__in = seasonMatches).select_related('play'):
+        if playWasNullified(receiverSplit.play.playDescription) or receiverSplit.play_id in countedReceiverPlayIds:
+            continue
+        countedReceiverPlayIds.add(receiverSplit.play_id)
+        matchStats = statsByMatchId[receiverSplit.play.nflMatch_id]
+        # A catch is a target as well; incompletions are added from the descriptions.
+        matchStats['targets'] += 1
+        matchStats['receivingYards'] += yardsGainedOnPlay(receiverSplit.play.playDescription)
+        if receiverSplit.receivingTdScored:
+            matchStats['receivingTds'] += 1
+
+
+def addDescriptionPerformanceStats(statsByMatchId, seasonMatches, team, playerObj):
+    namePattern = abbreviatedNamePattern(playerObj.name)
+    if namePattern == None:
+        return
+
+    targetedRegex = re.compile(r"(?:to|intended for)\s+" + namePattern)
+    fumbledRegex = re.compile(namePattern + r"\s+FUMBLES")
+    passerRegex = re.compile(namePattern + r"\s+pass")
+
+    teamPlays = playByPlay.objects.filter(nflMatch__in = seasonMatches, teamOnOffense = team)
+    for teamPlay in teamPlays:
+        description = teamPlay.playDescription or ""
+        if playWasNullified(description):
+            continue
+        matchStats = statsByMatchId[teamPlay.nflMatch_id]
+        wasTargeted = targetedRegex.search(description) != None
+
+        # Completions already counted as targets off the receiver splits.
+        if wasTargeted and teamPlay.playType in [3, 15, 16]:
+            matchStats['targets'] += 1
+        if wasTargeted and "Dropped" in description:
+            matchStats['drops'] += 1
+        if "FUMBLES" in description and fumbledRegex.search(description) != None:
+            matchStats['fumbles'] += 1
+        if teamPlay.playType in [15, 16] and passerRegex.search(description) != None:
+            matchStats['interceptions'] += 1
+
+
+def getTeamPerformanceStats(seasonMatches, team):
+    # nflMatch/team are many-to-many on teamMatchPerformance, so key off the
+    # scalar espn ids it also carries.
+    teamStatsByMatchEspnId = {}
+    matchEspnIds = [seasonMatch.espnId for seasonMatch in seasonMatches]
+    for teamPerformance in teamMatchPerformance.objects.filter(matchEspnId__in = matchEspnIds, teamEspnId = team.espnId):
+        passingFumbles = teamPerformance.passingFumbles or 0
+        rushingFumbles = teamPerformance.rushingFumbles or 0
+
+        teamStatsByMatchEspnId[teamPerformance.matchEspnId] = {
+            'passingYards': teamPerformance.totalPassingYards,
+            'passingAttempts': teamPerformance.passingAttempts,
+            'passingTds': teamPerformance.passingTouchdowns,
+            'rushingYards': teamPerformance.rushingYards,
+            'rushingAttempts': teamPerformance.rushingAttempts,
+            'rushingTds': teamPerformance.rushingTouchdowns,
+            'receivingYards': teamPerformance.totalReceivingYards,
+            # Every pass thrown is a target for somebody.
+            'targets': teamPerformance.passingAttempts,
+            'receivingTds': teamPerformance.passingTouchdowns,
+            'interceptions': teamPerformance.interceptionsOnOffense,
+            'fumbles': passingFumbles + rushingFumbles,
+            'sacks': teamPerformance.sacksTaken,
+            # ESPN doesn't publish team drops.
+            'drops': None,
+        }
+
+    return teamStatsByMatchEspnId
+
+
+def seasonHasStoredPlays(team, seasonYear):
+    # Team totals come from teamMatchPerformance, which covers seasons whose
+    # play-by-play was never pulled. Without plays every player column is zero,
+    # which is worth saying out loud rather than showing as a real zero.
+    return playByPlay.objects.filter(
+        nflMatch__yearOfSeason = int(seasonYear),
+        teamOnOffense = team,
+    ).exists()
+
+
+def getPlayersForPerformanceFilters(seasonYear, team, playerPosition):
+    # Feeds the Performances tab's player dropdown: who was on this team, at this
+    # position, in this season. Same reasoning as the roster tab - the week
+    # statuses say who was actually there, and a season with none falls back to
+    # the team's current players.
+    seasonPlayerIds = playerWeekStatus.objects.filter(
+        yearOfSeason = int(seasonYear),
+        team = team,
+    ).values_list('player', flat = True).distinct()
+
+    if len(seasonPlayerIds) == 0:
+        return list(player.objects.filter(team = team, playerPosition = playerPosition).order_by('name'))
+
+    return list(player.objects.filter(
+        id__in = list(seasonPlayerIds),
+        playerPosition = playerPosition,
+    ).order_by('name'))
+
+
+def getStartOfSeasonRoster(team, seasonYear):
+    # "The roster at the start of the year" is the week 1 game roster, which the
+    # availability pulls already store as playerWeekStatus rows. A season we
+    # haven't reached (or pulled) yet has none, so fall back to the team's
+    # current roster from ESPN and report which one the caller got.
+    weekOneStatuses = playerWeekStatus.objects.filter(
+        team = team,
+        yearOfSeason = int(seasonYear),
+        weekOfSeason = 1,
+    ).select_related('player')
+
+    if len(weekOneStatuses) > 0:
+        roster = sorted([s.player for s in weekOneStatuses], key = lambda p: (p.playerPosition, p.name))
+        return roster, "week1"
+
+    roster = pullTeamRosterFromApi(team)
+    if len(roster) == 0:
+        return [], "none"
+
+    return roster, "current"
+
+
+def getPlayersByPositionForSeason(playerPosition, seasonYear):
+    # A player counts as part of a season if they turned up on a game roster that
+    # year, which is what the playerWeekStatus rows record. They also carry the
+    # team the player was with, so the list can show that rather than whichever
+    # team the player sits on today.
+    seasonStatuses = playerWeekStatus.objects.filter(
+        yearOfSeason = int(seasonYear),
+    ).select_related('team').order_by('weekOfSeason')
+
+    teamThatSeasonByPlayerId = {}
+    for status in seasonStatuses:
+        # Later weeks overwrite earlier ones, so a player who was traded mid-season
+        # is listed under the team they finished it with.
+        teamThatSeasonByPlayerId[status.player_id] = status.team
+
+    # No week data stored for that season (one we haven't reached or pulled yet):
+    # fall back to everyone at the position so the tab still lists something.
+    if len(teamThatSeasonByPlayerId) == 0:
+        playersAtPosition = list(player.objects.filter(playerPosition = playerPosition).select_related('team'))
+        for playerObj in playersAtPosition:
+            playerObj.seasonTeam = playerObj.team
+        return sortPlayersByTeamThenName(playersAtPosition), "allSeasons"
+
+    playersAtPosition = list(player.objects.filter(
+        playerPosition = playerPosition,
+        id__in = list(teamThatSeasonByPlayerId.keys()),
+    ))
+    for playerObj in playersAtPosition:
+        playerObj.seasonTeam = teamThatSeasonByPlayerId[playerObj.id]
+
+    return sortPlayersByTeamThenName(playersAtPosition), "season"
+
+
+def sortPlayersByTeamThenName(playersToSort):
+    return sorted(playersToSort, key = lambda p: (p.seasonTeam.abbreviation if p.seasonTeam else "", p.name))
+
+
+def pullTeamRosterFromApi(team):
+    # ESPN's team roster endpoint only ever serves the CURRENT roster. It accepts
+    # a ?season= parameter and echoes it back, but the athlete list comes back
+    # empty for any past season, so there is no year to pass in here.
+    teamRosterUrl = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(team.espnId) + '/roster'
+    try:
+        rosterSubsections = requests.get(teamRosterUrl).json()['athletes']
+    except Exception as e:
+        print("Team roster request failed for " + teamRosterUrl + ": " + str(e))
+        return []
+
+    rosteredEspnIds = []
+    for subsection in rosterSubsections:
+        players.updatePlayerAthletesFromTeamRoster(subsection, team.espnId)
+        for athlete in subsection['items']:
+            rosteredEspnIds.append(int(athlete['id']))
+
+    # Filter on the ids ESPN just listed rather than player.team: that foreign
+    # key accumulates everyone who has ever been assigned to the team.
+    return sorted(player.objects.filter(espnId__in = rosteredEspnIds), key = lambda p: (p.playerPosition, p.name))
+
+
+def fetchGameRoster(matchId, teamId):
+    # ESPN only publishes a game roster once the game is close to (or past)
+    # kickoff; before that it answers 404 with an error payload. Return None in
+    # that case so callers can say "not available yet" instead of blowing up on
+    # a missing 'entries' key.
+    gameRosterUrl = 'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/' + str(matchId) + '/competitions/' + str(matchId) + '/competitors/' + str(teamId) + '/roster'
+    try:
+        rosterData = requests.get(gameRosterUrl).json()
+    except Exception as e:
+        print("Game roster request failed for " + gameRosterUrl + ": " + str(e))
+        return None
+
+    if not isinstance(rosterData, dict) or 'entries' not in rosterData:
+        print("No game roster published yet at " + gameRosterUrl)
+        return None
+
+    return rosterData
+
+
 def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
     athletesAndAvailability = []
     print(seasonWeek)
@@ -1635,9 +1991,214 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
                 playerWeekStatusObj.save()
         
         athletesAndAvailability.append([playerObj, playerWeekStatusObj])
-    
+
+    athletesAndAvailability = addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear, seasonWeek)
     athletesAndAvailability = sorted(athletesAndAvailability, key = lambda x: x[0].playerPosition)
     return athletesAndAvailability
+
+
+def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear, seasonWeek):
+    # ESPN's game roster feed is not always complete: it lists LAR by last name
+    # for every 2025 week and never includes Davante Adams, even in games where
+    # he caught a touchdown. Anyone our own play data has on the field for that
+    # game was plainly available, so fill those gaps in from the stat splits.
+    seasonMatch = nflMatch.objects.filter(
+        yearOfSeason = int(seasonYear),
+        weekOfSeason = int(seasonWeek),
+    ).filter(
+        Q(homeTeamEspnId = team.espnId) | Q(awayTeamEspnId = team.espnId)
+    ).first()
+
+    if seasonMatch == None:
+        return athletesAndAvailability
+
+    alreadyListedPlayerIds = set()
+    for athleteRow in athletesAndAvailability:
+        alreadyListedPlayerIds.add(athleteRow[0].id)
+
+    participantPlayerIds = set()
+    for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit]:
+        participantPlayerIds.update(splitModel.objects.filter(
+            play__nflMatch = seasonMatch,
+            play__teamOnOffense = team,
+        ).values_list('player', flat = True).distinct())
+
+    missingPlayerIds = participantPlayerIds - alreadyListedPlayerIds
+    if len(missingPlayerIds) == 0:
+        return athletesAndAvailability
+
+    for playerObj in player.objects.filter(id__in = list(missingPlayerIds)):
+        playerWeekStatusObj, statusCreated = playerWeekStatus.objects.get_or_create(
+            player = playerObj,
+            team = team,
+            yearOfSeason = seasonYear,
+            weekOfSeason = seasonWeek,
+        )
+        # They took a snap, so they were available whatever the feed left out.
+        print("Availability recovered from play data for " + playerObj.name + " (week " + str(seasonWeek) + ")")
+        athletesAndAvailability.append([playerObj, playerWeekStatusObj])
+
+    return athletesAndAvailability
+
+
+# ---------------------------------------------------------------------------
+# Background player-availability jobs
+#
+# The heavy availability pulls (every team, and/or the whole season) make many
+# sequential ESPN API calls. Running them inside the web request blocks long
+# enough that PythonAnywhere kills the worker, so getPlayers hands them to a
+# thread that calls runAvailabilityJob. The result is serialized to plain JSON
+# (see _availabilityStatusToken / _serializeAvailabilityRow) and stored on the
+# job row; the page polls for completion and then renders that JSON.
+# ---------------------------------------------------------------------------
+
+TEAM_REQUEST_DELAY_SECONDS = 5
+
+
+def _availabilityStatusToken(status):
+    # status is either a playerWeekStatus row or one of the "Bye"/"Not in Roster"
+    # marker strings produced while walking the season.
+    if isinstance(status, str):
+        return status
+    return "available" if status.playerStatus == 1 else "out"
+
+
+def _serializeAvailabilityRow(playerObj, statusList):
+    teamAbbreviation = playerObj.team.abbreviation if playerObj.team else ""
+    return {
+        "espnId": playerObj.espnId,
+        "name": playerObj.name,
+        "team": teamAbbreviation,
+        "position": playerObj.get_playerPosition_display(),
+        "isStarter": playerObj.isStarter,
+        "starPlayer": playerObj.starPlayer,
+        "statuses": [_availabilityStatusToken(s) for s in statusList],
+    }
+
+
+def _teamsForAvailabilityJob(teamAbbreviation):
+    if teamAbbreviation == "ALL":
+        return list(nflTeam.objects.all().order_by("abbreviation"))
+    return [nflTeam.objects.get(abbreviation = teamAbbreviation)]
+
+
+def _buildWeekAvailability(job, seasonYear, weekOfSeason, teamAbbreviation):
+    teams = _teamsForAvailabilityJob(teamAbbreviation)
+    rows = []
+    for index, s_team in enumerate(teams):
+        if index > 0:
+            clock.sleep(TEAM_REQUEST_DELAY_SECONDS)
+        job.progress = str(index + 1) + " / " + str(len(teams)) + " teams"
+        job.save()
+
+        teamId = s_team.espnId
+        selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = seasonYear, homeTeamEspnId = teamId)
+        if len(selectedMatchQuerySet) == 0:
+            selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = seasonYear, awayTeamEspnId = teamId)
+            if len(selectedMatchQuerySet) == 0:
+                # Bye week for this team, nothing to show.
+                continue
+
+        matchId = selectedMatchQuerySet[0].espnId
+        gameRosterData = fetchGameRoster(matchId, teamId)
+        if gameRosterData is None:
+            # Roster isn't published for this game yet.
+            continue
+
+        try:
+            weekAvailability = processGameRosterForAvailability(gameRosterData, s_team, seasonYear, weekOfSeason)
+        except Exception as e:
+            print("Failed availability pull for " + s_team.abbreviation + " wk " + str(weekOfSeason) + ": " + str(e))
+            continue
+
+        for playerObj, playerWeekStatusObj in weekAvailability:
+            rows.append(_serializeAvailabilityRow(playerObj, [playerWeekStatusObj]))
+
+    return {
+        "type": "week",
+        "season": seasonYear,
+        "weekLabels": [str(weekOfSeason)],
+        "rows": rows,
+    }
+
+
+def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
+    endRangeWeek = 12 if int(seasonYear) == 2024 else 19
+    teams = _teamsForAvailabilityJob(teamAbbreviation)
+    rows = []
+    for index, s_team in enumerate(teams):
+        if index > 0:
+            clock.sleep(TEAM_REQUEST_DELAY_SECONDS)
+        job.progress = str(index + 1) + " / " + str(len(teams)) + " teams"
+        job.save()
+
+        teamId = s_team.espnId
+        teamSeasonAvailability = []
+        for wk in range(1, endRangeWeek):
+            selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = seasonYear, homeTeamEspnId = teamId)
+            if len(selectedMatchQuerySet) == 0:
+                selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = seasonYear, awayTeamEspnId = teamId)
+                if len(selectedMatchQuerySet) == 0:
+                    for playerRecord in teamSeasonAvailability:
+                        playerRecord[1].append("Bye")
+                    continue
+
+            matchId = selectedMatchQuerySet[0].espnId
+            gameRosterData = fetchGameRoster(matchId, teamId)
+            if gameRosterData is None:
+                # Nothing published for this week yet, so the rest of the season
+                # won't have rosters either.
+                break
+
+            try:
+                weekAvailability = processGameRosterForAvailability(gameRosterData, s_team, seasonYear, wk)
+            except Exception as e:
+                print("Failed availability pull for " + s_team.abbreviation + " wk " + str(wk) + ": " + str(e))
+                break
+
+            teamSeasonAvailability = organizeRosterAvailabilityArrays(teamSeasonAvailability, weekAvailability, wk)
+
+        for playerObj, statusList in teamSeasonAvailability:
+            rows.append(_serializeAvailabilityRow(playerObj, statusList))
+
+    return {
+        "type": "season",
+        "season": seasonYear,
+        "weekLabels": [str(w) for w in range(1, endRangeWeek)],
+        "rows": rows,
+    }
+
+
+def runAvailabilityJob(jobId):
+    # Thread entry point. Owns its own DB connection, so close it when done.
+    from nfl_db.models import availabilityJob
+    from django.db import connection
+
+    job = None
+    try:
+        job = availabilityJob.objects.get(id = jobId)
+        job.status = "running"
+        job.progress = "Starting..."
+        job.save()
+
+        if job.week == "100":
+            result = _buildSeasonAvailability(job, job.season, job.team)
+        else:
+            result = _buildWeekAvailability(job, job.season, int(job.week), job.team)
+
+        job.result = json.dumps(result)
+        job.progress = "Complete"
+        job.status = "done"
+        job.save()
+    except Exception as e:
+        traceback.print_exc()
+        if job is not None:
+            job.status = "error"
+            job.error = str(e)
+            job.save()
+    finally:
+        connection.close()
+
 
 def scheduledScorePull():
     thisDayUTC = datetime.now()
