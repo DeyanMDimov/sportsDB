@@ -2169,6 +2169,79 @@ def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
     }
 
 
+def buildAvailabilityFromDatabase(seasonYear, weekRaw, teamAbbreviation):
+    # The "Pull Fresh" box unticked: answer entirely from stored playerWeekStatus
+    # rows and make no ESPN requests at all. Shape matches what the background
+    # job produces so the page renders it with the same table.
+    teams = _teamsForAvailabilityJob(teamAbbreviation)
+    if str(weekRaw) == "100":
+        return _seasonAvailabilityFromDatabase(seasonYear, teams)
+    return _weekAvailabilityFromDatabase(seasonYear, int(weekRaw), teams)
+
+
+def _weekAvailabilityFromDatabase(seasonYear, weekOfSeason, teams):
+    rows = []
+    for s_team in teams:
+        storedStatuses = playerWeekStatus.objects.filter(
+            yearOfSeason = int(seasonYear),
+            weekOfSeason = weekOfSeason,
+            team = s_team,
+        ).select_related('player', 'player__team')
+
+        for storedStatus in sorted(storedStatuses, key = lambda status: (status.player.playerPosition, status.player.name)):
+            rows.append(_serializeAvailabilityRow(storedStatus.player, [storedStatus]))
+
+    return {
+        "type": "week",
+        "season": seasonYear,
+        "weekLabels": [str(weekOfSeason)],
+        "rows": rows,
+    }
+
+
+def _seasonAvailabilityFromDatabase(seasonYear, teams):
+    endRangeWeek = 12 if int(seasonYear) == 2024 else 19
+    weekNumbers = list(range(1, endRangeWeek))
+    rows = []
+
+    for s_team in teams:
+        # Weeks with no match are bye weeks; weeks that were played but hold no
+        # row for the player mean they weren't on that roster.
+        playedWeeks = set(nflMatch.objects.filter(
+            yearOfSeason = int(seasonYear),
+        ).filter(
+            Q(homeTeamEspnId = s_team.espnId) | Q(awayTeamEspnId = s_team.espnId)
+        ).values_list('weekOfSeason', flat = True))
+
+        playersById = {}
+        statusesByPlayerId = {}
+        for storedStatus in playerWeekStatus.objects.filter(
+            yearOfSeason = int(seasonYear),
+            weekOfSeason__in = weekNumbers,
+            team = s_team,
+        ).select_related('player', 'player__team'):
+            playersById[storedStatus.player_id] = storedStatus.player
+            statusesByPlayerId.setdefault(storedStatus.player_id, {})[storedStatus.weekOfSeason] = storedStatus
+
+        for playerObj in sorted(playersById.values(), key = lambda p: (p.playerPosition, p.name)):
+            statusList = []
+            for weekNumber in weekNumbers:
+                if weekNumber not in playedWeeks:
+                    statusList.append("Bye")
+                elif weekNumber in statusesByPlayerId[playerObj.id]:
+                    statusList.append(statusesByPlayerId[playerObj.id][weekNumber])
+                else:
+                    statusList.append("Not in Roster")
+            rows.append(_serializeAvailabilityRow(playerObj, statusList))
+
+    return {
+        "type": "season",
+        "season": seasonYear,
+        "weekLabels": [str(w) for w in weekNumbers],
+        "rows": rows,
+    }
+
+
 def runAvailabilityJob(jobId):
     # Thread entry point. Owns its own DB connection, so close it when done.
     from nfl_db.models import availabilityJob

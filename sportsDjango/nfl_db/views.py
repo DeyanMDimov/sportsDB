@@ -448,6 +448,17 @@ def getPlayers(request):
             yearOfSeason = inputReq['season'].strip()
             weekRaw = inputReq['week'].strip()
             teamParam = inputReq.get('team', '').strip()
+            pullFresh = 'pullFresh' in inputReq
+
+            # Unticked "Pull Fresh" means look at nothing but the database. No
+            # ESPN request, no background job, whatever the team/week combination.
+            if not pullFresh:
+                storedAvailability = crudLogic.buildAvailabilityFromDatabase(yearOfSeason, weekRaw, teamParam)
+                if len(storedAvailability['rows']) == 0:
+                    responseMessage = "Nothing stored for that season, week and team yet. Tick \"Pull Fresh\" to pull it from ESPN."
+                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw, 'pullFresh': pullFresh})
+
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'jobResult': storedAvailability, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw, 'pullFresh': pullFresh})
 
             # Heavy pulls (every team, or the whole season) fire many sequential
             # ESPN requests and would blow past the host's web-worker time limit,
@@ -457,7 +468,7 @@ def getPlayers(request):
                 job = availabilityJob.objects.create(season = yearOfSeason, week = weekRaw, team = teamParam)
                 workerThread = threading.Thread(target = crudLogic.runAvailabilityJob, args = (job.id,), daemon = True)
                 workerThread.start()
-                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'availabilityJobId': job.id, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw})
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'availabilityJobId': job.id, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw, 'pullFresh': pullFresh})
 
             weekOfSeason = int(weekRaw)
             if 'team' in inputReq:
@@ -468,7 +479,7 @@ def getPlayers(request):
                     selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = yearOfSeason, awayTeamEspnId = teamId)
                     if(len(selectedMatchQuerySet) == 0):
                         responseMessage = "Week " + str(weekOfSeason) + " was the Bye week for " + selectedTeam.abbreviation
-                        return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
+                        return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason, 'pullFresh': pullFresh})
 
                 selectedMatch = selectedMatchQuerySet[0]
                 matchId = selectedMatch.espnId
@@ -478,11 +489,11 @@ def getPlayers(request):
                     # ESPN publishes the game roster around kickoff, so an
                     # upcoming week has nothing to show yet.
                     responseMessage = "No player availability published yet for " + selectedTeam.abbreviation + " in week " + str(weekOfSeason) + " of " + str(yearOfSeason) + "."
-                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
+                    return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'responseMessage': responseMessage, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason, 'pullFresh': pullFresh})
 
                 athleteAvailability = crudLogic.processGameRosterForAvailability(gameRosterData, selectedTeam, yearOfSeason, weekOfSeason)
 
-                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason})
+                return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason, 'pullFresh': pullFresh})
 
     return render(request, 'nfl/players.html', pageDictionary)
 
