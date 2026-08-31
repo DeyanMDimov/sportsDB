@@ -195,7 +195,10 @@
         <h3>{{ performancePlayerName }} &mdash; {{ performanceYear }}</h3>
         {% if performanceRows %}
         {% if performancePlaysStored %}
-        <p class="text-muted">Team total for that week in parentheses.</p>
+        <p class="text-muted">
+            Team total for that week in parentheses. Weeks the player was not
+            available show the status from player availability instead.
+        </p>
         {% else %}
         <p class="text-muted">
             No play-by-play stored for {{ performanceYear }}, so the player columns are
@@ -215,9 +218,13 @@
                 {% for performanceRow in performanceRows %}
                 <tr>
                     <td>Week {{ performanceRow.week }} {% if performanceRow.awayGame %}@{% else %}vs{% endif %} {{ performanceRow.opponentAbbreviation }}</td>
+                    {% if performanceRow.showAvailabilityInsteadOfStats %}
+                    <td class="text-muted" colspan="{{ performanceColumns|length }}">{{ performanceRow.availabilityLabel }}</td>
+                    {% else %}
                     {% for orderedStat in performanceRow.orderedStats %}
                     <td>{{ orderedStat.playerValue }}{% if orderedStat.teamValue != None %} <span class="team-total">({{ orderedStat.teamValue }})</span>{% endif %}</td>
                     {% endfor %}
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>

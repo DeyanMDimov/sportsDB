@@ -1636,6 +1636,7 @@ PERFORMANCE_STAT_LABELS = {
     "rushingAttempts": "Rush Att",
     "rushingTds": "Rush TD",
     "receivingYards": "Rec Yds",
+    "receptions": "Recs",
     "targets": "Targets",
     "receivingTds": "Rec TD",
     "interceptions": "INT",
@@ -1644,13 +1645,13 @@ PERFORMANCE_STAT_LABELS = {
     "drops": "Drops",
 }
 
-RECEIVER_PERFORMANCE_STATS = ["receivingYards", "targets", "receivingTds", "fumbles", "drops"]
+RECEIVER_PERFORMANCE_STATS = ["receivingYards", "receptions", "targets", "receivingTds", "fumbles", "drops"]
 
 PERFORMANCE_STATS_BY_POSITION = {
     1: ["passingYards", "passingAttempts", "passingTds", "rushingYards", "rushingAttempts",
         "rushingTds", "interceptions", "fumbles", "sacks"],
-    4: ["rushingYards", "rushingAttempts", "rushingTds", "receivingYards", "targets",
-        "receivingTds", "fumbles", "drops"],
+    4: ["rushingYards", "rushingAttempts", "rushingTds", "receivingYards", "receptions",
+        "targets", "receivingTds", "fumbles", "drops"],
     2: RECEIVER_PERFORMANCE_STATS,
     3: RECEIVER_PERFORMANCE_STATS,
 }
@@ -1708,21 +1709,70 @@ def getPlayerPerformancesForSeason(playerObj, team, seasonYear):
     addSplitPerformanceStats(playerStatsByMatchId, seasonMatches, playerObj)
     addDescriptionPerformanceStats(playerStatsByMatchId, seasonMatches, team, playerObj)
     teamStatsByMatchEspnId = getTeamPerformanceStats(seasonMatches, team)
+    availabilityByWeek = getAvailabilityByWeek(playerObj, team, seasonYear, seasonMatches)
 
     performanceRows = []
     for seasonMatch in seasonMatches:
         opponentEspnId = seasonMatch.awayTeamEspnId if seasonMatch.homeTeamEspnId == team.espnId else seasonMatch.homeTeamEspnId
         opponent = nflTeam.objects.filter(espnId = opponentEspnId).first()
 
+        matchPlayerStats = playerStatsByMatchId[seasonMatch.id]
+        availability, availabilityLabel = availabilityByWeek.get(seasonMatch.weekOfSeason, ("unknown", ""))
+        recordedAnything = any(matchPlayerStats[statKey] != 0 for statKey in matchPlayerStats)
+
         performanceRows.append({
             'week': seasonMatch.weekOfSeason,
             'opponentAbbreviation': opponent.abbreviation if opponent else "?",
             'awayGame': seasonMatch.awayTeamEspnId == team.espnId,
-            'playerStats': playerStatsByMatchId[seasonMatch.id],
+            'playerStats': matchPlayerStats,
             'teamStats': teamStatsByMatchEspnId.get(seasonMatch.espnId, {}),
+            'availability': availability,
+            'availabilityLabel': availabilityLabel,
+            # Availability stands in for the stats only when there are no stats to
+            # show; a week with recorded plays always shows them, whatever the
+            # availability rows claim.
+            'showAvailabilityInsteadOfStats': availability in ["out", "notInRoster"] and not recordedAnything,
         })
 
     return performanceRows
+
+
+def getAvailabilityByWeek(playerObj, team, seasonYear, seasonMatches):
+    # Says, per week, whether this player was on the roster and available. A week
+    # nobody on the team has a status row for means availability was never pulled
+    # for it, which is different from the player being absent - that stays
+    # "unknown" so the stats show as normal.
+    weekNumbers = [seasonMatch.weekOfSeason for seasonMatch in seasonMatches]
+
+    weeksWithAvailabilityData = set(playerWeekStatus.objects.filter(
+        team = team,
+        yearOfSeason = int(seasonYear),
+        weekOfSeason__in = weekNumbers,
+    ).values_list('weekOfSeason', flat = True))
+
+    playerStatusByWeek = {}
+    for weekStatus in playerWeekStatus.objects.filter(
+        player = playerObj,
+        team = team,
+        yearOfSeason = int(seasonYear),
+        weekOfSeason__in = weekNumbers,
+    ):
+        playerStatusByWeek[weekStatus.weekOfSeason] = weekStatus
+
+    availabilityByWeek = {}
+    for weekNumber in weekNumbers:
+        if weekNumber not in weeksWithAvailabilityData:
+            availabilityByWeek[weekNumber] = ("unknown", "")
+        elif weekNumber in playerStatusByWeek:
+            weekStatus = playerStatusByWeek[weekNumber]
+            if weekStatus.playerStatus == 1:
+                availabilityByWeek[weekNumber] = ("available", "Available")
+            else:
+                availabilityByWeek[weekNumber] = ("out", weekStatus.get_playerStatus_display())
+        else:
+            availabilityByWeek[weekNumber] = ("notInRoster", "Not in Roster")
+
+    return availabilityByWeek
 
 
 def emptyPerformanceStats():
@@ -1770,6 +1820,7 @@ def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
             continue
         countedReceiverPlayIds.add(receiverSplit.play_id)
         matchStats = statsByMatchId[receiverSplit.play.nflMatch_id]
+        matchStats['receptions'] += 1
         # A catch is a target as well; incompletions are added from the descriptions.
         matchStats['targets'] += 1
         matchStats['receivingYards'] += yardsGainedOnPlay(receiverSplit.play.playDescription)
@@ -1822,7 +1873,8 @@ def getTeamPerformanceStats(seasonMatches, team):
             'rushingAttempts': teamPerformance.rushingAttempts,
             'rushingTds': teamPerformance.rushingTouchdowns,
             'receivingYards': teamPerformance.totalReceivingYards,
-            # Every pass thrown is a target for somebody.
+            # Every completion is somebody's reception, every pass thrown somebody's target.
+            'receptions': teamPerformance.passCompletions,
             'targets': teamPerformance.passingAttempts,
             'receivingTds': teamPerformance.passingTouchdowns,
             'interceptions': teamPerformance.interceptionsOnOffense,
@@ -2016,8 +2068,12 @@ def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear,
     for athleteRow in athletesAndAvailability:
         alreadyListedPlayerIds.add(athleteRow[0].id)
 
+    # Only the offensive splits identify a player's own team: the passer, rusher
+    # and receiver on a play are always the team on offense. Returners are not -
+    # a punt or kickoff is returned by the side that is NOT on offense, so
+    # including them here credited every returner to their opponent.
     participantPlayerIds = set()
-    for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit]:
+    for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit]:
         participantPlayerIds.update(splitModel.objects.filter(
             play__nflMatch = seasonMatch,
             play__teamOnOffense = team,
