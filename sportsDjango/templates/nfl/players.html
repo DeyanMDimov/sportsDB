@@ -182,6 +182,10 @@
                                     selected
                                 {% endif %}
                                 >{{ performancePlayerOption.name }}</option>
+                            {% empty %}
+                                {% if performanceActive %}
+                                <option value="">No players with data for this team and season</option>
+                                {% endif %}
                             {% endfor %}
                             </select>
                         </div>
@@ -608,6 +612,12 @@
                     position: $("#performancePosition").val()
                 }).done(function (data) {
                     playerSelect.empty();
+                    if (data.players.length === 0) {
+                        // Nothing stored for that team and season, so say so rather
+                        // than leaving an empty box with no explanation.
+                        playerSelect.append($("<option>", { value: "", text: "No players with data for this team and season" }));
+                        return;
+                    }
                     $.each(data.players, function (index, playerOption) {
                         playerSelect.append($("<option>", { value: playerOption.espnId, text: playerOption.name }));
                     });

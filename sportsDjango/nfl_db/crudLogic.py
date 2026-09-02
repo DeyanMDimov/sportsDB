@@ -1899,16 +1899,25 @@ def seasonHasStoredPlays(team, seasonYear):
 
 def getPlayersForPerformanceFilters(seasonYear, team, playerPosition):
     # Feeds the Performances tab's player dropdown: who was on this team, at this
-    # position, in this season. Same reasoning as the roster tab - the week
-    # statuses say who was actually there, and a season with none falls back to
-    # the team's current players.
-    seasonPlayerIds = playerWeekStatus.objects.filter(
+    # position, in this season. Deliberately never falls back to player.team -
+    # that field holds whichever squad the player was last pulled with, so a
+    # season with no data of its own used to list every player currently sitting
+    # on the team, dragging in people who never played for them.
+    seasonPlayerIds = set(playerWeekStatus.objects.filter(
         yearOfSeason = int(seasonYear),
         team = team,
-    ).values_list('player', flat = True).distinct()
+    ).values_list('player', flat = True).distinct())
+
+    # Snaps taken for this team count too, so a player ESPN left out of the game
+    # roster feed still shows up.
+    for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit]:
+        seasonPlayerIds.update(splitModel.objects.filter(
+            play__nflMatch__yearOfSeason = int(seasonYear),
+            play__teamOnOffense = team,
+        ).values_list('player', flat = True).distinct())
 
     if len(seasonPlayerIds) == 0:
-        return list(player.objects.filter(team = team, playerPosition = playerPosition).order_by('name'))
+        return []
 
     return list(player.objects.filter(
         id__in = list(seasonPlayerIds),
