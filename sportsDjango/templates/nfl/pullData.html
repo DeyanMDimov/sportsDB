@@ -19,15 +19,18 @@
         
         <ul class="nav nav-tabs" id="pullDataTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link {% if not rosterTeamName %}active{% endif %}" id="gameDataTab" data-bs-toggle="tab" data-bs-target="#gameDataPane" type="button" role="tab" aria-controls="gameDataPane" aria-selected="{% if not rosterTeamName %}true{% else %}false{% endif %}">Game Data</button>
+                <button class="nav-link {% if not rosterTeamName and not cleanupReport and not dateReport %}active{% endif %}" id="gameDataTab" data-bs-toggle="tab" data-bs-target="#gameDataPane" type="button" role="tab" aria-controls="gameDataPane" aria-selected="{% if not rosterTeamName and not cleanupReport and not dateReport %}true{% else %}false{% endif %}">Game Data</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if rosterTeamName %}active{% endif %}" id="teamRosterTab" data-bs-toggle="tab" data-bs-target="#teamRosterPane" type="button" role="tab" aria-controls="teamRosterPane" aria-selected="{% if rosterTeamName %}true{% else %}false{% endif %}">Team Roster</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if cleanupReport or dateReport %}active{% endif %}" id="dataCleanupTab" data-bs-toggle="tab" data-bs-target="#dataCleanupPane" type="button" role="tab" aria-controls="dataCleanupPane" aria-selected="{% if cleanupReport or dateReport %}true{% else %}false{% endif %}">Database Cleanup</button>
+            </li>
         </ul>
 
         <div class="tab-content border border-top-0 mb-3" id="pullDataTabsContent">
-        <div class="tab-pane fade {% if not rosterTeamName %}show active{% endif %} p-3" id="gameDataPane" role="tabpanel" aria-labelledby="gameDataTab">
+        <div class="tab-pane fade {% if not rosterTeamName and not cleanupReport and not dateReport %}show active{% endif %} p-3" id="gameDataPane" role="tabpanel" aria-labelledby="gameDataTab">
             <form method="GET">
                 Load data for:
                 <div class="row g-1 mt-2 mb-2">
@@ -85,101 +88,230 @@
                         </h2>
                         <div id="collapseSpecificMatch" class="accordion-collapse collapse" aria-labelledby="headingSpecificMatch" data-bs-parent="#specificMatchAccordion">
                             <div class="accordion-body">
-                            <h5>Status dates</h5>
-                            <p class="text-muted">
-                                Availability rows written before statuses carried a date can be stamped
-                                with the date of the game they belong to. Worth doing first: it also lets
-                                the duplicate check below tell a repeat apart from a genuine second
-                                report. Checking changes nothing.
-                            </p>
-                            <form method="GET">
-                                <input type="hidden" name="dataCleanup" value="dates">
-                                <button type="submit" class="btn btn-outline-primary">Check for undated statuses</button>
-                            </form>
-
-                            {% if dateReport %}
-                            {% if dateReport.applied %}
-                            <h6 class="mt-3">Dated {{ dateReport.datedRowCount }} status row{{ dateReport.datedRowCount|pluralize }}.</h6>
-                            {% else %}
-                            <h6 class="mt-3">{{ dateReport.datedRowCount }} status row{{ dateReport.datedRowCount|pluralize }} can be dated.</h6>
-                            {% endif %}
-                            {% if dateReport.undatableRowCount %}
-                            <p class="text-muted">
-                                {{ dateReport.undatableRowCount }} row{{ dateReport.undatableRowCount|pluralize }} stay undated &mdash; no match on file for that team and week.
-                            </p>
-                            {% endif %}
-                            {% if not dateReport.applied and dateReport.datedRowCount %}
-                            <form method="GET">
-                                <input type="hidden" name="dataCleanup" value="datesRun">
-                                <button type="submit" class="btn btn-primary">Add dates to {{ dateReport.datedRowCount }} row{{ dateReport.datedRowCount|pluralize }}</button>
-                            </form>
-                            {% endif %}
-                            {% endif %}
-
-                            <hr class="mt-4">
-
-                            <h5>Duplicates and wrong teams</h5>
-                            <p class="text-muted">
-                                Finds rows that repeated pulls left behind: duplicate stat splits and
-                                identical roster statuses, plus players credited to the team they played
-                                against. Statuses reported on different dates are always kept, so a
-                                player's week can still be traced. Checking changes nothing.
-                            </p>
-                            <form method="GET">
-                                <input type="hidden" name="dataCleanup" value="preview">
-                                <button type="submit" class="btn btn-outline-primary">Check for problems</button>
-                            </form>
-
-                            {% if cleanupReport %}
-                            {% if cleanupReport.applied %}
-                            <h6 class="mt-3">Removed {{ cleanupReport.totalRows }} row{{ cleanupReport.totalRows|pluralize }}.</h6>
-                            {% else %}
-                            <h6 class="mt-3">Found {{ cleanupReport.totalRows }} row{{ cleanupReport.totalRows|pluralize }} to remove.</h6>
-                            {% endif %}
-                            <table class="table table-bordered mt-2">
-                                <thead>
-                                    <tr><td>Problem</td><td>Rows</td></tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Identical roster statuses (same status, same date)</td>
-                                        <td>{{ cleanupReport.duplicateWeekStatusCount }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Players credited to their opponent</td>
-                                        <td>{{ cleanupReport.wrongTeamWeekStatusCount }}</td>
-                                    </tr>
-                                    {% for splitCount in cleanupReport.duplicateSplitCounts %}
-                                    <tr>
-                                        <td>Duplicate {{ splitCount.label }} rows</td>
-                                        <td>{{ splitCount.count }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-
-                            {% if cleanupReport.wrongTeamSamples %}
-                            <p class="text-muted mb-1">Wrong-team examples:</p>
-                            <ul class="text-muted">
-                                {% for sample in cleanupReport.wrongTeamSamples %}
-                                <li>{{ sample.name }} listed under {{ sample.listedTeam }} &mdash; {{ sample.season }} week {{ sample.week }}</li>
-                                {% endfor %}
-                            </ul>
-                            {% endif %}
-
-                            {% if not cleanupReport.applied and cleanupReport.totalRows %}
-                            <form method="GET" onsubmit="return confirm('Permanently delete {{ cleanupReport.totalRows }} rows? This cannot be undone.');">
-                                <input type="hidden" name="dataCleanup" value="run">
-                                <button type="submit" class="btn btn-danger">Delete {{ cleanupReport.totalRows }} row{{ cleanupReport.totalRows|pluralize }}</button>
-                            </form>
-                            {% endif %}
-                            {% endif %}
+                                <form method="GET">
+                                    <div class="mb-3">
+                                        <label for="espnGameId" class="form-label">Match ESPN ID:</label>
+                                        <input type="text" class="form-control" id="espnGameId" name="espnGameId" placeholder="Enter ESPN Game ID" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Reprocess Match</button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+            {% comment %} <form method="GET">
+                <input type="hidden" name="deleteDrives" value ="allDrives">
+                <button type="submit" disabled>Delete All Drives</button>
+            </form> {% endcomment %}
         </div>
 
+        <div class="tab-pane fade {% if rosterTeamName %}show active{% endif %} p-3" id="teamRosterPane" role="tabpanel" aria-labelledby="teamRosterTab">
+            <form method="GET">
+                Pull the current roster from ESPN for:
+                <div class="row g-1 mt-2 mb-2">
+                    <div class="col-2">
+                        <div class="form-floating">
+                            <select class="form-select" name="teamName" id="select_roster_team" aria-label="Floating label">
+                                <option value="ALL" {% if rosterTeamName == "ALL" %}selected{% endif %}>ALL</option>
+                                {% for team in teams %}
+                                <option value="{{ team.abbreviation }}"
+                                    {% if rosterTeamName == team.abbreviation %}
+                                        selected
+                                    {% endif %} >{{ team.abbreviation }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="select_roster_team">Team</label>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-muted">
+                    ESPN only publishes each team's current roster, so this always pulls
+                    today's squad. Pulling all 32 takes a while.
+                </p>
+                <button type="submit" class="btn btn-success">Load!</button>
+            </form>
+        </div>
+
+        <div class="tab-pane fade {% if cleanupReport or dateReport %}show active{% endif %} p-3" id="dataCleanupPane" role="tabpanel" aria-labelledby="dataCleanupTab">
+            <h5>Status dates</h5>
+            <p class="text-muted">
+                Availability rows written before statuses carried a date can be stamped with
+                the date of the game they belong to. Worth doing first: it also lets the
+                duplicate check below tell a repeat apart from a genuine second report.
+                Checking changes nothing.
+            </p>
+            <form method="GET">
+                <input type="hidden" name="dataCleanup" value="dates">
+                <button type="submit" class="btn btn-outline-primary">Check for undated statuses</button>
+            </form>
+
+            {% if dateReport %}
+            {% if dateReport.applied %}
+            <h6 class="mt-3">Dated {{ dateReport.datedRowCount }} status row{{ dateReport.datedRowCount|pluralize }}.</h6>
+            {% else %}
+            <h6 class="mt-3">{{ dateReport.datedRowCount }} status row{{ dateReport.datedRowCount|pluralize }} can be dated.</h6>
+            {% endif %}
+            {% if dateReport.undatableRowCount %}
+            <p class="text-muted">
+                {{ dateReport.undatableRowCount }} row{{ dateReport.undatableRowCount|pluralize }} stay undated &mdash; no match on file for that team and week.
+            </p>
+            {% endif %}
+            {% if not dateReport.applied and dateReport.datedRowCount %}
+            <form method="GET">
+                <input type="hidden" name="dataCleanup" value="datesRun">
+                <button type="submit" class="btn btn-primary">Add dates to {{ dateReport.datedRowCount }} row{{ dateReport.datedRowCount|pluralize }}</button>
+            </form>
+            {% endif %}
+            {% endif %}
+
+            <hr class="mt-4">
+
+            <h5>Duplicates and wrong teams</h5>
+            <p class="text-muted">
+                Finds rows that repeated pulls left behind: duplicate stat splits and identical
+                roster statuses, plus players credited to the team they played against. Statuses
+                reported on different dates are always kept, so a player's week can still be
+                traced. Checking changes nothing.
+            </p>
+            <form method="GET">
+                <input type="hidden" name="dataCleanup" value="preview">
+                <button type="submit" class="btn btn-outline-primary">Check for problems</button>
+            </form>
+
+            {% if cleanupReport %}
+            {% if cleanupReport.applied %}
+            <h6 class="mt-3">Removed {{ cleanupReport.totalRows }} row{{ cleanupReport.totalRows|pluralize }}.</h6>
+            {% else %}
+            <h6 class="mt-3">Found {{ cleanupReport.totalRows }} row{{ cleanupReport.totalRows|pluralize }} to remove.</h6>
+            {% endif %}
+            <table class="table table-bordered mt-2">
+                <thead>
+                    <tr><td>Problem</td><td>Rows</td></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Identical roster statuses (same status, same date)</td>
+                        <td>{{ cleanupReport.duplicateWeekStatusCount }}</td>
+                    </tr>
+                    <tr>
+                        <td>Players credited to their opponent</td>
+                        <td>{{ cleanupReport.wrongTeamWeekStatusCount }}</td>
+                    </tr>
+                    {% for splitCount in cleanupReport.duplicateSplitCounts %}
+                    <tr>
+                        <td>Duplicate {{ splitCount.label }} rows</td>
+                        <td>{{ splitCount.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {% if cleanupReport.wrongTeamSamples %}
+            <p class="text-muted mb-1">Wrong-team examples:</p>
+            <ul class="text-muted">
+                {% for sample in cleanupReport.wrongTeamSamples %}
+                <li>{{ sample.name }} listed under {{ sample.listedTeam }} &mdash; {{ sample.season }} week {{ sample.week }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if not cleanupReport.applied and cleanupReport.totalRows %}
+            <form method="GET" onsubmit="return confirm('Permanently delete {{ cleanupReport.totalRows }} rows? This cannot be undone.');">
+                <input type="hidden" name="dataCleanup" value="run">
+                <button type="submit" class="btn btn-danger">Delete {{ cleanupReport.totalRows }} row{{ cleanupReport.totalRows|pluralize }}</button>
+            </form>
+            {% endif %}
+            {% endif %}
+        </div>
+        </div>
+        {% if rosterTeamName %}
+        <h3>Roster pull &mdash; {{ rosterTeamName }}</h3>
+        <p class="text-muted">{{ rosterMessage }}</p>
+        {% if rosterPlayers %}
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <td style="width:320px">Name</td>
+                    <td>Team</td>
+                    <td>Position</td>
+                    <td>Weight</td>
+                    <td>Height</td>
+                    <td>Rookie Year</td>
+                    <td>Espn ID</td>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rosteredPlayer in rosterPlayers %}
+                <tr>
+                    <td>{{ rosteredPlayer.name }}</td>
+                    <td>{{ rosteredPlayer.team.abbreviation }}</td>
+                    <td>{{ rosteredPlayer.get_playerPosition_display }}</td>
+                    <td>{{ rosteredPlayer.playerWeightPounds }} pounds</td>
+                    <td>{{ rosteredPlayer.playerHeightInches }} inches</td>
+                    <td>{{ rosteredPlayer.firstSeason }}</td>
+                    <td>{{ rosteredPlayer.espnId }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% endif %}
+
+        <div>
+            <h4>{{ message }}</h4>
+            {% if exceptionStrings %}
+                {% for ex in exceptionArrays%}
+                    <div class="pull_data_exception">
+                        <h5>{{ex}}</h5>
+                    </div>
+                {%endfor%}
+            {%endif%}
+            {% if exceptionArrays %}
+                {% for ex in exceptionArrays%}
+                    <div class="pull_data_exception accordion" id="accordion{{ex.3}}">
+                        <button class="collapsed btn btn-block" type="button" data-toggle="collapse" data-target="#collapse{{ex.3}}" aria-expanded="true" aria-controls="collapse{{ex.3}}" style="margin-left:0px">
+                                       
+                        
+                            <h5>
+                                {{ex.0}}
+                            </h5>
+                        </button>
+                        <p>{{ex.1}}</p>
+                        <div id="collapse{{ex.3}}" class="collapse" aria-labelledby="accordion{{ex.3}}" data-parent="#accordion{{ex.3}}">
+                            <pre>{{ex.2 | pprint}}</pre>
+                        </div>
+                    </div>
+                {%endfor%}
+            {%endif%}
+        </div>
+        <br>
+        <br>
+        {% comment %} <div>
+            <form method="GET">
+                <select name="season" id="season">
+                    <option value="2022">2022</option>
+                    <option value="2021">2021</option>
+                    <option value="2020">2020</option>
+                    <option value="2019">2019</option>
+                    <option value="2018">2018</option>
+                    <option value="2017">2017</option>
+                    <option value="2016">2016</option>
+                </select> 
+                <input type="hidden" name="full" value="True">
+                <br>
+                <button type="submit">Load Full Season</button>
+            </form>
+        </div> {% endcomment %}
+        {% comment %} 
+        <div>
+            Load data for game with ID:
+            <form method="GET">
+                <input type="text" id="espnGameId" name="espnGameId"><br><br>
+                <button type="submit">Load!</button>
+            </form> 
+        </div>
+        {% endcomment %}
         <div id="injuriesbutton">
             <button class="btn btn-outline-dark" id="ajaxbutton"> Get Injuries</button>
         </div>
