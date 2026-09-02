@@ -606,10 +606,18 @@
                 var playerSelect = $("#performancePlayer");
                 var previouslySelected = playerSelect.val();
 
-                $.getJSON("../ajax/performancePlayerOptions/", {
-                    season: $("#performanceSeason").val(),
-                    team: $("#performanceTeam").val(),
-                    position: $("#performancePosition").val()
+                // cache:false - the browser will happily serve a stale player list
+                // for the same season/team/position otherwise, which hides changes
+                // made on the server.
+                $.ajax({
+                    url: "../ajax/performancePlayerOptions/",
+                    dataType: "json",
+                    cache: false,
+                    data: {
+                        season: $("#performanceSeason").val(),
+                        team: $("#performanceTeam").val(),
+                        position: $("#performancePosition").val()
+                    }
                 }).done(function (data) {
                     playerSelect.empty();
                     if (data.players.length === 0) {

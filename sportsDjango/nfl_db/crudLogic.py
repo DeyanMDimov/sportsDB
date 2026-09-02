@@ -2322,26 +2322,63 @@ def findWrongTeamWeekStatusIds():
     # were on: the passer, rusher and receiver on a play are always the team with
     # the ball. Returners are not, which is what caused these rows.
     offensiveTeamsByPlayerWeek = {}
+    offensiveTeamsByPlayerSeason = {}
     for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit]:
         for playerId, teamOnOffenseId, seasonYear, weekOfSeason in splitModel.objects.values_list(
             'player_id', 'play__teamOnOffense_id', 'play__nflMatch__yearOfSeason', 'play__nflMatch__weekOfSeason'
         ):
             offensiveTeamsByPlayerWeek.setdefault((playerId, seasonYear, weekOfSeason), set()).add(teamOnOffenseId)
+            offensiveTeamsByPlayerSeason.setdefault((playerId, seasonYear), set()).add(teamOnOffenseId)
 
-    # Deliberately the only test used. Anything looser - "returned a kick while
-    # this team had the ball" - flags real special teamers: a kickoff is logged
-    # with the receiving team on offence, so a genuine returner looks identical
-    # to a misattributed one. Gunner Olszewski really was a 2023 Steeler with no
-    # offensive snaps, and a looser rule deletes him.
+    # Who took the field in each game, so a player who only returned a kick can
+    # still be tied to the match they appeared in.
+    playersInMatch = {}
+    for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit]:
+        for playerId, seasonYear, weekOfSeason in splitModel.objects.values_list(
+            'player_id', 'play__nflMatch__yearOfSeason', 'play__nflMatch__weekOfSeason'
+        ):
+            playersInMatch.setdefault((playerId, seasonYear, weekOfSeason), True)
+
+    opponentByTeamWeek = {}
+    for homeEspnId, awayEspnId, seasonYear, weekOfSeason in nflMatch.objects.values_list(
+        'homeTeamEspnId', 'awayTeamEspnId', 'yearOfSeason', 'weekOfSeason'
+    ):
+        opponentByTeamWeek[(homeEspnId, seasonYear, weekOfSeason)] = awayEspnId
+        opponentByTeamWeek[(awayEspnId, seasonYear, weekOfSeason)] = homeEspnId
+
+    teamIdByEspnId = {}
+    espnIdByTeamId = {}
+    for teamId, espnId in nflTeam.objects.values_list('id', 'espnId'):
+        teamIdByEspnId[espnId] = teamId
+        espnIdByTeamId[teamId] = espnId
+
     wrongTeamIds = []
     for rowId, playerId, teamId, seasonYear, weekOfSeason in playerWeekStatus.objects.filter(
         team__isnull = False
     ).values_list('id', 'player_id', 'team_id', 'yearOfSeason', 'weekOfSeason'):
-        offensiveTeams = offensiveTeamsByPlayerWeek.get((playerId, seasonYear, weekOfSeason), set())
+        weekKey = (playerId, seasonYear, weekOfSeason)
+        offensiveTeamsThisWeek = offensiveTeamsByPlayerWeek.get(weekKey, set())
 
         # Took an offensive snap that week, but for somebody else. Nobody plays
         # offence for a team they are not on, so this row cannot be right.
-        if offensiveTeams and teamId not in offensiveTeams:
+        if offensiveTeamsThisWeek and teamId not in offensiveTeamsThisWeek:
+            wrongTeamIds.append(rowId)
+            continue
+
+        # No offensive snap that week to judge by - a returner, say. Romeo Doubs
+        # returned Bears punts in week 14 and caught nothing, so the test above
+        # stays silent while he sits in Chicago's dropdown. Strike the row only on
+        # three-way evidence: he never played offence for this team all season, he
+        # did play offence for the team they faced that week, and he was actually
+        # on the field in that game.
+        if offensiveTeamsThisWeek or teamId in offensiveTeamsByPlayerSeason.get((playerId, seasonYear), set()):
+            continue
+        if weekKey not in playersInMatch:
+            continue
+
+        opponentEspnId = opponentByTeamWeek.get((espnIdByTeamId.get(teamId, None), seasonYear, weekOfSeason), None)
+        opponentTeamId = teamIdByEspnId.get(opponentEspnId, None)
+        if opponentTeamId != None and opponentTeamId in offensiveTeamsByPlayerSeason.get((playerId, seasonYear), set()):
             wrongTeamIds.append(rowId)
 
     return wrongTeamIds
