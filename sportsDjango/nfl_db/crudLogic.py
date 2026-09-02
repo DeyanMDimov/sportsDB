@@ -2293,6 +2293,12 @@ def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
 
 STAT_SPLIT_MODELS_TO_DEDUPLICATE = [passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit]
 
+# Play types whose return is always made by the team without the ball: punts and
+# their muffed variants, interception returns, and defensive fumble recoveries.
+# Kickoffs are left out on purpose - they are logged with the receiving team on
+# offence about as often as not, so they prove nothing.
+RETURN_TYPES_BY_TEAM_NOT_ON_OFFENSE = [24, 25, 26, 27, 15, 16, 19, 20]
+
 DELETE_CHUNK_SIZE = 500
 
 
@@ -2332,6 +2338,12 @@ def findWrongTeamWeekStatusIds():
 
     # Who took the field in each game, so a player who only returned a kick can
     # still be tied to the match they appeared in.
+    returnerEvidenceByPlayerWeek = {}
+    for playerId, playType, teamOnOffenseId, seasonYear, weekOfSeason in returnerStatSplit.objects.values_list(
+        'player_id', 'play__playType', 'play__teamOnOffense_id', 'play__nflMatch__yearOfSeason', 'play__nflMatch__weekOfSeason'
+    ):
+        returnerEvidenceByPlayerWeek.setdefault((playerId, seasonYear, weekOfSeason), []).append((playType, teamOnOffenseId))
+
     playersInMatch = {}
     for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit]:
         for playerId, seasonYear, weekOfSeason in splitModel.objects.values_list(
@@ -2373,12 +2385,30 @@ def findWrongTeamWeekStatusIds():
         # on the field in that game.
         if offensiveTeamsThisWeek or teamId in offensiveTeamsByPlayerSeason.get((playerId, seasonYear), set()):
             continue
-        if weekKey not in playersInMatch:
-            continue
 
         opponentEspnId = opponentByTeamWeek.get((espnIdByTeamId.get(teamId, None), seasonYear, weekOfSeason), None)
         opponentTeamId = teamIdByEspnId.get(opponentEspnId, None)
-        if opponentTeamId != None and opponentTeamId in offensiveTeamsByPlayerSeason.get((playerId, seasonYear), set()):
+
+        if weekKey in playersInMatch and opponentTeamId != None and opponentTeamId in offensiveTeamsByPlayerSeason.get((playerId, seasonYear), set()):
+            wrongTeamIds.append(rowId)
+            continue
+
+        # Still nothing? Then it is a pure returner, who never takes an offensive
+        # snap all year - Myles Price returns kicks for Minnesota and catches
+        # nothing. A punt or a turnover return is always made by the side that is
+        # NOT on offence (5714 of 5840 punt returns in this database), so those
+        # plays place the returner on the opposite team from the one with the
+        # ball. Kickoffs are logged inconsistently and are ignored here.
+        impliedTeamIds = set()
+        for playType, teamOnOffenseId in returnerEvidenceByPlayerWeek.get(weekKey, []):
+            if playType in RETURN_TYPES_BY_TEAM_NOT_ON_OFFENSE:
+                offenseEspnId = espnIdByTeamId.get(teamOnOffenseId, None)
+                returningEspnId = opponentByTeamWeek.get((offenseEspnId, seasonYear, weekOfSeason), None)
+                returningTeamId = teamIdByEspnId.get(returningEspnId, None)
+                if returningTeamId != None:
+                    impliedTeamIds.add(returningTeamId)
+
+        if len(impliedTeamIds) > 0 and teamId not in impliedTeamIds:
             wrongTeamIds.append(rowId)
 
     return wrongTeamIds
