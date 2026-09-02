@@ -1928,7 +1928,12 @@ def getStartOfSeasonRoster(team, seasonYear):
     ).select_related('player')
 
     if len(weekOneStatuses) > 0:
-        roster = sorted([s.player for s in weekOneStatuses], key = lambda p: (p.playerPosition, p.name))
+        # A player can hold several rows for one week (the injury pull records one
+        # per report date), so list each of them once.
+        rosterByPlayerId = {}
+        for weekOneStatus in weekOneStatuses:
+            rosterByPlayerId[weekOneStatus.player_id] = weekOneStatus.player
+        roster = sorted(rosterByPlayerId.values(), key = lambda p: (p.playerPosition, p.name))
         return roster, "week1"
 
     roster = pullTeamRosterFromApi(team)
@@ -2016,9 +2021,27 @@ def fetchGameRoster(matchId, teamId):
     return rosterData
 
 
+def getMatchDateForTeamWeek(team, seasonYear, seasonWeek):
+    # Availability rows describe how a team went into a given game, so that
+    # game's date is what they get stamped with. Kickoff is stored in UTC, and a
+    # Sunday night game is already Monday there, so read it in US Central first.
+    seasonMatch = nflMatch.objects.filter(
+        yearOfSeason = int(seasonYear),
+        weekOfSeason = int(seasonWeek),
+    ).filter(
+        Q(homeTeamEspnId = team.espnId) | Q(awayTeamEspnId = team.espnId)
+    ).first()
+
+    if seasonMatch == None or seasonMatch.datePlayed == None:
+        return None
+
+    return seasonMatch.datePlayed.astimezone(ZoneInfo('America/Chicago')).date()
+
+
 def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
     athletesAndAvailability = []
     print(seasonWeek)
+    matchDate = getMatchDateForTeamWeek(team, seasonYear, seasonWeek)
     for athlete in rosterData['entries']:
 
         playerObj = None
@@ -2029,14 +2052,19 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
         if playerObj == None:
             playerObj = players.createPlayerAthletesFromGameRoster(athlete, team.espnId)
         
-        try:
-            playerWeekStatusObj = playerWeekStatus.objects.get(player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek)
-        except:
+        # filter().first() rather than get(): once a week held two rows for a
+        # player, get() raised MultipleObjectsReturned and the except branch below
+        # added another one on every single pull.
+        playerWeekStatusObj = playerWeekStatus.objects.filter(
+            player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek,
+        ).order_by('id').first()
+        if playerWeekStatusObj == None:
             playerWeekStatusObj = playerWeekStatus.objects.create(
                 player = playerObj,
                 team = team,
                 weekOfSeason = seasonWeek,
                 yearOfSeason = seasonYear,
+                reportDate = matchDate,
             )
             if athlete['didNotPlay'] == True or athlete['valid'] == False:
                 playerWeekStatusObj.playerStatus = 4
@@ -2089,6 +2117,7 @@ def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear,
             team = team,
             yearOfSeason = seasonYear,
             weekOfSeason = seasonWeek,
+            defaults = {'reportDate': getMatchDateForTeamWeek(team, seasonYear, seasonWeek)},
         )
         # They took a snap, so they were available whatever the feed left out.
         print("Availability recovered from play data for " + playerObj.name + " (week " + str(seasonWeek) + ")")
@@ -2114,12 +2143,18 @@ def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear,
 AVAILABILITY_REQUEST_DELAY_SECONDS = 6
 
 
-def _availabilityStatusToken(status):
+def _availabilityStatusEntry(status):
     # status is either a playerWeekStatus row or one of the "Bye"/"Not in Roster"
-    # marker strings produced while walking the season.
+    # marker strings produced while walking the season. The date rides along so
+    # the page can show when a status was reported.
     if isinstance(status, str):
-        return status
-    return "available" if status.playerStatus == 1 else "out"
+        return {"token": status, "label": status, "date": ""}
+
+    return {
+        "token": "available" if status.playerStatus == 1 else "out",
+        "label": status.get_playerStatus_display(),
+        "date": status.reportDate.strftime("%b %-d") if status.reportDate else "",
+    }
 
 
 def _serializeAvailabilityRow(playerObj, statusList):
@@ -2131,7 +2166,7 @@ def _serializeAvailabilityRow(playerObj, statusList):
         "position": playerObj.get_playerPosition_display(),
         "isStarter": playerObj.isStarter,
         "starPlayer": playerObj.starPlayer,
-        "statuses": [_availabilityStatusToken(s) for s in statusList],
+        "statuses": [_availabilityStatusEntry(s) for s in statusList],
     }
 
 
@@ -2232,6 +2267,193 @@ def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
     }
 
 
+# ---------------------------------------------------------------------------
+# Database cleanup (Pull Data -> Database Cleanup)
+#
+# Two problems that re-pulling data can leave behind:
+#   * duplicate rows. Re-running a match pull writes a second set of stat splits
+#     for every play, and the availability pull used to add another
+#     playerWeekStatus row each time it ran.
+#   * players credited to the wrong team. An earlier version of the availability
+#     recovery read returner splits as well as offensive ones, but a punt or
+#     kickoff is returned by the side that is NOT on offense, so every returner
+#     was also written in under their opponent.
+# Both are found and removed here rather than by hand. Everything runs as a dry
+# run first so the page can say what it would delete before anything goes.
+# ---------------------------------------------------------------------------
+
+STAT_SPLIT_MODELS_TO_DEDUPLICATE = [passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit]
+
+DELETE_CHUNK_SIZE = 500
+
+
+def findDuplicateWeekStatusIds():
+    # Only rows that are the same record twice over: same player, team, week,
+    # status AND report date. The injury pull deliberately writes a row per
+    # report date so a status can be traced through the week, and every one of
+    # those dates is kept - a player who was Out on Thursday and Out again on
+    # Saturday keeps both rows. What goes is the identical, same-day repeats the
+    # availability pull used to add on every run.
+    seenRecords = set()
+    duplicateIds = []
+    for rowId, playerId, teamId, seasonYear, weekOfSeason, playerStatus, reportDate in playerWeekStatus.objects.order_by('id').values_list(
+        'id', 'player_id', 'team_id', 'yearOfSeason', 'weekOfSeason', 'playerStatus', 'reportDate'
+    ):
+        recordKey = (playerId, teamId, seasonYear, weekOfSeason, playerStatus, reportDate)
+        if recordKey in seenRecords:
+            duplicateIds.append(rowId)
+        else:
+            seenRecords.add(recordKey)
+
+    return duplicateIds
+
+
+def findWrongTeamWeekStatusIds():
+    # Which team a player took an offensive snap for is proof of the side they
+    # were on: the passer, rusher and receiver on a play are always the team with
+    # the ball. Returners are not, which is what caused these rows.
+    offensiveTeamsByPlayerWeek = {}
+    for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit]:
+        for playerId, teamOnOffenseId, seasonYear, weekOfSeason in splitModel.objects.values_list(
+            'player_id', 'play__teamOnOffense_id', 'play__nflMatch__yearOfSeason', 'play__nflMatch__weekOfSeason'
+        ):
+            offensiveTeamsByPlayerWeek.setdefault((playerId, seasonYear, weekOfSeason), set()).add(teamOnOffenseId)
+
+    # Deliberately the only test used. Anything looser - "returned a kick while
+    # this team had the ball" - flags real special teamers: a kickoff is logged
+    # with the receiving team on offence, so a genuine returner looks identical
+    # to a misattributed one. Gunner Olszewski really was a 2023 Steeler with no
+    # offensive snaps, and a looser rule deletes him.
+    wrongTeamIds = []
+    for rowId, playerId, teamId, seasonYear, weekOfSeason in playerWeekStatus.objects.filter(
+        team__isnull = False
+    ).values_list('id', 'player_id', 'team_id', 'yearOfSeason', 'weekOfSeason'):
+        offensiveTeams = offensiveTeamsByPlayerWeek.get((playerId, seasonYear, weekOfSeason), set())
+
+        # Took an offensive snap that week, but for somebody else. Nobody plays
+        # offence for a team they are not on, so this row cannot be right.
+        if offensiveTeams and teamId not in offensiveTeams:
+            wrongTeamIds.append(rowId)
+
+    return wrongTeamIds
+
+
+def findDuplicateStatSplitIds(splitModel):
+    # A player throws, carries, catches or returns the ball at most once on a
+    # given play, so anything past the first row for a play is a re-pull.
+    seenPlays = set()
+    duplicateIds = []
+    for rowId, playerId, playId in splitModel.objects.order_by('id').values_list('id', 'player_id', 'play_id'):
+        playKey = (playerId, playId)
+        if playKey in seenPlays:
+            duplicateIds.append(rowId)
+        else:
+            seenPlays.add(playKey)
+
+    return duplicateIds
+
+
+def describeWeekStatusRows(rowIds, sampleSize = 8):
+    samples = []
+    for weekStatus in playerWeekStatus.objects.filter(id__in = rowIds[:sampleSize]).select_related('player', 'team', 'player__team'):
+        samples.append({
+            'name': weekStatus.player.name,
+            'listedTeam': weekStatus.team.abbreviation if weekStatus.team else "?",
+            'rosterTeam': weekStatus.player.team.abbreviation if weekStatus.player.team else "?",
+            'season': weekStatus.yearOfSeason,
+            'week': weekStatus.weekOfSeason,
+        })
+    return samples
+
+
+def findUndatedWeekStatusRows():
+    # Rows the availability pull wrote before it stamped a date. Grouped by the
+    # game they belong to so each group needs only one schedule lookup.
+    undatedRowIdsByMatchKey = {}
+    for rowId, teamId, seasonYear, weekOfSeason in playerWeekStatus.objects.filter(
+        reportDate__isnull = True,
+        team__isnull = False,
+    ).values_list('id', 'team_id', 'yearOfSeason', 'weekOfSeason'):
+        undatedRowIdsByMatchKey.setdefault((teamId, seasonYear, weekOfSeason), []).append(rowId)
+
+    return undatedRowIdsByMatchKey
+
+
+def backfillWeekStatusDates(applyChanges = False):
+    undatedRowIdsByMatchKey = findUndatedWeekStatusRows()
+
+    teamsById = {}
+    for team in nflTeam.objects.all():
+        teamsById[team.id] = team
+
+    datedRowCount = 0
+    undatableRowCount = 0
+    for (teamId, seasonYear, weekOfSeason), rowIds in undatedRowIdsByMatchKey.items():
+        team = teamsById.get(teamId, None)
+        matchDate = getMatchDateForTeamWeek(team, seasonYear, weekOfSeason) if team else None
+        if matchDate == None:
+            # No match on file for that team and week, so there is no date to give.
+            undatableRowCount += len(rowIds)
+            continue
+
+        datedRowCount += len(rowIds)
+        if applyChanges:
+            for chunkStart in range(0, len(rowIds), DELETE_CHUNK_SIZE):
+                playerWeekStatus.objects.filter(
+                    id__in = rowIds[chunkStart:chunkStart + DELETE_CHUNK_SIZE]
+                ).update(reportDate = matchDate)
+
+    return {'applied': applyChanges, 'datedRowCount': datedRowCount, 'undatableRowCount': undatableRowCount}
+
+
+def runPlayerDataCleanup(applyChanges = False):
+    # Always works out what is wrong first; only deletes when asked to.
+    duplicateWeekStatusIds = findDuplicateWeekStatusIds()
+    wrongTeamWeekStatusIds = findWrongTeamWeekStatusIds()
+
+    # A row can be both a duplicate and wrongly attributed; count it once.
+    duplicateWeekStatusIdSet = set(duplicateWeekStatusIds)
+    wrongTeamWeekStatusIds = [rowId for rowId in wrongTeamWeekStatusIds if rowId not in duplicateWeekStatusIdSet]
+
+    splitDuplicates = []
+    for splitModel in STAT_SPLIT_MODELS_TO_DEDUPLICATE:
+        splitDuplicates.append({
+            'model': splitModel,
+            'label': splitModel.__name__,
+            'ids': findDuplicateStatSplitIds(splitModel),
+        })
+
+    cleanupReport = {
+        'applied': applyChanges,
+        'duplicateWeekStatusCount': len(duplicateWeekStatusIds),
+        'wrongTeamWeekStatusCount': len(wrongTeamWeekStatusIds),
+        'wrongTeamSamples': describeWeekStatusRows(wrongTeamWeekStatusIds),
+        'duplicateSplitCounts': [{'label': entry['label'], 'count': len(entry['ids'])} for entry in splitDuplicates],
+        'duplicateSplitTotal': sum(len(entry['ids']) for entry in splitDuplicates),
+    }
+    cleanupReport['totalRows'] = (
+        cleanupReport['duplicateWeekStatusCount']
+        + cleanupReport['wrongTeamWeekStatusCount']
+        + cleanupReport['duplicateSplitTotal']
+    )
+
+    if not applyChanges:
+        return cleanupReport
+
+    deleteRowsInChunks(playerWeekStatus, duplicateWeekStatusIds)
+    deleteRowsInChunks(playerWeekStatus, wrongTeamWeekStatusIds)
+    for entry in splitDuplicates:
+        deleteRowsInChunks(entry['model'], entry['ids'])
+
+    return cleanupReport
+
+
+def deleteRowsInChunks(rowModel, rowIds):
+    # Chunked so the delete doesn't build one enormous IN (...) clause.
+    for chunkStart in range(0, len(rowIds), DELETE_CHUNK_SIZE):
+        rowModel.objects.filter(id__in = rowIds[chunkStart:chunkStart + DELETE_CHUNK_SIZE]).delete()
+
+
 def buildAvailabilityFromDatabase(seasonYear, weekRaw, teamAbbreviation):
     # The "Pull Fresh" box unticked: answer entirely from stored playerWeekStatus
     # rows and make no ESPN requests at all. Shape matches what the background
@@ -2251,8 +2473,16 @@ def _weekAvailabilityFromDatabase(seasonYear, weekOfSeason, teams):
             team = s_team,
         ).select_related('player', 'player__team')
 
-        for storedStatus in sorted(storedStatuses, key = lambda status: (status.player.playerPosition, status.player.name)):
-            rows.append(_serializeAvailabilityRow(storedStatus.player, [storedStatus]))
+        # One row per player, carrying every status reported that week in order,
+        # so the page can show how it changed rather than just where it ended up.
+        statusesByPlayerId = {}
+        playersById = {}
+        for storedStatus in storedStatuses.order_by('reportDate', 'id'):
+            statusesByPlayerId.setdefault(storedStatus.player_id, []).append(storedStatus)
+            playersById[storedStatus.player_id] = storedStatus.player
+
+        for playerObj in sorted(playersById.values(), key = lambda p: (p.playerPosition, p.name)):
+            rows.append(_serializeAvailabilityRow(playerObj, statusesByPlayerId[playerObj.id]))
 
     return {
         "type": "week",
@@ -2282,8 +2512,10 @@ def _seasonAvailabilityFromDatabase(seasonYear, teams):
             yearOfSeason = int(seasonYear),
             weekOfSeason__in = weekNumbers,
             team = s_team,
-        ).select_related('player', 'player__team'):
+        ).select_related('player', 'player__team').order_by('reportDate', 'id'):
             playersById[storedStatus.player_id] = storedStatus.player
+            # Later report dates overwrite earlier ones, leaving the status the
+            # week ended on.
             statusesByPlayerId.setdefault(storedStatus.player_id, {})[storedStatus.weekOfSeason] = storedStatus
 
         for playerObj in sorted(playersById.values(), key = lambda p: (p.playerPosition, p.name)):
@@ -3306,9 +3538,12 @@ def createPasserStatSplit(play, player_obj, tenure, stats_dict):
         if play.playType not in [2, 3, 4]:  # COMPLETED PASS, INCOMPLETE PASS, SACK
             return None
             
-        passer_split = passerStatSplit.objects.create(
+        # get_or_create so re-pulling a match updates its splits instead of
+        # writing a duplicate set of them.
+        passer_split, splitCreated = passerStatSplit.objects.get_or_create(
             play=play,
             player=player_obj,
+            defaults=dict(
             currentTenure=tenure,
             playerRole=1,
             playerPosition=1,
@@ -3317,7 +3552,7 @@ def createPasserStatSplit(play, player_obj, tenure, stats_dict):
             fumble=(play.playType in [21, 22]),
             fumbleLost=(play.playType == 21),
             passingTdScored=(play.scoringPlay and play.playType == 2 and play.offenseScored)
-        )
+        ))
         return passer_split
     except Exception as e:
         print(f"Error creating passer stat split: {e}")
@@ -3329,9 +3564,12 @@ def createRusherStatSplit(play, player_obj, tenure, stats_dict):
         if play.playType != 1:  # Only for RUSH plays
             return None
             
-        rusher_split = rusherStatSplit.objects.create(
+        # get_or_create so re-pulling a match updates its splits instead of
+        # writing a duplicate set of them.
+        rusher_split, splitCreated = rusherStatSplit.objects.get_or_create(
             play=play,
             player=player_obj,
+            defaults=dict(
             currentTenure=tenure,
             playerRole=2,
             playerPosition=2,
@@ -3339,7 +3577,7 @@ def createRusherStatSplit(play, player_obj, tenure, stats_dict):
             fumble=(play.playType in [17, 18, 19, 20]),
             fumbleLost=(play.playType in [19, 20]),
             rushingTdScored=(play.scoringPlay and play.playType == 1 and play.offenseScored)
-        )
+        ))
         return rusher_split
     except Exception as e:
         print(f"Error creating rusher stat split: {e}")
@@ -3351,9 +3589,12 @@ def createReceiverStatSplit(play, player_obj, tenure, stats_dict):
         if play.playType != 2:  # Only for COMPLETED PASS plays
             return None
             
-        receiver_split = receiverStatSplit.objects.create(
+        # get_or_create so re-pulling a match updates its splits instead of
+        # writing a duplicate set of them.
+        receiver_split, splitCreated = receiverStatSplit.objects.get_or_create(
             play=play,
             player=player_obj,
+            defaults=dict(
             currentTenure=tenure,
             playerRole=3,
             playerPosition=3,
@@ -3362,7 +3603,7 @@ def createReceiverStatSplit(play, player_obj, tenure, stats_dict):
             fumble=(play.playType in [17, 18, 19, 20]),
             fumbleLost=(play.playType in [19, 20]),
             receivingTdScored=(play.scoringPlay and play.playType == 2 and play.offenseScored)
-        )
+        ))
         return receiver_split
     except Exception as e:
         print(f"Error creating receiver stat split: {e}")
@@ -3382,9 +3623,12 @@ def createReturnerStatSplit(play, player_obj, tenure, stats_dict):
         
         return_type = return_type_map.get(play.playType, 1)
         
-        returner_split = returnerStatSplit.objects.create(
+        # get_or_create so re-pulling a match updates its splits instead of
+        # writing a duplicate set of them.
+        returner_split, splitCreated = returnerStatSplit.objects.get_or_create(
             play=play,
             player=player_obj,
+            defaults=dict(
             currentTenure=tenure,
             playerRole=4,
             playerPosition=4,
@@ -3392,7 +3636,7 @@ def createReturnerStatSplit(play, player_obj, tenure, stats_dict):
             fumble=False,
             fumbleLost=False,
             returnType=return_type
-        )
+        ))
         
         return returner_split
     except Exception as e:
@@ -3426,17 +3670,19 @@ def parsePlayDescription(play):
                 
                 if passer:
                     tenure = playerTeamTenure.objects.filter(player=passer, team=team).first()
-                    passerStatSplit.objects.create(
+                    passerStatSplit.objects.get_or_create(
                         play=play,
                         player=passer,
-                        currentTenure=tenure,
-                        playerRole=1,
-                        playerPosition=1,
-                        passingYards=play.yardsOnPlay if play.playType == 2 else 0,
-                        interception=False,
-                        fumble=False,
-                        fumbleLost=False,
-                        passingTdScored=(play.scoringPlay and play.offenseScored)
+                        defaults=dict(
+                            currentTenure=tenure,
+                            playerRole=1,
+                            playerPosition=1,
+                            passingYards=play.yardsOnPlay if play.playType == 2 else 0,
+                            interception=False,
+                            fumble=False,
+                            fumbleLost=False,
+                            passingTdScored=(play.scoringPlay and play.offenseScored),
+                        ),
                     )
                 
                 if play.playType == 2:
@@ -3448,18 +3694,21 @@ def parsePlayDescription(play):
                     
                     if receiver:
                         tenure = playerTeamTenure.objects.filter(player=receiver, team=team).first()
-                        receiverStatSplit.objects.create(
+                        receiverStatSplit.objects.get_or_create(
                             play=play,
                             player=receiver,
-                            currentTenure=tenure,
-                            playerRole=3,
-                            playerPosition=3,
-                            receivingYards=play.yardsOnPlay,
-                            yardsAfterCatch=0,
-                            fumble=False,
-                            fumbleLost=False,
-                            receivingTdScored=(play.scoringPlay and play.offenseScored)
+                            defaults=dict(
+                                currentTenure=tenure,
+                                playerRole=3,
+                                playerPosition=3,
+                                receivingYards=play.yardsOnPlay,
+                                yardsAfterCatch=0,
+                                fumble=False,
+                                fumbleLost=False,
+                                receivingTdScored=(play.scoringPlay and play.offenseScored),
+                            ),
                         )
+
         
         elif play.playType == 1:  # RUSH
             rush_pattern = r'([A-Z]\.\w+)\s+(?:left|right|up)'
@@ -3475,16 +3724,18 @@ def parsePlayDescription(play):
                 
                 if rusher:
                     tenure = playerTeamTenure.objects.filter(player=rusher, team=team).first()
-                    rusherStatSplit.objects.create(
+                    rusherStatSplit.objects.get_or_create(
                         play=play,
                         player=rusher,
-                        currentTenure=tenure,
-                        playerRole=2,
-                        playerPosition=2,
-                        rushingYards=play.yardsOnPlay,
-                        fumble=False,
-                        fumbleLost=False,
-                        rushingTdScored=(play.scoringPlay and play.offenseScored)
+                        defaults=dict(
+                            currentTenure=tenure,
+                            playerRole=2,
+                            playerPosition=2,
+                            rushingYards=play.yardsOnPlay,
+                            fumble=False,
+                            fumbleLost=False,
+                            rushingTdScored=(play.scoringPlay and play.offenseScored),
+                        ),
                     )
                     
     except Exception as e:

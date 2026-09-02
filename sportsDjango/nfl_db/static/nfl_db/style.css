@@ -76,6 +76,16 @@ body {
   color: #7c8a9e;
 }
 
+/* Report date shown beside a player's availability status. */
+.statusDate {
+  color: #93a4bd;
+  font-size: 0.85em;
+}
+
+.statusEntry + .statusEntry {
+  margin-left: 0.6em;
+}
+
 /* ==========================
    Tables
    ========================== */

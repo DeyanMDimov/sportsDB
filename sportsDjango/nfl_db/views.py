@@ -25,6 +25,16 @@ def getData(request):
     pageDictionary['teams'] = nflTeam.objects.all().order_by('abbreviation')
 
     if request.method == 'GET':
+        if 'dataCleanup' in request.GET:
+            # Two steps: the button previews what is wrong, and only a second
+            # click with dataCleanup=run actually deletes anything.
+            cleanupAction = request.GET['dataCleanup']
+            if cleanupAction in ['dates', 'datesRun']:
+                pageDictionary['dateReport'] = crudLogic.backfillWeekStatusDates(applyChanges = cleanupAction == 'datesRun')
+            else:
+                pageDictionary['cleanupReport'] = crudLogic.runPlayerDataCleanup(applyChanges = cleanupAction == 'run')
+            return render(request, 'nfl/pullData.html', pageDictionary)
+
         if 'season' in request.GET and 'week' in request.GET:     
         #     inputReq = request.GET
         #     yearOfSeason = inputReq['season'].strip()

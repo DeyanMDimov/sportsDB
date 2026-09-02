@@ -355,9 +355,17 @@
                             {% if row.isStarter %} checked {% endif %} /></td>
                         <td><input type="checkbox" id="{{ row.espnId }}-starPlayer" name="{{ row.espnId }}-starPlayer"
                             {% if row.starPlayer %} checked {% endif %} /></td>
+                        {% if jobResult.type == "season" %}
                         {% for s in row.statuses %}
-                        <td>{% if s == "Bye" %}Bye{% elif s == "Not in Roster" %}Not in Roster{% elif s == "available" %}&#9989;{% else %}&#128683;{% endif %}</td>
+                        <td class="weekAvailTableCell" title="{{ s.label }}{% if s.date %} &mdash; {{ s.date }}{% endif %}">{% if s.token == "Bye" %}Bye{% elif s.token == "Not in Roster" %}Not in Roster{% elif s.token == "available" %}&#9989;{% else %}&#128683;{% endif %}</td>
                         {% endfor %}
+                        {% else %}
+                        <td>
+                            {% for s in row.statuses %}
+                            <span class="statusEntry">{% if s.token == "available" %}&#9989;{% else %}&#128683;{% endif %}{% if s.date %} <span class="statusDate">{{ s.date }}</span>{% endif %}</span>
+                            {% endfor %}
+                        </td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -484,7 +492,7 @@
                             {% if player.0.starPlayer %} checked {% endif %} /></td>
                         {% comment %} <td><input type="checkbox" id="{{player.0.espnId}}-bigImpact" name="{{player.0.espnId}}-bigImpact" 
                             {% if player.0.currentlyHavingBigImpact %} checked {% endif %} /></td> {% endcomment %}
-                        <td>{% if player.1.playerStatus == 1 %}✅{% else %}🚫{% endif %}</td>
+                        <td>{% if player.1.playerStatus == 1 %}✅{% else %}🚫{% endif %}{% if player.1.reportDate %} <span class="statusDate">{{ player.1.reportDate|date:"M j" }}</span>{% endif %}</td>
                     </tr>
                     
 
