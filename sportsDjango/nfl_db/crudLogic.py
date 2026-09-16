@@ -1195,6 +1195,9 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
             createdPlay.distanceTilFirstDown = int(individualPlay['start']['distance'])
             createdPlay.playDown = int(individualPlay['start']['down'])
             createdPlay.sequenceNumber = int(individualPlay['sequenceNumber'])
+            createdPlay.playDescription = individualPlay['text']
+            createdPlay.yardsFromEndzone = individualPlay['start']['yardsToEndzone']
+            createdPlay.yardsOnPlay = individualPlay['statYardage']
     except Exception as e:
         print("PLAY TYPE EXCEPTION IN PLAY BY PLAY CREATE: " + str(playType))
         print("The Json value: " + individualPlay['type']['text'])

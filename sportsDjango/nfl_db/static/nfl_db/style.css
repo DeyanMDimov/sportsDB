@@ -612,6 +612,11 @@ table thead tr th:first-child {
     background: linear-gradient(to right, var(--team-color-1) 50%, var(--team-color-2) 50%);
 }
 
+/* First row of a new game in a list of touchdowns grouped by game */
+.game-divider > td {
+    border-top: 4px solid #4b5563 !important;
+}
+
 /* Arizona Cardinals */
 .team-ARI {
     --team-color-1: #97233F;

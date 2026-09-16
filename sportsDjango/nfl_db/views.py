@@ -1488,6 +1488,61 @@ def predictTouchdowns(request):
     
     return render(request, 'nfl/predictTouchdowns.html', pageDictionary)
 
+def getTouchdownsByWeek(request):
+    yearsOnPage = yearsOnPage_Helper()
+    weeksOnPage = weeksOnPage_Helper()
+
+    pageDictionary = {}
+    pageDictionary['years'] = yearsOnPage
+    pageDictionary['weeks'] = weeksOnPage
+
+    # Before anything is picked, preselect the latest week played in the newest season
+    latestPlayedMatch = nflMatch.objects.filter(
+        yearOfSeason=yearsOnPage[0],
+        weekOfSeason__gte=1,
+        completed=True
+    ).order_by('-weekOfSeason').first()
+    pageDictionary['weekOfSeason'] = latestPlayedMatch.weekOfSeason if latestPlayedMatch else 1
+
+    if request.method == 'GET':
+        if 'season' in request.GET and 'week' in request.GET:
+            inputReq = request.GET
+            yearOfSeason = inputReq['season'].strip()
+            weekOfSeason = int(inputReq['week'].strip())
+
+            # Earlier kickoff windows first; games in the same window keep a stable order
+            weekMatches = nflMatch.objects.filter(
+                yearOfSeason=yearOfSeason,
+                weekOfSeason=weekOfSeason
+            ).order_by('datePlayed', 'espnId')
+
+            teamsByEspnId = {team.espnId: team for team in nflTeam.objects.all()}
+
+            touchdownData = []
+            for match in weekMatches:
+                awayTeam = teamsByEspnId[match.awayTeamEspnId]
+                homeTeam = teamsByEspnId[match.homeTeamEspnId]
+
+                # Keep opponents next to each other: away team's TDs, then the home team's
+                for team, opponent, isHome in ((awayTeam, homeTeam, False), (homeTeam, awayTeam, True)):
+                    teamTds = extractTouchdownsFromMatch(match, team, opponent, isHome)
+                    teamTds = sorted(teamTds, key=lambda x: (
+                        x['quarter'] if x['quarter'] else 'Z',
+                        -x['secondsRemainingInPeriod'] if 'secondsRemainingInPeriod' in x and x['secondsRemainingInPeriod'] else 0
+                    ))
+                    touchdownData.extend(teamTds)
+
+            pageDictionary['touchdowns'] = touchdownData
+            pageDictionary['totalTouchdowns'] = len(touchdownData)
+            pageDictionary['positionTouchdowns'] = calculateTouchdownsByPosition(touchdownData)
+            pageDictionary['yearOfSeason'] = yearOfSeason
+            pageDictionary['weekOfSeason'] = weekOfSeason
+            pageDictionary['weekLoaded'] = True
+
+            return render(request, 'nfl/touchdownsByWeek.html', pageDictionary)
+
+    return render(request, 'nfl/touchdownsByWeek.html', pageDictionary)
+
 def extractTouchdownsFromMatch(match, team, opponent, isHome):
     """
     Extract all touchdowns scored by a team in a match
@@ -1581,6 +1636,7 @@ def createTouchdownDict(play, match, team, opponent, isHome, td_type):
         'url': play_url,
         'week': match.weekOfSeason,
         'date': match.datePlayed,
+        'matchEspnId': match.espnId,
         'espnId': play.espnId,
         'team': team.abbreviation,
         'opponent': opponent.abbreviation,

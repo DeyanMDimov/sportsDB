@@ -1,0 +1,140 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% block touchdownsByWeek %}
+    <div class="container">
+        {% include 'nfl/touchdownTabs.html' with activeTouchdownTab='byWeek' %}
+        <div class="pt-3">
+            <h2>Touchdowns By Week</h2>
+            <form method="GET" class="p-3">
+                <div class="row g-2">
+                    <div class="mb-1 col-2">
+                        <div class="form-floating">
+                            <select name="season" id="season" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}"
+                                {% if yr|stringformat:"i" == yearOfSeason %}
+                                    selected
+                                {% endif %}>{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="season">Season:</label>
+                        </div>
+                    </div>
+                    <div class="mb-1 col-2">
+                        <div class="form-floating">
+                            <select name="week" id="week" class="form-control">
+                                {% for wk in weeks %}
+                                <option value="{{wk.0}}"
+                                    {% if wk.0 == weekOfSeason %}
+                                        selected
+                                    {% endif %} > {{ wk.1 }}</option>
+                                {% endfor %}
+                            </select>
+                            <label for="week">Week:</label>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Load!</button>
+            </form>
+        </div>
+
+        {% if touchdowns %}
+        <div class="mt-4">
+            <h3>Week {{ weekOfSeason }} - {{ yearOfSeason }} Season</h3>
+            <p class="lead">Total Touchdowns Scored: {{ totalTouchdowns }}</p>
+
+            <!-- Position Summary Section -->
+            {% if positionTouchdowns %}
+            <div class="mb-4">
+                <h4>Touchdowns by Position</h4>
+                <table class="table table-striped table-sm mt-2" style="max-width: 600px;">
+                    <thead>
+                        <tr>
+                            <th>Position</th>
+                            <th>Total</th>
+                            <th>Rushing</th>
+                            <th>Receiving</th>
+                            <th>Defensive</th>
+                            <th>Return</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for position, stats in positionTouchdowns %}
+                        <tr>
+                            <td><strong>{{ position }}</strong></td>
+                            <td><strong>{{ stats.total }}</strong></td>
+                            <td>{{ stats.rushing }}</td>
+                            <td>{{ stats.receiving }}</td>
+                            <td>{{ stats.defensive }}</td>
+                            <td>{{ stats.return }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Detailed Touchdown List, grouped by game in kickoff order -->
+            <h4>All Touchdowns Scored</h4>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>Link</th>
+                            <th>Team</th>
+                            <th>Opponent</th>
+                            <th>TD Type</th>
+                            <th>Play Type</th>
+                            <th>Scorer</th>
+                            <th>Position</th>
+                            <th>Yards</th>
+                            <th>Passer</th>
+                            <th>Down</th>
+                            <th>Quarter</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for td in touchdowns %}
+                        <tr {% ifchanged td.matchEspnId %}{% if not forloop.first %}class="game-divider"{% endif %}{% endifchanged %}>
+                            <td><a href="{{td.url}}" target="_blank">Link</a></td>
+                            <td class="team-border team-{{ td.team }}">{{ td.team }}</td>
+                            <td class="team-border team-{{ td.opponent }}">{{ td.opponent }}</td>
+                            <td>{{ td.tdType }}</td>
+                            <td>{{ td.playType|title }}</td>
+                            <td>
+                                {% if td.scorer %}
+                                    <strong>{{ td.scorer }}</strong>
+                                {% else %}
+                                    <em>Unknown</em>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if td.scorerPosition %}
+                                    <strong>{{ td.scorerPosition }}</strong>
+                                {% else %}
+                                    <em>Unknown</em>
+                                {% endif %}
+                            </td>
+                            <td>{{ td.yardsOnPlay|default:"-" }}</td>
+                            <td>{{ td.passer|default:"-" }}</td>
+                            <td>{{ td.down|default:"-" }}</td>
+                            <td><small>{{ td.quarter }}</small></td>
+                            <td><small>{{ td.time }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% elif weekLoaded %}
+        <div class="alert alert-info mt-4">
+            No touchdown data found for Week {{ weekOfSeason }} of {{ yearOfSeason }}.
+        </div>
+        {% endif %}
+    </div>
+    <br>
+    <br>
+    <br>
+    <br>
+{% endblock %}
