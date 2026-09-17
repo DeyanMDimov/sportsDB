@@ -1900,6 +1900,103 @@ def seasonHasStoredPlays(team, seasonYear):
     ).exists()
 
 
+# Players page -> By Team tab: stat key -> (split model, what one play is worth).
+TEAM_WEEKLY_STATS = {
+    "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
+    "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
+    "rushingTds": (rusherStatSplit, lambda statSplit: 1 if statSplit.rushingTdScored else 0),
+    "receivingTds": (receiverStatSplit, lambda statSplit: 1 if statSplit.receivingTdScored else 0),
+}
+TEAM_WEEKLY_TD_STATS = ["rushingTds", "receivingTds"]
+
+
+def getTeamStatByWeek(team, seasonYear, statKey):
+    # Players page -> By Team tab: every player with any of the chosen stat for
+    # this team in the season, one cell per game, best season first.
+    seasonMatches = list(nflMatch.objects.filter(
+        yearOfSeason = int(seasonYear),
+    ).filter(
+        Q(homeTeamEspnId = team.espnId) | Q(awayTeamEspnId = team.espnId)
+    ).order_by('weekOfSeason'))
+
+    weekColumns = []
+    for seasonMatch in seasonMatches:
+        opponentEspnId = seasonMatch.awayTeamEspnId if seasonMatch.homeTeamEspnId == team.espnId else seasonMatch.homeTeamEspnId
+        opponent = nflTeam.objects.filter(espnId = opponentEspnId).first()
+        weekColumns.append({
+            'week': seasonMatch.weekOfSeason,
+            'opponentAbbreviation': opponent.abbreviation if opponent else "?",
+            'awayGame': seasonMatch.awayTeamEspnId == team.espnId,
+        })
+
+    if len(seasonMatches) == 0:
+        return weekColumns, []
+
+    weekByMatchId = {seasonMatch.id: seasonMatch.weekOfSeason for seasonMatch in seasonMatches}
+
+    # Same de-duplication as addSplitPerformanceStats: a re-pulled game leaves
+    # repeat split rows, but a player only carries/catches once per play.
+    countedPlays = set()
+    valuesByPlayerId = {}
+    playersById = {}
+    splitModel, playValue = TEAM_WEEKLY_STATS[statKey]
+    splitRows = splitModel.objects.filter(
+        play__nflMatch__in = seasonMatches,
+        play__teamOnOffense = team,
+    ).select_related('play', 'player')
+    for statSplit in splitRows:
+        if (statSplit.player_id, statSplit.play_id) in countedPlays or playWasNullified(statSplit.play.playDescription):
+            continue
+        countedPlays.add((statSplit.player_id, statSplit.play_id))
+        playersById[statSplit.player_id] = statSplit.player
+        playerWeeks = valuesByPlayerId.setdefault(statSplit.player_id, {})
+        weekNumber = weekByMatchId[statSplit.play.nflMatch_id]
+        playerWeeks[weekNumber] = playerWeeks.get(weekNumber, 0) + playValue(statSplit)
+
+    # Out/not-on-roster only means something for weeks availability was pulled.
+    weekNumbers = [weekColumn['week'] for weekColumn in weekColumns]
+    weeksWithAvailabilityData = set()
+    statusByPlayerWeek = {}
+    for playerId, weekNumber, playerStatus in playerWeekStatus.objects.filter(
+        team = team,
+        yearOfSeason = int(seasonYear),
+        weekOfSeason__in = weekNumbers,
+    ).values_list('player_id', 'weekOfSeason', 'playerStatus'):
+        weeksWithAvailabilityData.add(weekNumber)
+        statusByPlayerWeek[(playerId, weekNumber)] = playerStatus
+
+    statusLabels = dict(playerWeekStatus.playerStatuses)
+    teamRows = []
+    for playerId, playerWeeks in valuesByPlayerId.items():
+        seasonTotal = sum(playerWeeks.values())
+        # Everyone who touched the ball has a touchdown count, mostly zero; only
+        # list the players who actually scored.
+        if statKey in TEAM_WEEKLY_TD_STATS and seasonTotal == 0:
+            continue
+        weekCells = []
+        for weekNumber in weekNumbers:
+            # Recorded plays always win over whatever the availability rows claim.
+            if weekNumber in playerWeeks:
+                weekCells.append({'state': 'value', 'value': playerWeeks[weekNumber]})
+            elif weekNumber not in weeksWithAvailabilityData:
+                weekCells.append({'state': 'unknown'})
+            elif (playerId, weekNumber) not in statusByPlayerWeek:
+                weekCells.append({'state': 'notInRoster', 'label': "Not in Roster"})
+            elif statusByPlayerWeek[(playerId, weekNumber)] != 1:
+                weekCells.append({'state': 'out', 'label': statusLabels.get(statusByPlayerWeek[(playerId, weekNumber)], "Out")})
+            else:
+                weekCells.append({'state': 'value', 'value': 0})
+
+        teamRows.append({
+            'player': playersById[playerId],
+            'seasonTotal': seasonTotal,
+            'weekCells': weekCells,
+        })
+
+    teamRows.sort(key = lambda teamRow: (-teamRow['seasonTotal'], teamRow['player'].name))
+    return weekColumns, teamRows
+
+
 def getPlayersForPerformanceFilters(seasonYear, team, playerPosition):
     # Feeds the Performances tab's player dropdown: who was on this team, at this
     # position, in this season. Deliberately never falls back to player.team -

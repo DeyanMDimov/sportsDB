@@ -391,7 +391,26 @@ def getPlayers(request):
     pageDictionary['teams'] = nflTeams
 
     if(request.method == 'GET'):
-        if 'performancePlayer' in request.GET:
+        if 'byTeamTeam' in request.GET:
+            inputReq = request.GET
+            byTeamYear = inputReq.get('byTeamSeason', str(yearsOnPage[0])).strip()
+            byTeamAbbreviation = inputReq['byTeamTeam'].strip()
+            byTeamStat = inputReq.get('byTeamStat', 'rushingYards').strip()
+            if byTeamStat not in crudLogic.TEAM_WEEKLY_STATS:
+                byTeamStat = 'rushingYards'
+
+            byTeamSelected = nflTeam.objects.filter(abbreviation = byTeamAbbreviation).first()
+            byTeamWeeks, byTeamRows = [], []
+            if byTeamSelected != None:
+                byTeamWeeks, byTeamRows = crudLogic.getTeamStatByWeek(byTeamSelected, byTeamYear, byTeamStat)
+
+            return render(request, 'nfl/players.html', {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage,
+                'byTeamActive': True, 'byTeamYear': byTeamYear, 'byTeamTeam': byTeamAbbreviation,
+                'byTeamTeamName': byTeamSelected.teamName if byTeamSelected else byTeamAbbreviation,
+                'byTeamStat': byTeamStat, 'byTeamStatLabel': crudLogic.PERFORMANCE_STAT_LABELS[byTeamStat],
+                'byTeamWeeks': byTeamWeeks, 'byTeamRows': byTeamRows})
+
+        elif 'performancePlayer' in request.GET:
             inputReq = request.GET
             performanceYear = inputReq.get('performanceSeason', str(yearsOnPage[0])).strip()
             performanceTeamAbbreviation = inputReq.get('performanceTeam', '').strip()

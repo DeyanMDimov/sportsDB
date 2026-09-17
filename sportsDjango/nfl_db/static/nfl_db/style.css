@@ -926,3 +926,44 @@ table thead tr th:first-child {
             grid-template-columns: 1fr;
         }
     }
+/* Players -> By Team weekly yards table */
+/* Sized to the table, not the page container, and centred on the page so a
+   full season shows without scrolling. Only a window narrower than the table
+   falls back to scrolling sideways. */
+.byTeamTableWrap {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin-left: 50%;
+  transform: translateX(-50%);
+  overflow-x: auto;
+}
+
+.byTeamTableWrap .byTeamTable {
+  width: auto;
+}
+
+.byTeamTable th, .byTeamTable td {
+  padding: 6px 10px;
+  vertical-align: middle;
+}
+
+.byTeamTable .byTeamPlayer {
+  text-align: left;
+  white-space: nowrap;
+  /* Keep names in view while the weeks scroll sideways. */
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: inset -1px 0 0 var(--bs-border-color);
+}
+
+.byTeamTable .byTeamNum {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.byTeamTable .byTeamOpponent {
+  font-weight: normal;
+  font-size: 0.8em;
+}

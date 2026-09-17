@@ -8,7 +8,7 @@
         {% firstof athleteAvail jobResult jobError availabilityJobId responseMessage sel_Week as availabilityView %}
         <ul class="nav nav-tabs" id="playersTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView %}true{% else %}false{% endif %}">View Team Roster</button>
+                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive %}true{% else %}false{% endif %}">View Team Roster</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if allPlayers %}active{% endif %}" id="positionTab" data-bs-toggle="tab" data-bs-target="#positionPane" type="button" role="tab" aria-controls="positionPane" aria-selected="{% if allPlayers %}true{% else %}false{% endif %}">Players by Position</button>
@@ -19,10 +19,13 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if performanceActive %}active{% endif %}" id="performanceTab" data-bs-toggle="tab" data-bs-target="#performancePane" type="button" role="tab" aria-controls="performancePane" aria-selected="{% if performanceActive %}true{% else %}false{% endif %}">Performances</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if byTeamActive %}active{% endif %}" id="byTeamTab" data-bs-toggle="tab" data-bs-target="#byTeamPane" type="button" role="tab" aria-controls="byTeamPane" aria-selected="{% if byTeamActive %}true{% else %}false{% endif %}">By Team</button>
+            </li>
         </ul>
 
         <div class="tab-content border border-top-0 mb-3" id="playersTabsContent">
-            <div class="tab-pane fade {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView %}show active{% endif %}" id="viewRosterPane" role="tabpanel" aria-labelledby="viewRosterTab">
+            <div class="tab-pane fade {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive %}show active{% endif %}" id="viewRosterPane" role="tabpanel" aria-labelledby="viewRosterTab">
                 <form method="GET" class="p-3">
                     View the roster a team started the season with
                     <div class="row g-2">
@@ -194,7 +197,90 @@
                 </form>
             </div>
 
+            <div class="tab-pane fade {% if byTeamActive %}show active{% endif %}" id="byTeamPane" role="tabpanel" aria-labelledby="byTeamTab">
+                <form method="GET" class="p-3">
+                    Weekly stats for every player on a team
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            Season: <select name="byTeamSeason" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}"
+                                {% if byTeamYear and yr|stringformat:"i" == byTeamYear %}
+                                    selected
+                                {% elif not byTeamYear and forloop.first %}
+                                    selected
+                                {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Team: <select name="byTeamTeam" class="form-control">
+                            {% for team in teams %}
+                                <option value="{{ team.abbreviation }}" {% if byTeamTeam == team.abbreviation %}selected{% endif %}> {{ team.abbreviation }}</option>
+                            {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Stat: <select name="byTeamStat" class="form-control">
+                                <option value="rushingYards" {% if byTeamStat == "rushingYards" %}selected{% endif %}> Rushing Yards </option>
+                                <option value="receivingYards" {% if byTeamStat == "receivingYards" %}selected{% endif %}> Receiving Yards </option>
+                                <option value="rushingTds" {% if byTeamStat == "rushingTds" %}selected{% endif %}> Rushing Touchdowns </option>
+                                <option value="receivingTds" {% if byTeamStat == "receivingTds" %}selected{% endif %}> Receiving Touchdowns </option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+
         </div>
+        {% if byTeamActive %}
+        <h3>{{ byTeamTeamName }} {{ byTeamStatLabel }} &mdash; {{ byTeamYear }}</h3>
+        {% if byTeamRows %}
+        <p class="text-muted">&#10060; = player was out that week. &ndash; = not on the roster that week.</p>
+        <div class="byTeamTableWrap">
+        <table class="table table-bordered table-sm byTeamTable">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="byTeamPlayer">Player</th>
+                    <th rowspan="2" class="byTeamNum">Total</th>
+                    {% for byTeamWeek in byTeamWeeks %}
+                    <th class="byTeamNum">W{{ byTeamWeek.week }}</th>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    {% for byTeamWeek in byTeamWeeks %}
+                    <th class="byTeamNum byTeamOpponent">{% if byTeamWeek.awayGame %}@{% endif %}{{ byTeamWeek.opponentAbbreviation }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for byTeamRow in byTeamRows %}
+                <tr>
+                    <td class="byTeamPlayer">{{ byTeamRow.player.name }}</td>
+                    <td class="byTeamNum"><b>{{ byTeamRow.seasonTotal }}</b></td>
+                    {% for weekCell in byTeamRow.weekCells %}
+                    {% if weekCell.state == "value" %}
+                    <td class="byTeamNum">{{ weekCell.value }}</td>
+                    {% elif weekCell.state == "out" %}
+                    <td class="byTeamNum" title="{{ weekCell.label }}">&#10060;</td>
+                    {% elif weekCell.state == "notInRoster" %}
+                    <td class="byTeamNum text-muted" title="{{ weekCell.label }}">&ndash;</td>
+                    {% else %}
+                    <td class="byTeamNum">0</td>
+                    {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% elif byTeamWeeks %}
+        <p class="text-muted">No {{ byTeamStatLabel|lower }} recorded for {{ byTeamTeam }} in {{ byTeamYear }} &mdash; play-by-play may not be pulled for that season.</p>
+        {% else %}
+        <p class="text-muted">No matches stored for {{ byTeamTeam }} in {{ byTeamYear }}.</p>
+        {% endif %}
+        {% endif %}
         {% if performanceActive %}
         <h3>{{ performancePlayerName }} &mdash; {{ performanceYear }}</h3>
         {% if performanceRows %}
