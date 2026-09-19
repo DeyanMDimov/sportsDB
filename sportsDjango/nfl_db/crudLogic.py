@@ -3916,3 +3916,86 @@ def parsePlayDescription(play):
                     
     except Exception as e:
         print(f"Error parsing play description for play {play.id}: {e}")
+
+# ---------------------------------------------------------------------------
+# Teams page -> Rankings tab
+# ---------------------------------------------------------------------------
+
+# Stats where a smaller number is the better result, so the rankings put the
+# lowest total on top instead of the highest.
+TEAM_RANKING_LOWER_IS_BETTER = {
+    "totalPointsAllowed", "totalPointsAllowedByDefense", "totalYardsAllowedByDefense",
+    "totalPassYardsAllowed", "totalRushYardsAllowed",
+    "totalPenalties", "totalPenaltyYards", "totalOffensePenalties", "totalOffensePenaltyYards",
+    "totalDefensePenalties", "totalDefensePenaltyYards", "specialTeamsPenalties",
+    "specialTeamsPenaltyYards", "firstDownsByPenaltyGiven",
+    "totalGiveaways", "interceptionsOnOffense", "passingFumbles", "passingFumblesLost",
+    "rushingFumbles", "rushingFumblesLost", "redZoneFumbles", "redZoneFumblesLost",
+    "redZoneInterceptions", "sacksTaken", "sackYardsLost", "qbHitsTaken",
+    "stuffsTaken", "stuffYardsLost", "drivePinnedInsideTen", "drivePinnedInsideFive",
+    "totalPunts",
+}
+
+
+def teamStatIsAveraged(statField):
+    # Percentages are per-game rates, so a period's figure is their average
+    # rather than their sum.
+    return "Pct" in statField
+
+
+def regularSeasonWeekCount(seasonYear):
+    # The season went from 17 games to 18 weeks in 2021.
+    return 18 if int(seasonYear) >= 2021 else 17
+
+
+def getTeamRankings(seasonYear, statField, startWeek, endWeek):
+    # Teams page -> Rankings tab: every team's week-by-week figure for one stat
+    # over a span of regular season weeks, best total first.
+    weekNumbers = list(range(int(startWeek), int(endWeek) + 1))
+
+    performanceValues = {}
+    for teamEspnId, weekOfSeason, statValue in teamMatchPerformance.objects.filter(
+        yearOfSeason = int(seasonYear),
+        weekOfSeason__in = weekNumbers,
+    ).values_list('teamEspnId', 'weekOfSeason', statField):
+        if statValue == None:
+            continue
+        # A re-pull can leave more than one row for a team's week; they carry the
+        # same figures, so the last one read stands rather than double counting.
+        performanceValues[(teamEspnId, weekOfSeason)] = float(statValue)
+
+    isAveraged = teamStatIsAveraged(statField)
+    rankingRows = []
+    for team in nflTeam.objects.all():
+        weekCells = []
+        playedValues = []
+        for weekNumber in weekNumbers:
+            statValue = performanceValues.get((team.espnId, weekNumber))
+            if statValue == None:
+                # No row for that week: the team was on its bye, or the week has
+                # not been played or pulled yet.
+                weekCells.append({'played': False})
+            else:
+                playedValues.append(statValue)
+                weekCells.append({'played': True, 'value': statValue})
+
+        if len(playedValues) == 0:
+            continue
+
+        seasonTotal = sum(playedValues) / len(playedValues) if isAveraged else sum(playedValues)
+        rankingRows.append({
+            'team': team,
+            'seasonTotal': seasonTotal,
+            'gamesPlayed': len(playedValues),
+            'weekCells': weekCells,
+        })
+
+    lowerIsBetter = statField in TEAM_RANKING_LOWER_IS_BETTER
+    rankingRows.sort(key = lambda rankingRow: (
+        rankingRow['seasonTotal'] if lowerIsBetter else -rankingRow['seasonTotal'],
+        rankingRow['team'].abbreviation,
+    ))
+    for rankIndex, rankingRow in enumerate(rankingRows):
+        rankingRow['rank'] = rankIndex + 1
+
+    return weekNumbers, rankingRows, lowerIsBetter, isAveraged

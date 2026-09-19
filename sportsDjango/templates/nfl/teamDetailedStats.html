@@ -3,8 +3,18 @@
 {% load templateFilters%}
 {% block teamDetailedStats %}
     <div class = "container">
-        
-        <div>
+
+        <ul class="nav nav-tabs" id="teamsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if not rankingActive %}active{% endif %}" id="fullStatsTab" data-bs-toggle="tab" data-bs-target="#fullStatsPane" type="button" role="tab" aria-controls="fullStatsPane" aria-selected="{% if not rankingActive %}true{% else %}false{% endif %}">Full Stats</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if rankingActive %}active{% endif %}" id="rankingsTab" data-bs-toggle="tab" data-bs-target="#rankingsPane" type="button" role="tab" aria-controls="rankingsPane" aria-selected="{% if rankingActive %}true{% else %}false{% endif %}">Rankings</button>
+            </li>
+        </ul>
+
+        <div class="tab-content border border-top-0 mb-3" id="teamsTabsContent">
+        <div class="tab-pane fade {% if not rankingActive %}show active{% endif %} p-3" id="fullStatsPane" role="tabpanel" aria-labelledby="fullStatsTab">
             Get Detailed Stats for :
             <form method="GET">
                 <div class="row g-1 mt-3">
@@ -40,6 +50,106 @@
                 <button type="submit" class="btn btn-success">Load!</button>
             </form>
         </div>
+
+        <div class="tab-pane fade {% if rankingActive %}show active{% endif %} p-3" id="rankingsPane" role="tabpanel" aria-labelledby="rankingsTab">
+            Rank every team by one stat
+            {{ statOptionGroups|json_script:"rankingStatGroupsData" }}
+            <form method="GET">
+                <div class="row g-2 mt-1">
+                    <div class="col-2">
+                        Season:
+                        <select class="form-select" name="rankingSeason" id="rankingSeason">
+                            {% for yr in years %}
+                            <option value="{{yr}}"
+                                {% if rankingSeason and yr|stringformat:"i" == rankingSeason %}selected{% elif not rankingSeason and forloop.first %}selected{% endif %}>{{yr}}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-3">
+                        Category:
+                        <select class="form-select" id="rankingCategory">
+                            {% for optionGroup in statOptionGroups %}
+                            <option value="{{ forloop.counter0 }}">{{ optionGroup.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-3">
+                        Stat:
+                        {% comment %}Filled from the category by the script at the foot of the page.{% endcomment %}
+                        <select class="form-select" name="rankingStat" id="rankingStat"></select>
+                    </div>
+                    <div class="col-2">
+                        Period:
+                        <select class="form-select" name="rankingRange" id="rankingRange">
+                            <option value="full" {% if rankingRange != "period" %}selected{% endif %}>Full Season</option>
+                            <option value="period" {% if rankingRange == "period" %}selected{% endif %}>Select Period</option>
+                        </select>
+                    </div>
+                    <div class="col-2 rankingWeekPicker" {% if rankingRange != "period" %}style="display:none"{% endif %}>
+                        Start week:
+                        <select class="form-select" name="rankingStartWeek" id="rankingStartWeek">
+                            {% for wk in rankingWeekOptions %}
+                            <option value="{{ wk }}" {% if rankingStartWeek == wk %}selected{% endif %}>{{ wk }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-2 rankingWeekPicker" {% if rankingRange != "period" %}style="display:none"{% endif %}>
+                        End week:
+                        <select class="form-select" name="rankingEndWeek" id="rankingEndWeek">
+                            {% for wk in rankingWeekOptions %}
+                            <option value="{{ wk }}" {% if rankingEndWeek == wk %}selected{% endif %}>{{ wk }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <br>
+                <button type="submit" class="btn btn-success">Load!</button>
+            </form>
+        </div>
+        </div>
+
+        {% if rankingActive %}
+        <h3>{{ rankingStatLabel }} &mdash; {{ rankingSeason }}{% if rankingRange == "period" %}, weeks {{ rankingStartWeek }}&ndash;{{ rankingEndWeek }}{% else %}, full season{% endif %}</h3>
+        {% if rankingRows %}
+        <p class="text-muted">
+            Ranked by {% if rankingAveraged %}average{% else %}total{% endif %} over the period,
+            {% if rankingLowerIsBetter %}lowest{% else %}highest{% endif %} first. Blank weeks are byes
+            or weeks not played yet.
+        </p>
+        <div class="byTeamTableWrap">
+        <table class="table table-bordered table-sm byTeamTable">
+            <thead>
+                <tr>
+                    <th class="byTeamNum">#</th>
+                    <th class="byTeamPlayer">Team</th>
+                    <th class="byTeamNum">{% if rankingAveraged %}Avg{% else %}Total{% endif %}</th>
+                    {% for wk in rankingWeeks %}
+                    <th class="byTeamNum">W{{ wk }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for rankingRow in rankingRows %}
+                <tr>
+                    <td class="byTeamNum">{{ rankingRow.rank }}</td>
+                    <td class="byTeamPlayer team-border team-{{ rankingRow.team.abbreviation }}">{{ rankingRow.team.abbreviation }} {{ rankingRow.team.teamName }}</td>
+                    <td class="byTeamNum"><b>{{ rankingRow.seasonTotal|floatformat:"-1" }}</b></td>
+                    {% for weekCell in rankingRow.weekCells %}
+                    {% if weekCell.played %}
+                    <td class="byTeamNum">{{ weekCell.value|floatformat:"-1" }}</td>
+                    {% else %}
+                    <td class="byTeamNum text-muted">&ndash;</td>
+                    {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Nothing stored for {{ rankingSeason }} yet.</p>
+        {% endif %}
+        {% endif %}
         <br>
         
         {% if teamPerf %}
@@ -104,4 +214,67 @@
         {% endif %}
 
     </div>
+
+    <script>
+        // "Select Period" is the only mode with a start/end week to pick.
+        $(document).ready(function () {
+            // Category picks which stats the Stat dropdown offers, so the list
+            // stays short instead of one scroll through every stat there is.
+            var statGroups = JSON.parse($("#rankingStatGroupsData").text());
+            var selectedStat = "{{ rankingStat|default:'' }}";
+
+            function fillStatOptions() {
+                var groupIndex = parseInt($("#rankingCategory").val(), 10) || 0;
+                var statSelect = $("#rankingStat");
+                statSelect.empty();
+                $.each(statGroups[groupIndex].options, function (i, statOption) {
+                    statSelect.append($("<option>").val(statOption.field).text(statOption.label));
+                });
+                if (statSelect.find("option[value='" + selectedStat + "']").length) {
+                    statSelect.val(selectedStat);
+                }
+            }
+
+            // Open on the category holding whichever stat the page was loaded with.
+            $.each(statGroups, function (groupIndex, statGroup) {
+                $.each(statGroup.options, function (i, statOption) {
+                    if (statOption.field === selectedStat) {
+                        $("#rankingCategory").val(String(groupIndex));
+                    }
+                });
+            });
+
+            $("#rankingCategory").on("change", function () {
+                selectedStat = "";
+                fillStatOptions();
+            });
+            $("#rankingStat").on("change", function () {
+                selectedStat = $(this).val();
+            });
+            fillStatOptions();
+
+            function toggleWeekPickers() {
+                $(".rankingWeekPicker").toggle($("#rankingRange").val() === "period");
+            }
+
+            // The season went from 17 games to 18 weeks in 2021, so week 18 is
+            // only on offer for the seasons that have one.
+            function trimWeekOptions() {
+                var weekCount = parseInt($("#rankingSeason").val(), 10) >= 2021 ? 18 : 17;
+                $("#rankingStartWeek option, #rankingEndWeek option").each(function () {
+                    var tooLate = parseInt(this.value, 10) > weekCount;
+                    $(this).prop("disabled", tooLate).toggle(!tooLate);
+                    if (tooLate && this.selected) {
+                        $(this).prop("selected", false);
+                        $(this).closest("select").val(String(weekCount));
+                    }
+                });
+            }
+
+            $("#rankingRange").on("change", toggleWeekPickers);
+            $("#rankingSeason").on("change", trimWeekOptions);
+            toggleWeekPickers();
+            trimWeekOptions();
+        });
+    </script>
 {% endblock %}

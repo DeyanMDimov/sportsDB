@@ -6,7 +6,7 @@ from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, 
 from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit
 from django.db import models
 from nfl_db import businessLogic, crudLogic, players
-import datetime, time, requests, traceback, threading
+import datetime, time, requests, traceback, threading, re
 from zoneinfo import ZoneInfo
 
 # Create your views here.
@@ -1120,14 +1120,78 @@ def buildTeamStatGroups():
     return groups
 
 
+def clampWeek(weekValue, weekCount):
+    try:
+        weekNumber = int(str(weekValue).strip())
+    except ValueError:
+        return 1
+    return max(1, min(weekCount, weekNumber))
+
+
+def teamStatLabel(statField):
+    """"totalPointsScored" -> "Total Points Scored", for the stat dropdowns."""
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", statField)
+    spaced = spaced[0].upper() + spaced[1:]
+    return spaced.replace("Qb ", "QB ").replace("Pct", "%")
+
+
+def teamStatOptionGroups():
+    """The Rankings stat dropdown, grouped the same way the Full Stats table is."""
+    optionGroups = []
+    for group in buildTeamStatGroups():
+        for subGroup in group["subGroups"]:
+            groupLabel = group["name"] if subGroup["name"] == None else group["name"] + " - " + subGroup["name"]
+            optionGroups.append({
+                "label": groupLabel,
+                "options": [{"field": statField, "label": teamStatLabel(statField)} for statField in subGroup["fields"]],
+            })
+    return optionGroups
+
+
 def fullTeamStats(request):
 
     yearsOnPage = yearsOnPage_Helper()
 
     inputReq = request.GET
 
+    statOptionGroups = teamStatOptionGroups()
+    rankableStatFields = set()
+    for optionGroup in statOptionGroups:
+        for statOption in optionGroup["options"]:
+            rankableStatFields.add(statOption["field"])
+
     if(request.method == 'GET'):
-        if 'teamName' in inputReq:
+        if 'rankingStat' in inputReq:
+            rankingYear = inputReq.get('rankingSeason', str(yearsOnPage[0])).strip()
+            rankingStat = inputReq['rankingStat'].strip()
+            if rankingStat not in rankableStatFields:
+                rankingStat = "totalPointsScored"
+
+            weekCount = crudLogic.regularSeasonWeekCount(rankingYear)
+            rankingRange = inputReq.get('rankingRange', 'full').strip()
+            if rankingRange == 'period':
+                rankingStartWeek = clampWeek(inputReq.get('rankingStartWeek', 1), weekCount)
+                rankingEndWeek = clampWeek(inputReq.get('rankingEndWeek', weekCount), weekCount)
+                if rankingEndWeek < rankingStartWeek:
+                    rankingStartWeek, rankingEndWeek = rankingEndWeek, rankingStartWeek
+            else:
+                rankingRange = 'full'
+                rankingStartWeek, rankingEndWeek = 1, weekCount
+
+            rankingWeeks, rankingRows, rankingLowerIsBetter, rankingAveraged = crudLogic.getTeamRankings(
+                rankingYear, rankingStat, rankingStartWeek, rankingEndWeek)
+
+            return render(request, 'nfl/teamDetailedStats.html', {
+                "teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage,
+                'statOptionGroups': statOptionGroups, 'rankingActive': True,
+                'rankingSeason': rankingYear, 'rankingStat': rankingStat,
+                'rankingStatLabel': teamStatLabel(rankingStat), 'rankingRange': rankingRange,
+                'rankingStartWeek': rankingStartWeek, 'rankingEndWeek': rankingEndWeek,
+                'rankingWeekOptions': list(range(1, weekCount + 1)),
+                'rankingWeeks': rankingWeeks, 'rankingRows': rankingRows,
+                'rankingLowerIsBetter': rankingLowerIsBetter, 'rankingAveraged': rankingAveraged})
+
+        elif 'teamName' in inputReq:
             
             yearOfSeason = inputReq['season']
 
@@ -1158,13 +1222,13 @@ def fullTeamStats(request):
 
             statGroups = buildTeamStatGroups()
 
-            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), "season": yearOfSeason, "teamName": inputReq['teamName'], "teamEspnId": selectedTeamEspnId, "teamPerf": listOfPerformances, "statGroups": statGroups, "colSpan": len(listOfPerformances) + 1, 'years': yearsOnPage})
+            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), "season": yearOfSeason, "teamName": inputReq['teamName'], "teamEspnId": selectedTeamEspnId, "teamPerf": listOfPerformances, "statGroups": statGroups, "colSpan": len(listOfPerformances) + 1, 'years': yearsOnPage, 'statOptionGroups': statOptionGroups, 'rankingWeekOptions': list(range(1, 19)), 'rankingStartWeek': 1, 'rankingEndWeek': 18})
 
             
         else:
-            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage})
+            return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage, 'statOptionGroups': statOptionGroups, 'rankingWeekOptions': list(range(1, 19)), 'rankingStartWeek': 1, 'rankingEndWeek': 18})
     else:
-        return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage})
+        return render(request, 'nfl/teamDetailedStats.html', {"teams": nflTeam.objects.all().order_by('abbreviation'), 'years': yearsOnPage, 'statOptionGroups': statOptionGroups, 'rankingWeekOptions': list(range(1, 19)), 'rankingStartWeek': 1, 'rankingEndWeek': 18})
 
 def viewIndividualStat(request):
     pass
