@@ -33,6 +33,9 @@ class Command(BaseCommand):
         parser.add_argument('--keepAvailability', action = 'store_true',
                             help = 'Keep the playerWeekStatus injury rows for the week')
         parser.add_argument('--team', default = None, help = 'Limit to one team abbreviation, e.g. --team CHI')
+        parser.add_argument('--onlyUnplayed', action = 'store_true',
+                            help = 'Only clear teamMatchPerformance rows belonging to matches that are not completed, '
+                                   'plus any row whose match is missing. Leaves finished games, matches and injury rows alone.')
 
     def handle(self, *args, **options):
         seasonYear = options['season']
@@ -63,25 +66,25 @@ class Command(BaseCommand):
         if teamFilter != None:
             performances = performances.filter(teamEspnId = teamFilter.espnId)
 
+        if options['onlyUnplayed']:
+            # The rankings tables read teamMatchPerformance straight off the week, so a row left
+            # behind for a game that has not finished shows up as a real figure. Keep only the
+            # rows whose match exists and is completed.
+            playedEspnIds = set(matches.filter(completed = True).values_list('espnId', flat = True))
+            unplayedIds = [row.id for row in performances if row.matchEspnId not in playedEspnIds]
+            performances = teamMatchPerformance.objects.filter(id__in = unplayedIds)
+
         # playerWeekStatus has no match foreign key at all, only the week and year.
         weekStatuses = playerWeekStatus.objects.filter(yearOfSeason = seasonYear, weekOfSeason = seasonWeek)
         if teamFilter != None:
             weekStatuses = weekStatuses.filter(team = teamFilter)
+        if options['onlyUnplayed']:
+            weekStatuses = playerWeekStatus.objects.none()
 
-        rowCounts = [
-            ("nflMatch", matches.count()),
-            ("teamMatchPerformance", performances.count()),
-            ("teamMatchRoster", teamMatchRoster.objects.filter(nflMatch__in = matchIds).count()),
-            ("driveOfPlay", driveOfPlay.objects.filter(nflMatch__in = matchIds).count()),
-            ("playByPlay", playByPlay.objects.filter(nflMatch__in = matchIds).count()),
-            ("playerMatchOffense", playerMatchOffense.objects.filter(nflMatch__in = matchIds).count()),
-            ("playerMatchDefense", playerMatchDefense.objects.filter(nflMatch__in = matchIds).count()),
-            ("nflMatchOdds", nflMatchOdds.objects.filter(nflMatch__in = matchIds).count()),
-            ("bettingModelResult", bettingModelResult.objects.filter(nflMatch__in = matchIds).count()),
-            ("playerWeekStatus", weekStatuses.count()),
-        ]
-        for splitName, splitModel in statSplitModels:
-            rowCounts.append((splitName, splitModel.objects.filter(play__nflMatch__in = matchIds).count()))
+        if options['onlyUnplayed']:
+            rowCounts = [("teamMatchPerformance", performances.count())]
+        else:
+            rowCounts = buildFullRowCounts(matches, performances, weekStatuses, matchIds)
 
         print("")
         print(str(seasonYear) + " week " + str(seasonWeek)
@@ -93,6 +96,8 @@ class Command(BaseCommand):
         if sum(rowCount for rowName, rowCount in rowCounts) == 0:
             print("   nothing. There is no data stored for this week.")
             return
+
+        describePerformanceRows(performances, matches)
 
         if options['keepMatches']:
             print("   (--keepMatches: the " + str(len(matchIds))
@@ -117,7 +122,9 @@ class Command(BaseCommand):
                 deletedCount, perModel = weekStatuses.delete()
                 mergeDeleteCounts(deletedByModel, perModel)
 
-            if options['keepMatches']:
+            if options['onlyUnplayed']:
+                pass
+            elif options['keepMatches']:
                 for childModel in [teamMatchRoster, driveOfPlay, playerMatchOffense, playerMatchDefense,
                                    nflMatchOdds, bettingModelResult]:
                     deletedCount, perModel = childModel.objects.filter(nflMatch__in = matchIds).delete()
@@ -138,10 +145,14 @@ class Command(BaseCommand):
                 print("   " + modelLabel + ": " + str(deletedByModel[modelLabel]))
 
         print("")
-        print("Pull it again with: /pulldata?season=" + str(seasonYear)
-              + "&startWeek=" + str(seasonWeek) + "&endWeek=" + str(seasonWeek))
-        if not options['keepAvailability']:
-            print("Injury rows were removed too, so re-run the availability pull for the week as well.")
+        if options['onlyUnplayed']:
+            print("Matches and finished games were left alone. Nothing needs re-pulling;"
+                  + " the real figures land when those games finish.")
+        else:
+            print("Pull it again with: /pulldata?season=" + str(seasonYear)
+                  + "&startWeek=" + str(seasonWeek) + "&endWeek=" + str(seasonWeek))
+            if not options['keepAvailability']:
+                print("Injury rows were removed too, so re-run the availability pull for the week as well.")
 
 
 def mergeDeleteCounts(runningTotals, perModelCounts):
@@ -149,3 +160,53 @@ def mergeDeleteCounts(runningTotals, perModelCounts):
         if perModelCounts[modelLabel] == 0:
             continue
         runningTotals[modelLabel] = runningTotals.get(modelLabel, 0) + perModelCounts[modelLabel]
+
+
+def buildFullRowCounts(matches, performances, weekStatuses, matchIds):
+    rowCounts = [
+        ("nflMatch", matches.count()),
+        ("teamMatchPerformance", performances.count()),
+        ("teamMatchRoster", teamMatchRoster.objects.filter(nflMatch__in = matchIds).count()),
+        ("driveOfPlay", driveOfPlay.objects.filter(nflMatch__in = matchIds).count()),
+        ("playByPlay", playByPlay.objects.filter(nflMatch__in = matchIds).count()),
+        ("playerMatchOffense", playerMatchOffense.objects.filter(nflMatch__in = matchIds).count()),
+        ("playerMatchDefense", playerMatchDefense.objects.filter(nflMatch__in = matchIds).count()),
+        ("nflMatchOdds", nflMatchOdds.objects.filter(nflMatch__in = matchIds).count()),
+        ("bettingModelResult", bettingModelResult.objects.filter(nflMatch__in = matchIds).count()),
+        ("playerWeekStatus", weekStatuses.count()),
+    ]
+    for splitName, splitModel in statSplitModels:
+        rowCounts.append((splitName, splitModel.objects.filter(play__nflMatch__in = matchIds).count()))
+    return rowCounts
+
+
+def describePerformanceRows(performances, matches):
+    # The rankings tables are driven by teamMatchPerformance, so spell out which teams hold a
+    # row and whether that team's game has actually finished.
+    if performances.count() == 0:
+        return
+
+    completedEspnIds = set(matches.filter(completed = True).values_list('espnId', flat = True))
+    knownEspnIds = set(matches.values_list('espnId', flat = True))
+    abbreviationsByEspnId = dict(nflTeam.objects.values_list('espnId', 'abbreviation'))
+
+    fromFinishedGames = []
+    fromUnfinishedGames = []
+    fromMissingMatches = []
+    for teamEspnId, matchEspnId in performances.values_list('teamEspnId', 'matchEspnId'):
+        teamLabel = abbreviationsByEspnId.get(teamEspnId, str(teamEspnId))
+        if matchEspnId in completedEspnIds:
+            fromFinishedGames.append(teamLabel)
+        elif matchEspnId in knownEspnIds:
+            fromUnfinishedGames.append(teamLabel)
+        else:
+            fromMissingMatches.append(teamLabel)
+
+    print("")
+    print("   teamMatchPerformance rows by team:")
+    if len(fromFinishedGames) > 0:
+        print("      finished games (" + str(len(fromFinishedGames)) + "): " + ", ".join(sorted(fromFinishedGames)))
+    if len(fromUnfinishedGames) > 0:
+        print("      GAME NOT FINISHED (" + str(len(fromUnfinishedGames)) + "): " + ", ".join(sorted(fromUnfinishedGames)))
+    if len(fromMissingMatches) > 0:
+        print("      no matching nflMatch (" + str(len(fromMissingMatches)) + "): " + ", ".join(sorted(fromMissingMatches)))

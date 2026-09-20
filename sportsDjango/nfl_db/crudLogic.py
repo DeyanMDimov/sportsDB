@@ -2796,7 +2796,12 @@ def scheduledScorePull():
                     processGameData(gameData, weekOfSeason, yearOfSeason)
                 
                 if thisDay.weekday() == 0:
-                    gamesNextWeek = nflMatch.objects.filter(weekOfSeason = weekOfSeason+1)
+                    # Has to be filtered to this season as well. On an unfiltered lookup this
+                    # picks up next week's number from every season on record, and re-processing
+                    # those finished games restamps their team performances onto the current
+                    # season and week, which both invents figures for games that have not been
+                    # played and empties the week they really belong to.
+                    gamesNextWeek = nflMatch.objects.filter(yearOfSeason = yearOfSeason, weekOfSeason = weekOfSeason+1)
                     for game in gamesNextWeek:
                         matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(game.espnId) + "?lang=en&region=us"
                         matchDataResponse = requests.get(matchURL)
@@ -2829,7 +2834,12 @@ def scheduledScorePull():
                     processGameData(gameData, weekOfSeason, yearOfSeason)
                 
                 if thisDay.time() > time(hour = 22, minute = 30, second = 00, microsecond = 0, tzinfo = central_zone):
-                    gamesNextWeek = nflMatch.objects.filter(weekOfSeason = weekOfSeason+1)
+                    # Has to be filtered to this season as well. On an unfiltered lookup this
+                    # picks up next week's number from every season on record, and re-processing
+                    # those finished games restamps their team performances onto the current
+                    # season and week, which both invents figures for games that have not been
+                    # played and empties the week they really belong to.
+                    gamesNextWeek = nflMatch.objects.filter(yearOfSeason = yearOfSeason, weekOfSeason = weekOfSeason+1)
                     for game in gamesNextWeek:
                         matchURL = "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/" + str(game.espnId) + "?lang=en&region=us"
                         matchDataResponse = requests.get(matchURL)
