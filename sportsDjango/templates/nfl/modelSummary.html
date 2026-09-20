@@ -198,7 +198,7 @@
                                 <td>{{ result.bookProvidedTotal }}</td>
                                 <td>
                                     {% if result.gameCompleted %}
-                                    {{ result.actualTotal }}
+                                    <span class="{% if result.bookProvidedTotal %}{% if result.actualTotal > result.bookProvidedTotal %}actualTotalOver{% elif result.actualTotal < result.bookProvidedTotal %}actualTotalUnder{% endif %}{% endif %}">{{ result.actualTotal }}</span>
                                     {% endif %}
                                 </td>
                                 <td class="modelSummaryLine">
@@ -566,7 +566,10 @@
                         {% endfor %}
                         {% if anyCompleted %}
                         <tr>
-                            <td colspan="14">
+                            <td colspan="10">
+                            </td>
+                            <td><span class="actualTotalOver">{{actualOverCount}}</span> - <span class="actualTotalUnder">{{actualUnderCount}}</span></td>
+                            <td colspan="3">
                             </td>
                             <td>{{ouRecord}}</td>
                             <td>{{lbRecord}}</td>

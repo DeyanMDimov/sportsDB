@@ -115,7 +115,7 @@
                     </thead>
                     <tbody>
                         {% for td in touchdowns %}
-                        <tr>
+                        <tr {% ifchanged td.week %}{% if not forloop.first %}class="game-divider"{% endif %}{% endifchanged %}>
                             <td><a href="{{td.url}}" target="_blank">Link</a></td>
                             <td>{{ td.week }}</td>
                             <td>{{ td.opponent }}</td>
@@ -219,7 +219,7 @@
                     </thead>
                     <tbody>
                         {% for td in opponentTouchdowns %}
-                        <tr>
+                        <tr {% ifchanged td.week %}{% if not forloop.first %}class="game-divider"{% endif %}{% endifchanged %}>
                             <td><a href="{{td.url}}" target="_blank">Link</a></td>
                             <td>{{ td.week }}</td>
                             <td>{{ td.team }}</td>

@@ -1,5 +1,6 @@
 {% extends 'nfl/base.html'%}
 {% load static %}
+{% load tz %}
 {% load templateFilters%}
 {% block teamDetailedStats %}
     <div class = "container">
@@ -162,6 +163,12 @@
                     <tr>
                         <td> {{perf.nflMatch.datePlayed}} </td>
                     </tr>
+                    <tr>
+                        <td>Week</td>
+                        {% for perf in teamPerf %}
+                            <td> {{ perf.weekOfSeason }} </td>
+                        {% endfor %}
+                    </tr>
                     <tr> 
                         <td>Opponent</td>
                         {% for perf in teamPerf %}
@@ -174,32 +181,26 @@
                         <td>Date Played</td>
                         {% for perf in teamPerf %}
                             {% for match in perf.nflMatch.all %}
-                                <td> {{match.datePlayed|date:"M d Y"}} </td>
+                                <td> {{match.datePlayed|timezone:"America/Chicago"|date:"D n/j"}} </td>
                             {% endfor %}
                         {% endfor %}
                     </tr>
-                    <tr>
-                        <td>Week</td>
-                        {% for perf in teamPerf %}
-                            <td> {{ perf.weekOfSeason }} </td>
-                        {% endfor %}
-                    </tr>
                     {% for group in statGroups %}
-                    <tr class="table-primary">
-                        <td colspan="{{ colSpan }}"><strong>{{ group.name }}</strong></td>
+                    <tr class="statGroupRow" data-statGroupToggle="{{ forloop.counter0 }}" tabindex="0" role="button" aria-expanded="true">
+                        <td colspan="{{ colSpan }}"><span class="statToggleArrow bi-chevron-down"></span><strong>{{ group.name }}</strong></td>
                     </tr>
                         {% for sub in group.subGroups %}
                             {% if sub.name %}
-                            <tr class="table-secondary">
-                                <td colspan="{{ colSpan }}"><em>{{ sub.name }}</em></td>
+                            <tr class="statSubGroupRow" data-statGroup="{{ forloop.parentloop.counter0 }}" data-statSubGroupToggle="{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}" tabindex="0" role="button" aria-expanded="true">
+                                <td colspan="{{ colSpan }}"><span class="statToggleArrow bi-chevron-down"></span><em>{{ sub.name }}</em></td>
                             </tr>
                             {% endif %}
-                            {% for fName in sub.fields %}
-                            <tr>
-                                <td>{{ fName }}</td>
+                            {% for statField in sub.fields %}
+                            <tr data-statRow="true" data-statGroup="{{ forloop.parentloop.parentloop.counter0 }}"{% if sub.name %} data-statSubGroup="{{ forloop.parentloop.parentloop.counter0 }}-{{ forloop.parentloop.counter0 }}"{% endif %}>
+                                <td>{{ statField.label }}</td>
                                 {% for perf in teamPerf %}
                                 <td>
-                                    {{ perf|get_obj_attr:fName }}
+                                    {{ perf|get_obj_attr:statField.field }}
                                 </td>
                                 {% endfor %}
                             </tr>
@@ -270,6 +271,58 @@
                     }
                 });
             }
+
+            // Full Stats sections collapse on click. A collapsed subsection stays
+            // collapsed when its group is reopened, so state is kept in these sets
+            // and every row's visibility is worked out from them.
+            var collapsedGroups = {};
+            var collapsedSubGroups = {};
+
+            function refreshStatSections() {
+                $("tr[data-statRow]").each(function () {
+                    var subGroup = $(this).attr("data-statSubGroup");
+                    var hidden = collapsedGroups[$(this).attr("data-statGroup")] || (subGroup && collapsedSubGroups[subGroup]);
+                    $(this).toggle(!hidden);
+                });
+                $("tr.statSubGroupRow").each(function () {
+                    var collapsed = collapsedGroups[$(this).attr("data-statGroup")];
+                    $(this).toggle(!collapsed);
+                    var subCollapsed = collapsedSubGroups[$(this).attr("data-statSubGroupToggle")];
+                    $(this).attr("aria-expanded", subCollapsed ? "false" : "true")
+                        .find(".statToggleArrow")
+                        .toggleClass("bi-chevron-down", !subCollapsed)
+                        .toggleClass("bi-chevron-right", !!subCollapsed);
+                });
+                $("tr.statGroupRow").each(function () {
+                    var collapsed = collapsedGroups[$(this).attr("data-statGroupToggle")];
+                    $(this).attr("aria-expanded", collapsed ? "false" : "true")
+                        .find(".statToggleArrow")
+                        .toggleClass("bi-chevron-down", !collapsed)
+                        .toggleClass("bi-chevron-right", !!collapsed);
+                });
+            }
+
+            $("tr.statGroupRow").on("click keydown", function (event) {
+                if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") {
+                    return;
+                }
+                event.preventDefault();
+                var group = $(this).attr("data-statGroupToggle");
+                collapsedGroups[group] = !collapsedGroups[group];
+                refreshStatSections();
+            });
+
+            $("tr.statSubGroupRow").on("click keydown", function (event) {
+                if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") {
+                    return;
+                }
+                event.preventDefault();
+                var subGroup = $(this).attr("data-statSubGroupToggle");
+                collapsedSubGroups[subGroup] = !collapsedSubGroups[subGroup];
+                refreshStatSections();
+            });
+
+            refreshStatSections();
 
             $("#rankingRange").on("change", toggleWeekPickers);
             $("#rankingSeason").on("change", trimWeekOptions);

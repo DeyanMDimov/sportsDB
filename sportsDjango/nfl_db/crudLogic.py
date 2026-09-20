@@ -1,4 +1,4 @@
-from nfl_db import models, players
+from nfl_db import models, players, businessLogic
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
 from nfl_db.models import rusherStatSplit, receiverStatSplit, returnerStatSplit, passerStatSplit
 from django.db import IntegrityError
@@ -145,6 +145,9 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
             game_exception.append(e.args[0][0][1])
             game_exception.append(str(matchEspnId)+str(awayTeamEspnId))
             exceptionCollection.append(game_exception)
+
+        # Stored model results for later weeks were built from this match's old data.
+        businessLogic.invalidateModelResults(yearOfSeason, weekOfSeason)
         
         print("Completed.")    
 
@@ -508,7 +511,6 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             teamPerf.totalYardsAllowedByDefense     = nflMatchInstance.homeTeamYardsAllowed
             teamPerf.totalPassYardsAllowed          = nflMatchInstance.homeTeamReceivingYardsAllowed
             teamPerf.totalRushYardsAllowed          = nflMatchInstance.homeTeamRushYardsAllowed
-            teamPerf.totalExplosivePlays            = nflMatchInstance.homeTeamExplosivePlays
             teamPerf.totalTakeaways                 = nflMatchInstance.homeTeamTakeaways
             if nflMatchInstance.neutralStadium == True:
                 teamPerf.atHome = False
@@ -520,7 +522,6 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             teamPerf.totalYardsAllowedByDefense     = nflMatchInstance.awayTeamYardsAllowed
             teamPerf.totalPassYardsAllowed          = nflMatchInstance.awayTeamReceivingYardsAllowed
             teamPerf.totalRushYardsAllowed          = nflMatchInstance.awayTeamRushYardsAllowed
-            teamPerf.totalExplosivePlays            = nflMatchInstance.awayTeamExplosivePlays
             teamPerf.totalTakeaways                 = nflMatchInstance.awayTeamTakeaways
             teamPerf.atHome = False
 
@@ -693,7 +694,6 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
                 existingTeamPerformance.totalYardsAllowedByDefense     = nflMatchInstance.homeTeamYardsAllowed
                 existingTeamPerformance.totalPassYardsAllowed          = nflMatchInstance.homeTeamReceivingYardsAllowed
                 existingTeamPerformance.totalRushYardsAllowed          = nflMatchInstance.homeTeamRushYardsAllowed
-                existingTeamPerformance.totalExplosivePlays            = nflMatchInstance.homeTeamExplosivePlays
                 existingTeamPerformance.totalTakeaways                 = nflMatchInstance.homeTeamTakeaways
                 if nflMatchInstance.neutralStadium == True:
                     existingTeamPerformance.atHome = False
@@ -710,7 +710,6 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             existingTeamPerformance.totalYardsAllowedByDefense     = nflMatchInstance.awayTeamYardsAllowed
             existingTeamPerformance.totalPassYardsAllowed          = nflMatchInstance.awayTeamReceivingYardsAllowed
             existingTeamPerformance.totalRushYardsAllowed          = nflMatchInstance.awayTeamRushYardsAllowed
-            existingTeamPerformance.totalExplosivePlays            = nflMatchInstance.awayTeamExplosivePlays
             existingTeamPerformance.totalTakeaways                 = nflMatchInstance.awayTeamTakeaways
             existingTeamPerformance.atHome = False
             existingTeamPerformance.save()
@@ -976,6 +975,10 @@ def captureStatsFromPlayByPlay(playByPlayData, playByPlayObj, teamId, opponentId
 
     teamPerf.rushingPlaysTenPlus        = teamRushingTenPlus
     teamPerf.passPlaysTwentyFivePlus    = teamPassPlaysTwentyFivePlus
+    # An explosive play is one of those two, counted here off the full play feed.
+    # The old match-level count only ever read the first page of that feed, so
+    # nflMatch.homeTeamExplosivePlays / awayTeamExplosivePlays are no longer used.
+    teamPerf.totalExplosivePlays        = teamRushingTenPlus + teamPassPlaysTwentyFivePlus
 
     teamPerf.totalOffensePenalties      = totalOffensePenalties
     teamPerf.totalOffensePenaltyYards   = totalOffensePenaltyYards
@@ -1546,7 +1549,6 @@ def createTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId,
         teamPerf.totalYardsAllowedByDefense     = nflMatchInstance.homeTeamYardsAllowed
         teamPerf.totalPassYardsAllowed          = nflMatchInstance.homeTeamReceivingYardsAllowed
         teamPerf.totalRushYardsAllowed          = nflMatchInstance.homeTeamRushYardsAllowed
-        teamPerf.totalExplosivePlays            = nflMatchInstance.homeTeamExplosivePlays
         if nflMatchInstance.neutralStadium == True:
             teamPerf.atHome = False
         else:
@@ -1557,7 +1559,6 @@ def createTeamPerformance(teamScore, teamStats, matchEspnId, teamId, opponentId,
         teamPerf.totalYardsAllowedByDefense     = nflMatchInstance.awayTeamYardsAllowed
         teamPerf.totalPassYardsAllowed          = nflMatchInstance.awayTeamReceivingYardsAllowed
         teamPerf.totalRushYardsAllowed          = nflMatchInstance.awayTeamRushYardsAllowed
-        teamPerf.totalExplosivePlays            = nflMatchInstance.awayTeamExplosivePlays
         teamPerf.atHome = False
 
     teamPerf.save()
@@ -3999,3 +4000,118 @@ def getTeamRankings(seasonYear, statField, startWeek, endWeek):
         rankingRow['rank'] = rankIndex + 1
 
     return weekNumbers, rankingRows, lowerIsBetter, isAveraged
+
+
+# ---------------------------------------------------------------------------
+# Players page -> Rankings tab
+#
+# League-wide version of the By Team table: one stat, every player at a
+# position, ranked. Only stats that come off the stat splits are on offer -
+# targets, drops, fumbles and interceptions are read out of play descriptions
+# one team at a time, which is far too slow to run for the whole league.
+# ---------------------------------------------------------------------------
+
+PLAYER_RANKING_STATS = {
+    "passingYards": (passerStatSplit, "passingTdScored"),
+    "passingAttempts": (passerStatSplit, "passingTdScored"),
+    "passingTds": (passerStatSplit, "passingTdScored"),
+    "sacks": (passerStatSplit, "passingTdScored"),
+    "rushingYards": (rusherStatSplit, "rushingTdScored"),
+    "rushingAttempts": (rusherStatSplit, "rushingTdScored"),
+    "rushingTds": (rusherStatSplit, "rushingTdScored"),
+    "receivingYards": (receiverStatSplit, "receivingTdScored"),
+    "receptions": (receiverStatSplit, "receivingTdScored"),
+    "receivingTds": (receiverStatSplit, "receivingTdScored"),
+}
+
+PLAYER_RANKING_STATS_BY_POSITION = {
+    1: ["passingYards", "passingAttempts", "passingTds", "rushingYards", "rushingAttempts", "rushingTds", "sacks"],
+    4: ["rushingYards", "rushingAttempts", "rushingTds", "receivingYards", "receptions", "receivingTds"],
+    2: ["receivingYards", "receptions", "receivingTds", "rushingYards", "rushingAttempts", "rushingTds"],
+    3: ["receivingYards", "receptions", "receivingTds", "rushingYards", "rushingAttempts", "rushingTds"],
+}
+
+
+def playRankingValue(statKey, playType, playDescription, tdScored):
+    # What one play is worth for the chosen stat, matching how the Performances
+    # tab counts the same thing.
+    if statKey == "passingYards":
+        return yardsGainedOnPlay(playDescription) if playType == 2 else 0
+    if statKey == "passingAttempts":
+        return 1 if playType in [2, 3] else 0
+    if statKey == "sacks":
+        return 1 if playType == 4 else 0
+    if statKey in ["passingTds", "rushingTds", "receivingTds"]:
+        return 1 if tdScored else 0
+    if statKey in ["rushingYards", "receivingYards"]:
+        return yardsGainedOnPlay(playDescription)
+    if statKey in ["rushingAttempts", "receptions"]:
+        return 1
+    return 0
+
+
+def getPlayerRankings(seasonYear, playerPosition, statKey, weekParam):
+    # weekParam is a week number, or "ALL" for the whole regular season.
+    if str(weekParam).strip().upper() == "ALL":
+        weekNumbers = list(range(1, regularSeasonWeekCount(seasonYear) + 1))
+    else:
+        weekNumbers = [int(weekParam)]
+
+    splitModel, tdFieldName = PLAYER_RANKING_STATS[statKey]
+
+    countedPlays = set()
+    valuesByPlayerId = {}
+    teamPlayCountsByPlayerId = {}
+    for playerId, playId, weekOfSeason, teamOnOffenseId, playType, playDescription, tdScored in splitModel.objects.filter(
+        player__playerPosition = int(playerPosition),
+        play__nflMatch__yearOfSeason = int(seasonYear),
+        play__nflMatch__weekOfSeason__in = weekNumbers,
+    ).values_list(
+        'player_id', 'play_id', 'play__nflMatch__weekOfSeason', 'play__teamOnOffense_id',
+        'play__playType', 'play__playDescription', tdFieldName,
+    ):
+        if playWasNullified(playDescription) or (playerId, playId) in countedPlays:
+            continue
+        countedPlays.add((playerId, playId))
+
+        # A player traded mid-season shows up under whichever team they took the
+        # most snaps for in the period.
+        teamCounts = teamPlayCountsByPlayerId.setdefault(playerId, {})
+        teamCounts[teamOnOffenseId] = teamCounts.get(teamOnOffenseId, 0) + 1
+
+        playerWeeks = valuesByPlayerId.setdefault(playerId, {})
+        playerWeeks[weekOfSeason] = playerWeeks.get(weekOfSeason, 0) + playRankingValue(statKey, playType, playDescription, tdScored)
+
+    if len(valuesByPlayerId) == 0:
+        return weekNumbers, []
+
+    playersById = {playerObj.id: playerObj for playerObj in player.objects.filter(id__in = list(valuesByPlayerId))}
+    teamsById = {team.id: team for team in nflTeam.objects.all()}
+
+    rankingRows = []
+    for playerId, playerWeeks in valuesByPlayerId.items():
+        seasonTotal = sum(playerWeeks.values())
+        if seasonTotal == 0:
+            continue
+
+        weekCells = []
+        for weekNumber in weekNumbers:
+            if weekNumber in playerWeeks:
+                weekCells.append({'played': True, 'value': playerWeeks[weekNumber]})
+            else:
+                weekCells.append({'played': False})
+
+        teamCounts = teamPlayCountsByPlayerId[playerId]
+        mainTeamId = max(teamCounts, key = teamCounts.get)
+        rankingRows.append({
+            'player': playersById[playerId],
+            'team': teamsById.get(mainTeamId),
+            'seasonTotal': seasonTotal,
+            'weekCells': weekCells,
+        })
+
+    rankingRows.sort(key = lambda rankingRow: (-rankingRow['seasonTotal'], rankingRow['player'].name))
+    for rankIndex, rankingRow in enumerate(rankingRows):
+        rankingRow['rank'] = rankIndex + 1
+
+    return weekNumbers, rankingRows

@@ -38,6 +38,13 @@
             </form>
         </div>
 
+        {% if weekLoaded %}
+        <div class="mt-2">
+            <a href="?season={{ yearOfSeason }}&#38;week={{ weekOfSeason|add:"-1" }}" id="prev-week-arrow" class="btn btn-dark btn-md{% if weekOfSeason <= 1 %} disabled{% endif %}" aria-label="Previous week"{% if weekOfSeason <= 1 %} aria-disabled="true"{% endif %}><span class="bi-chevron-left"></span></a>
+            <a href="?season={{ yearOfSeason }}&#38;week={{ weekOfSeason|add:"1" }}" id="next-week-arrow" class="btn btn-dark btn-md{% if weekOfSeason >= 22 %} disabled{% endif %}" aria-label="Next week"{% if weekOfSeason >= 22 %} aria-disabled="true"{% endif %}><span class="bi-chevron-right"></span></a>
+        </div>
+        {% endif %}
+
         {% if touchdowns %}
         <div class="mt-4">
             <h3>Week {{ weekOfSeason }} - {{ yearOfSeason }} Season</h3>

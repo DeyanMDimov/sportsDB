@@ -1,5 +1,6 @@
 from nfl_db import models
-from nfl_db.models import nflMatch, teamMatchPerformance, nflTeam, driveOfPlay
+from nfl_db.models import nflMatch, teamMatchPerformance, nflTeam, driveOfPlay, bettingModelResult
+from django.db.models import Q
 from datetime import datetime
 import json
 
@@ -1330,4 +1331,123 @@ class matchModelDetails:
         self.awayTeamDefenseYdsPerGmRank = awayTeamArray[4]
 
 
+#-------Stored Model Results-------#
 
+MODEL_VERSIONS = [version for version, label in bettingModelResult.modelVersions]
+
+# bettingModelResult columns that mirror attributes on the model result classes.
+STORED_RESULT_FIELDS = [
+    field.name for field in bettingModelResult._meta.concrete_fields
+    if field.name not in ('id', 'nflMatch', 'modelVersion', 'movingAverageWeeks', 'yearOfSeason', 'weekOfSeason', 'computedAt')
+]
+
+def computeModelResult(match, selectedModel, movingAverageWeeks = 0):
+    """Run the selected model for one match and fill in actual results and bet outcomes."""
+    if selectedModel == "v2":
+        modelResult = generateBettingModelHistV2(match, week1 = (int(match.weekOfSeason) == 1))
+    elif selectedModel == "v1.5":
+        modelResult = generateBettingModelHistV1(match, movingAverageWeeks)
+    else:
+        modelResult = generateBettingModelHistV1(match)
+
+    homeTeam = nflTeam.objects.get(espnId = match.homeTeamEspnId)
+    awayTeam = nflTeam.objects.get(espnId = match.awayTeamEspnId)
+
+    if match.completed:
+        if match.awayTeamPoints != None:
+            modelResult.team1ActualYards = match.homeTeamTotalYards
+            modelResult.team2ActualYards = match.awayTeamTotalYards
+            modelResult.team1ActualPoints = match.homeTeamPoints
+            modelResult.team2ActualPoints = match.awayTeamPoints
+            modelResult.actualSpread = match.awayTeamPoints - match.homeTeamPoints
+            modelResult.actualTotal = match.homeTeamPoints + match.awayTeamPoints
+            modelResult.gameCompleted = True
+
+            if selectedModel == "v2":
+                team1_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = homeTeam)
+                team2_drives = driveOfPlay.objects.filter(nflMatch = match, teamOnOffense = awayTeam)
+                modelResult.actual_t1_OffenseDrives = team1_drives.count()
+                modelResult.actual_t1_DrivesRedZone = team1_drives.filter(reachedRedZone = True).count()
+                modelResult.actual_t1_RedZoneConv = team1_drives.filter(driveResult = 1).count()
+                modelResult.actual_t2_OffenseDrives = team2_drives.count()
+                modelResult.actual_t2_DrivesRedZone = team2_drives.filter(reachedRedZone = True).count()
+                modelResult.actual_t2_RedZoneConv = team2_drives.filter(driveResult = 1).count()
+
+        if match.overUnderLine != 0 and match.overUnderLine != None:
+            modelResult = checkModelBets(match.overUnderLine, match.matchLineHomeTeam, modelResult, homeTeam.abbreviation, awayTeam.abbreviation)
+    else:
+        if match.overUnderLine != 0 and match.overUnderLine != None:
+            modelResult.bookProvidedTotal = match.overUnderLine
+        if match.matchLineHomeTeam != None:
+            modelResult.bookProvidedSpread = match.matchLineHomeTeam
+
+    return modelResult
+
+def modelResultToRow(modelResult, match, selectedModel, movingAverageWeeks):
+    storedResult = bettingModelResult(
+        nflMatch = match,
+        modelVersion = selectedModel,
+        movingAverageWeeks = movingAverageWeeks,
+        yearOfSeason = match.yearOfSeason,
+        weekOfSeason = match.weekOfSeason,
+    )
+    for fieldName in STORED_RESULT_FIELDS:
+        value = getattr(modelResult, fieldName, None)
+        if value is not None:
+            setattr(storedResult, fieldName, value)
+    return storedResult
+
+def modelResultFromRow(storedResult):
+    # v2 falls back to a v1 result object when the previous week isn't finished,
+    # so rebuild the same class the model would have returned.
+    if storedResult.modelVersion == "v2" and not storedResult.previousWeekNotFinished:
+        modelResult = individualV2ModelResult.__new__(individualV2ModelResult)
+    else:
+        modelResult = individualBettingModelResult.__new__(individualBettingModelResult)
+
+    for fieldName in STORED_RESULT_FIELDS:
+        value = getattr(storedResult, fieldName)
+        if value is not None:
+            setattr(modelResult, fieldName, value)
+    return modelResult
+
+def getModelResultsForMatches(matches, selectedModel, movingAverageWeeks = 0):
+    """Return model results for each match, in order, reading stored results where
+    they exist. Results for completed matches are saved after being computed; results
+    for upcoming matches are always computed fresh since odds and prior weeks can change."""
+    if selectedModel not in MODEL_VERSIONS:
+        return []
+    if selectedModel != "v1.5":
+        movingAverageWeeks = 0
+
+    matches = list(matches)
+    storedResults = bettingModelResult.objects.filter(nflMatch__in = matches, modelVersion = selectedModel, movingAverageWeeks = movingAverageWeeks)
+    storedResultsByMatch = {storedResult.nflMatch_id: storedResult for storedResult in storedResults}
+
+    modelResults = []
+    newRows = []
+    for match in matches:
+        storedResult = storedResultsByMatch.get(match.id)
+        if storedResult != None:
+            modelResults.append(modelResultFromRow(storedResult))
+            continue
+
+        modelResult = computeModelResult(match, selectedModel, movingAverageWeeks)
+        modelResults.append(modelResult)
+        if match.completed:
+            newRows.append(modelResultToRow(modelResult, match, selectedModel, movingAverageWeeks))
+
+    if len(newRows) > 0:
+        bettingModelResult.objects.bulk_create(newRows, ignore_conflicts = True)
+
+    return modelResults
+
+def invalidateModelResults(yearOfSeason, weekOfSeason):
+    """Drop stored results that may have used data from this week: later weeks of the
+    same season, and all of the next season (early weeks and moving averages reach
+    back into the previous year)."""
+    yearOfSeason = int(yearOfSeason)
+    weekOfSeason = int(weekOfSeason)
+    bettingModelResult.objects.filter(
+        Q(yearOfSeason = yearOfSeason, weekOfSeason__gte = weekOfSeason) | Q(yearOfSeason = yearOfSeason + 1)
+    ).delete()

@@ -8,7 +8,7 @@
         {% firstof athleteAvail jobResult jobError availabilityJobId responseMessage sel_Week as availabilityView %}
         <ul class="nav nav-tabs" id="playersTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive %}true{% else %}false{% endif %}">View Team Roster</button>
+                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}true{% else %}false{% endif %}">View Team Roster</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if allPlayers %}active{% endif %}" id="positionTab" data-bs-toggle="tab" data-bs-target="#positionPane" type="button" role="tab" aria-controls="positionPane" aria-selected="{% if allPlayers %}true{% else %}false{% endif %}">Players by Position</button>
@@ -22,10 +22,13 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if byTeamActive %}active{% endif %}" id="byTeamTab" data-bs-toggle="tab" data-bs-target="#byTeamPane" type="button" role="tab" aria-controls="byTeamPane" aria-selected="{% if byTeamActive %}true{% else %}false{% endif %}">By Team</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if playerRankingActive %}active{% endif %}" id="playerRankingTab" data-bs-toggle="tab" data-bs-target="#playerRankingPane" type="button" role="tab" aria-controls="playerRankingPane" aria-selected="{% if playerRankingActive %}true{% else %}false{% endif %}">Rankings</button>
+            </li>
         </ul>
 
         <div class="tab-content border border-top-0 mb-3" id="playersTabsContent">
-            <div class="tab-pane fade {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive %}show active{% endif %}" id="viewRosterPane" role="tabpanel" aria-labelledby="viewRosterTab">
+            <div class="tab-pane fade {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}show active{% endif %}" id="viewRosterPane" role="tabpanel" aria-labelledby="viewRosterTab">
                 <form method="GET" class="p-3">
                     View the roster a team started the season with
                     <div class="row g-2">
@@ -233,7 +236,92 @@
                 </form>
             </div>
 
+            <div class="tab-pane fade {% if playerRankingActive %}show active{% endif %}" id="playerRankingPane" role="tabpanel" aria-labelledby="playerRankingTab">
+                <form method="GET" class="p-3">
+                    Rank every player at one position by one stat
+                    {{ rankingStatsByPosition|json_script:"playerRankingStatData" }}
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            Season: <select name="playerRankingSeason" id="playerRankingSeason" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}"
+                                {% if playerRankingSeason and yr|stringformat:"i" == playerRankingSeason %}selected{% elif not playerRankingSeason and forloop.first %}selected{% endif %}>{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Position: <select name="playerRankingPosition" id="playerRankingPosition" class="form-control">
+                                {% for positionValue, positionName in rankingPositions %}
+                                <option value="{{ positionValue }}" {% if playerRankingPosition == positionValue|stringformat:"i" %}selected{% endif %}>{{ positionName }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-3">
+                            {% comment %}Filled from the position by the script at the foot of the page.{% endcomment %}
+                            Stat: <select name="playerRankingStat" id="playerRankingStat" class="form-control"></select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Week: <select name="playerRankingWeek" id="playerRankingWeek" class="form-control">
+                                <option value="ALL" {% if playerRankingWeek == "ALL" or not playerRankingWeek %}selected{% endif %}>ALL</option>
+                                {% for wk in playerRankingWeekOptions %}
+                                <option value="{{ wk }}" {% if playerRankingWeek == wk|stringformat:"i" %}selected{% endif %}>{{ wk }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+
         </div>
+        {% if playerRankingActive %}
+        <h3>{{ playerRankingPositionName }} {{ playerRankingStatLabel }} &mdash; {{ playerRankingSeason }}{% if playerRankingWeek == "ALL" %}, full season{% else %}, week {{ playerRankingWeek }}{% endif %}</h3>
+        {% if playerRankingRows %}
+        <p class="text-muted">
+            Every {{ playerRankingPositionName }} with a recorded {{ playerRankingStatLabel|lower }},
+            highest {% if playerRankingWeek == "ALL" %}season total{% else %}figure{% endif %} first.
+            Blank weeks are byes or weeks the player did not feature in.
+        </p>
+        <div class="byTeamTableWrap">
+        <table class="table table-bordered table-sm byTeamTable">
+            <thead>
+                <tr>
+                    <th class="byTeamNum">#</th>
+                    <th class="byTeamPlayer">Player</th>
+                    <th class="byTeamPlayer">Team</th>
+                    <th class="byTeamNum">Total</th>
+                    {% if playerRankingWeek == "ALL" %}
+                    {% for wk in playerRankingWeeks %}
+                    <th class="byTeamNum">W{{ wk }}</th>
+                    {% endfor %}
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for rankingRow in playerRankingRows %}
+                <tr>
+                    <td class="byTeamNum">{{ rankingRow.rank }}</td>
+                    <td class="byTeamPlayer">{{ rankingRow.player.name }}</td>
+                    <td class="byTeamPlayer team-border team-{{ rankingRow.team.abbreviation }}">{{ rankingRow.team.abbreviation }}</td>
+                    <td class="byTeamNum"><b>{{ rankingRow.seasonTotal }}</b></td>
+                    {% if playerRankingWeek == "ALL" %}
+                    {% for weekCell in rankingRow.weekCells %}
+                    {% if weekCell.played %}
+                    <td class="byTeamNum">{{ weekCell.value }}</td>
+                    {% else %}
+                    <td class="byTeamNum text-muted">&ndash;</td>
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Nothing recorded for {{ playerRankingSeason }}{% if playerRankingWeek != "ALL" %}, week {{ playerRankingWeek }}{% endif %} &mdash; play-by-play may not be pulled for that season.</p>
+        {% endif %}
+        {% endif %}
         {% if byTeamActive %}
         <h3>{{ byTeamTeamName }} {{ byTeamStatLabel }} &mdash; {{ byTeamYear }}</h3>
         {% if byTeamRows %}
@@ -680,6 +768,48 @@
                         console.log(player_id + " saved.");
                     }
                 });
+        });
+    </script>
+    <script>
+        // Position decides which stats the Rankings tab offers.
+        $(document).ready(function () {
+            var playerRankingStats = JSON.parse($("#playerRankingStatData").text());
+            var selectedRankingStat = "{{ playerRankingStat|default:'' }}";
+
+            function fillRankingStatOptions() {
+                var statSelect = $("#playerRankingStat");
+                statSelect.empty();
+                $.each(playerRankingStats[$("#playerRankingPosition").val()], function (i, statOption) {
+                    statSelect.append($("<option>").val(statOption.field).text(statOption.label));
+                });
+                if (statSelect.find("option[value='" + selectedRankingStat + "']").length) {
+                    statSelect.val(selectedRankingStat);
+                }
+            }
+
+            $("#playerRankingPosition").on("change", function () {
+                selectedRankingStat = "";
+                fillRankingStatOptions();
+            });
+            $("#playerRankingStat").on("change", function () {
+                selectedRankingStat = $(this).val();
+            });
+            fillRankingStatOptions();
+
+            // The season went from 17 games to 18 weeks in 2021, so week 18 is
+            // only on offer for the seasons that have one.
+            function trimRankingWeeks() {
+                var weekCount = parseInt($("#playerRankingSeason").val(), 10) >= 2021 ? 18 : 17;
+                $("#playerRankingWeek option").each(function () {
+                    var tooLate = this.value !== "ALL" && parseInt(this.value, 10) > weekCount;
+                    $(this).prop("disabled", tooLate).toggle(!tooLate);
+                    if (tooLate && this.selected) {
+                        $("#playerRankingWeek").val("ALL");
+                    }
+                });
+            }
+            $("#playerRankingSeason").on("change", trimRankingWeeks);
+            trimRankingWeeks();
         });
     </script>
     <script>

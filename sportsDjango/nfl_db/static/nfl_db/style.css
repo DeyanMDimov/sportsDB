@@ -421,6 +421,57 @@ width: 90px;
     width: 100px;
 }
 
+/* Actual total vs. the book's over/under */
+.actualTotalOver,
+.actualTotalUnder {
+    text-decoration-line: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 4px;
+}
+
+.actualTotalOver {
+    text-decoration-color: #22c55e;
+}
+
+.actualTotalUnder {
+    text-decoration-color: #ef4444;
+}
+
+/* Full Stats group / subgroup title rows */
+.statGroupRow {
+    --bs-table-bg: #1e2a44;
+    --bs-table-color: #dbeafe;
+}
+
+.statSubGroupRow {
+    --bs-table-bg: #242833;
+    --bs-table-color: #93a4bd;
+}
+
+.statGroupRow,
+.statSubGroupRow {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Beat the global "center the first column" rule: these span the whole table. */
+.statGroupRow > td,
+.statSubGroupRow > td {
+    text-align: left !important;
+    padding-left: 14px;
+}
+
+.statSubGroupRow > td {
+    padding-left: 32px;
+}
+
+.statToggleArrow {
+    display: inline-block;
+    font-size: 0.8em;
+    vertical-align: middle;
+    margin-right: 0.6em;
+}
+
 #year-summary td{
   padding-left: 20px;
 }

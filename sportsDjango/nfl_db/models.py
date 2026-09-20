@@ -545,11 +545,114 @@ class nflMatchOdds(models.Model):
     homeTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
     awayTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
 
+#-------Betting Model Results-------#
 
+class bettingModelResult(models.Model):
+    # Cached output of a betting model (v1 / v1.5 / v2) for one match, so the
+    # model and yearly summary pages don't recompute every game on each load.
+    # Only completed matches are stored; see businessLogic.getModelResultsForMatches.
+    nflMatch        = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
+    modelVersions = (
+        ("v1", "V1.0"),
+        ("v1.5", "V1.5"),
+        ("v2", "V2.0"),
+    )
+    modelVersion        = models.CharField(max_length = 5, choices = modelVersions)
+    movingAverageWeeks  = models.SmallIntegerField(default = 0)
+    yearOfSeason        = models.SmallIntegerField(validators = [MinValueValidator(2002)])
+    weekOfSeason        = models.SmallIntegerField(validators = [MinValueValidator(-4), MaxValueValidator(22)])
+    computedAt          = models.DateTimeField(auto_now = True)
 
+    team1Name   = models.CharField(max_length = 3)
+    team2Name   = models.CharField(max_length = 3)
 
+    previousWeekNotFinished = models.BooleanField(default = False)
+    emptyModel              = models.BooleanField(default = False)
+    gameCompleted           = models.BooleanField(default = False)
 
+    #model inputs
+    team1TotalOffensiveYardsPerGame     = models.FloatField(default = 0)
+    team1TotalYardsPerPoint             = models.FloatField(default = 0)
+    team1TotalDefensiveYardsPerGame     = models.FloatField(default = 0)
+    team1TotalDefensiveYardsPerPoint    = models.FloatField(default = 0)
+    team2TotalOffensiveYardsPerGame     = models.FloatField(default = 0)
+    team2TotalYardsPerPoint             = models.FloatField(default = 0)
+    team2TotalDefensiveYardsPerGame     = models.FloatField(default = 0)
+    team2TotalDefensiveYardsPerPoint    = models.FloatField(default = 0)
 
+    #model outputs
+    team1ExpectedYardsPerGame   = models.FloatField(default = 0)
+    team1ExpectedYardsPerPoint  = models.FloatField(default = 0)
+    team2ExpectedYardsPerGame   = models.FloatField(default = 0)
+    team2ExpectedYardsPerPoint  = models.FloatField(default = 0)
+    team1CalculatedPoints       = models.FloatField(default = 0)
+    team2CalculatedPoints       = models.FloatField(default = 0)
+    calculatedSpread            = models.FloatField(default = 0)
+    calculatedTotal             = models.FloatField(default = 0)
+
+    #v1 supplementary stats (not produced by v2)
+    homeTeamExplosiveRush           = models.SmallIntegerField(null = True, blank = True)
+    homeTeamExplosiveRecs           = models.SmallIntegerField(null = True, blank = True)
+    awayTeamExplosiveRush           = models.SmallIntegerField(null = True, blank = True)
+    awayTeamExplosiveRecs           = models.SmallIntegerField(null = True, blank = True)
+    homeTeamExplosiveRushAllowed    = models.SmallIntegerField(null = True, blank = True)
+    homeTeamExplosiveRecsAllowed    = models.SmallIntegerField(null = True, blank = True)
+    awayTeamExplosiveRushAllowed    = models.SmallIntegerField(null = True, blank = True)
+    awayTeamExplosiveRecsAllowed    = models.SmallIntegerField(null = True, blank = True)
+    homeTeamTurnoverDiff            = models.SmallIntegerField(null = True, blank = True)
+    awayTeamTurnoverDiff            = models.SmallIntegerField(null = True, blank = True)
+
+    #v2 drive stats
+    avg_t1_OffenseDrives            = models.FloatField(null = True, blank = True)
+    avg_t1_DrivesRedZone            = models.FloatField(null = True, blank = True)
+    avg_t1_RedZoneConv              = models.FloatField(null = True, blank = True)
+    avg_t1_OpponentDrives           = models.FloatField(null = True, blank = True)
+    avg_t1_OpponentDrivesRedZone    = models.FloatField(null = True, blank = True)
+    avg_t1_OpponentRedZoneConv      = models.FloatField(null = True, blank = True)
+    avg_t2_OffenseDrives            = models.FloatField(null = True, blank = True)
+    avg_t2_DrivesRedZone            = models.FloatField(null = True, blank = True)
+    avg_t2_RedZoneConv              = models.FloatField(null = True, blank = True)
+    avg_t2_OpponentDrives           = models.FloatField(null = True, blank = True)
+    avg_t2_OpponentDrivesRedZone    = models.FloatField(null = True, blank = True)
+    avg_t2_OpponentRedZoneConv      = models.FloatField(null = True, blank = True)
+    expected_t1_OffenseDrives       = models.FloatField(null = True, blank = True)
+    expected_t1_DrivesRedZone       = models.FloatField(null = True, blank = True)
+    expected_t1_RedZoneConv         = models.FloatField(null = True, blank = True)
+    expected_t2_OffenseDrives       = models.FloatField(null = True, blank = True)
+    expected_t2_DrivesRedZone       = models.FloatField(null = True, blank = True)
+    expected_t2_RedZoneConv         = models.FloatField(null = True, blank = True)
+    expected_points_from_drives_t1  = models.FloatField(null = True, blank = True)
+    expected_points_from_drives_t2  = models.FloatField(null = True, blank = True)
+    actual_t1_OffenseDrives         = models.SmallIntegerField(null = True, blank = True)
+    actual_t1_DrivesRedZone         = models.SmallIntegerField(null = True, blank = True)
+    actual_t1_RedZoneConv           = models.SmallIntegerField(null = True, blank = True)
+    actual_t2_OffenseDrives         = models.SmallIntegerField(null = True, blank = True)
+    actual_t2_DrivesRedZone         = models.SmallIntegerField(null = True, blank = True)
+    actual_t2_RedZoneConv           = models.SmallIntegerField(null = True, blank = True)
+
+    #actual result
+    team1ActualYards    = models.SmallIntegerField(null = True, blank = True)
+    team2ActualYards    = models.SmallIntegerField(null = True, blank = True)
+    team1ActualPoints   = models.SmallIntegerField(null = True, blank = True)
+    team2ActualPoints   = models.SmallIntegerField(null = True, blank = True)
+    actualSpread        = models.SmallIntegerField(null = True, blank = True)
+    actualTotal         = models.SmallIntegerField(null = True, blank = True)
+
+    #bets
+    bookProvidedSpread      = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    bookProvidedTotal       = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    overUnderBet            = models.CharField(max_length = 10, default = "")
+    overUnderBetIsCorrect   = models.CharField(max_length = 5, default = "None")
+    lineBet                 = models.CharField(max_length = 20, default = "")
+    lineBetIsCorrect        = models.CharField(max_length = 5, default = "None")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['nflMatch', 'modelVersion', 'movingAverageWeeks'], name="UniqueModelResultPerMatch")
+        ]
+        indexes = [
+            models.Index(fields=['yearOfSeason', 'weekOfSeason'], name = 'model_result_season_week_idx'),
+        ]
 
 
 #-------Background Job Models-------#
