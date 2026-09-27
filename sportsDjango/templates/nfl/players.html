@@ -325,7 +325,7 @@
         {% if byTeamActive %}
         <h3>{{ byTeamTeamName }} {{ byTeamStatLabel }} &mdash; {{ byTeamYear }}</h3>
         {% if byTeamRows %}
-        <p class="text-muted">&#10060; = player was out that week. &ndash; = not on the roster that week.</p>
+        <p class="text-muted">&#10060; = player was out that week. &#10134; = not on the roster that week.</p>
         <div class="byTeamTableWrap">
         <table class="table table-bordered table-sm byTeamTable">
             <thead>
@@ -353,7 +353,7 @@
                     {% elif weekCell.state == "out" %}
                     <td class="byTeamNum" title="{{ weekCell.label }}">&#10060;</td>
                     {% elif weekCell.state == "notInRoster" %}
-                    <td class="byTeamNum text-muted" title="{{ weekCell.label }}">&ndash;</td>
+                    <td class="byTeamNum" title="{{ weekCell.label }}">&#10134;</td>
                     {% else %}
                     <td class="byTeamNum">0</td>
                     {% endif %}
@@ -361,6 +361,15 @@
                 </tr>
                 {% endfor %}
             </tbody>
+            <tfoot>
+                <tr class="byTeamTotalRow">
+                    <th class="byTeamPlayer">Total</th>
+                    <td class="byTeamNum"><b>{{ byTeamTotalRow.seasonTotal }}</b></td>
+                    {% for weekTotal in byTeamTotalRow.weekTotals %}
+                    <td class="byTeamNum"><b>{{ weekTotal }}</b></td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
         </table>
         </div>
         {% elif byTeamWeeks %}

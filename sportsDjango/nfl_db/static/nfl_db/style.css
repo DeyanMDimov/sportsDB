@@ -1018,3 +1018,8 @@ table thead tr th:first-child {
   font-weight: normal;
   font-size: 0.8em;
 }
+
+.byTeamTable .byTeamTotalRow th,
+.byTeamTable .byTeamTotalRow td {
+  border-top: 2px solid var(--bs-border-color);
+}

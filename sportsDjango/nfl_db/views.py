@@ -458,15 +458,15 @@ def getPlayers(request):
                 byTeamStat = 'rushingYards'
 
             byTeamSelected = nflTeam.objects.filter(abbreviation = byTeamAbbreviation).first()
-            byTeamWeeks, byTeamRows = [], []
+            byTeamWeeks, byTeamRows, byTeamTotalRow = [], [], None
             if byTeamSelected != None:
-                byTeamWeeks, byTeamRows = crudLogic.getTeamStatByWeek(byTeamSelected, byTeamYear, byTeamStat)
+                byTeamWeeks, byTeamRows, byTeamTotalRow = crudLogic.getTeamStatByWeek(byTeamSelected, byTeamYear, byTeamStat)
 
             return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage,
                 'byTeamActive': True, 'byTeamYear': byTeamYear, 'byTeamTeam': byTeamAbbreviation,
                 'byTeamTeamName': byTeamSelected.teamName if byTeamSelected else byTeamAbbreviation,
                 'byTeamStat': byTeamStat, 'byTeamStatLabel': crudLogic.PERFORMANCE_STAT_LABELS[byTeamStat],
-                'byTeamWeeks': byTeamWeeks, 'byTeamRows': byTeamRows})
+                'byTeamWeeks': byTeamWeeks, 'byTeamRows': byTeamRows, 'byTeamTotalRow': byTeamTotalRow})
 
         elif 'performancePlayer' in request.GET:
             inputReq = request.GET

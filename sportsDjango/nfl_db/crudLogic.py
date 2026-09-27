@@ -1913,7 +1913,8 @@ TEAM_WEEKLY_TD_STATS = ["rushingTds", "receivingTds"]
 
 def getTeamStatByWeek(team, seasonYear, statKey):
     # Players page -> By Team tab: every player with any of the chosen stat for
-    # this team in the season, one cell per game, best season first.
+    # this team in the season, one cell per game, best season first, plus the
+    # team's total for each game.
     seasonMatches = list(nflMatch.objects.filter(
         yearOfSeason = int(seasonYear),
     ).filter(
@@ -1931,7 +1932,7 @@ def getTeamStatByWeek(team, seasonYear, statKey):
         })
 
     if len(seasonMatches) == 0:
-        return weekColumns, []
+        return weekColumns, [], None
 
     weekByMatchId = {seasonMatch.id: seasonMatch.weekOfSeason for seasonMatch in seasonMatches}
 
@@ -1995,7 +1996,13 @@ def getTeamStatByWeek(team, seasonYear, statKey):
         })
 
     teamRows.sort(key = lambda teamRow: (-teamRow['seasonTotal'], teamRow['player'].name))
-    return weekColumns, teamRows
+
+    weekTotals = [sum(playerWeeks.get(weekNumber, 0) for playerWeeks in valuesByPlayerId.values()) for weekNumber in weekNumbers]
+    teamTotalRow = {
+        'seasonTotal': sum(weekTotals),
+        'weekTotals': weekTotals,
+    }
+    return weekColumns, teamRows, teamTotalRow
 
 
 def getPlayersForPerformanceFilters(seasonYear, team, playerPosition):
