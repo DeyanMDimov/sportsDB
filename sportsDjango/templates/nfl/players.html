@@ -8,15 +8,6 @@
         {% firstof athleteAvail jobResult jobError availabilityJobId responseMessage sel_Week as availabilityView %}
         <ul class="nav nav-tabs" id="playersTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}true{% else %}false{% endif %}">View Team Roster</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link {% if allPlayers %}active{% endif %}" id="positionTab" data-bs-toggle="tab" data-bs-target="#positionPane" type="button" role="tab" aria-controls="positionPane" aria-selected="{% if allPlayers %}true{% else %}false{% endif %}">Players by Position</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link {% if not allPlayers and availabilityView %}active{% endif %}" id="availabilityTab" data-bs-toggle="tab" data-bs-target="#availabilityPane" type="button" role="tab" aria-controls="availabilityPane" aria-selected="{% if not allPlayers and availabilityView %}true{% else %}false{% endif %}">Player Availability</button>
-            </li>
-            <li class="nav-item" role="presentation">
                 <button class="nav-link {% if performanceActive %}active{% endif %}" id="performanceTab" data-bs-toggle="tab" data-bs-target="#performancePane" type="button" role="tab" aria-controls="performancePane" aria-selected="{% if performanceActive %}true{% else %}false{% endif %}">Performances</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -24,6 +15,15 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if playerRankingActive %}active{% endif %}" id="playerRankingTab" data-bs-toggle="tab" data-bs-target="#playerRankingPane" type="button" role="tab" aria-controls="playerRankingPane" aria-selected="{% if playerRankingActive %}true{% else %}false{% endif %}">Rankings</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if not allPlayers and availabilityView %}active{% endif %}" id="availabilityTab" data-bs-toggle="tab" data-bs-target="#availabilityPane" type="button" role="tab" aria-controls="availabilityPane" aria-selected="{% if not allPlayers and availabilityView %}true{% else %}false{% endif %}">Player Availability</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}true{% else %}false{% endif %}">Team Roster</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if allPlayers %}active{% endif %}" id="positionTab" data-bs-toggle="tab" data-bs-target="#positionPane" type="button" role="tab" aria-controls="positionPane" aria-selected="{% if allPlayers %}true{% else %}false{% endif %}">Players by Position</button>
             </li>
         </ul>
 
