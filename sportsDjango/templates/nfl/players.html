@@ -6,9 +6,12 @@
         
         {% comment %}Which tab opens on load: whichever one produced what is on the page.{% endcomment %}
         {% firstof athleteAvail jobResult jobError availabilityJobId responseMessage sel_Week as availabilityView %}
+        {% comment %}With nothing on the page yet, open on Performances.{% endcomment %}
+        {% firstof viewRosterTeam allPlayers availabilityView byTeamActive playerRankingActive as otherTabView %}
+        {% if not otherTabView %}{% firstof "1" as performanceDefault %}{% endif %}
         <ul class="nav nav-tabs" id="playersTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link {% if performanceActive %}active{% endif %}" id="performanceTab" data-bs-toggle="tab" data-bs-target="#performancePane" type="button" role="tab" aria-controls="performancePane" aria-selected="{% if performanceActive %}true{% else %}false{% endif %}">Performances</button>
+                <button class="nav-link {% if performanceActive or performanceDefault %}active{% endif %}" id="performanceTab" data-bs-toggle="tab" data-bs-target="#performancePane" type="button" role="tab" aria-controls="performancePane" aria-selected="{% if performanceActive or performanceDefault %}true{% else %}false{% endif %}">Performances</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if byTeamActive %}active{% endif %}" id="byTeamTab" data-bs-toggle="tab" data-bs-target="#byTeamPane" type="button" role="tab" aria-controls="byTeamPane" aria-selected="{% if byTeamActive %}true{% else %}false{% endif %}">By Team</button>
@@ -20,7 +23,7 @@
                 <button class="nav-link {% if not allPlayers and availabilityView %}active{% endif %}" id="availabilityTab" data-bs-toggle="tab" data-bs-target="#availabilityPane" type="button" role="tab" aria-controls="availabilityPane" aria-selected="{% if not allPlayers and availabilityView %}true{% else %}false{% endif %}">Player Availability</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}true{% else %}false{% endif %}">Team Roster</button>
+                <button class="nav-link {% if viewRosterTeam %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam %}true{% else %}false{% endif %}">Team Roster</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if allPlayers %}active{% endif %}" id="positionTab" data-bs-toggle="tab" data-bs-target="#positionPane" type="button" role="tab" aria-controls="positionPane" aria-selected="{% if allPlayers %}true{% else %}false{% endif %}">Players by Position</button>
@@ -28,7 +31,7 @@
         </ul>
 
         <div class="tab-content border border-top-0 mb-3" id="playersTabsContent">
-            <div class="tab-pane fade {% if viewRosterTeam or not allPlayers and not performanceActive and not availabilityView and not byTeamActive and not playerRankingActive %}show active{% endif %}" id="viewRosterPane" role="tabpanel" aria-labelledby="viewRosterTab">
+            <div class="tab-pane fade {% if viewRosterTeam %}show active{% endif %}" id="viewRosterPane" role="tabpanel" aria-labelledby="viewRosterTab">
                 <form method="GET" class="p-3">
                     View the roster a team started the season with
                     <div class="row g-2">
@@ -145,7 +148,7 @@
                 </form>
             </div>
 
-            <div class="tab-pane fade {% if performanceActive %}show active{% endif %}" id="performancePane" role="tabpanel" aria-labelledby="performanceTab">
+            <div class="tab-pane fade {% if performanceActive or performanceDefault %}show active{% endif %}" id="performancePane" role="tabpanel" aria-labelledby="performanceTab">
                 <form method="GET" class="p-3">
                     Weekly performances for
                     <div class="row g-2">
@@ -863,12 +866,18 @@
             $(filterIds.join(", ")).on("change", reloadPerformancePlayers);
 
             // The dropdown is empty until a season/team/position has been asked
-            // for, so fill it once when the tab is first opened.
-            $("#performanceTab").one("shown.bs.tab", function () {
+            // for, so fill it once the tab is showing - right away if the page
+            // opened on it, otherwise the first time it is clicked.
+            function fillPerformancePlayersIfEmpty() {
                 if ($("#performancePlayer option").length === 0) {
                     reloadPerformancePlayers();
                 }
-            });
+            }
+            if ($("#performancePane").hasClass("active")) {
+                fillPerformancePlayersIfEmpty();
+            } else {
+                $("#performanceTab").one("shown.bs.tab", fillPerformancePlayersIfEmpty);
+            }
         })();
     </script>
 {% endblock %}
