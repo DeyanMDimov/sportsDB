@@ -1217,7 +1217,6 @@ def getPlays(request):
             
             pageDictionary['selectedYear'] = yearOfSeason
             pageDictionary['selectedWeek'] = weekOfSeason
-            pageDictionary['selectedTeam'] = selectedTeamAbbr
 
             resultArray = []
 
@@ -1226,6 +1225,8 @@ def getPlays(request):
                 teamsToProcess = nflTeam.objects.all()
             else:
                 teamsToProcess = [nflTeam.objects.get(abbreviation=selectedTeamAbbr)]
+                # The team dropdown reads the selected team's abbreviation off the object.
+                pageDictionary['selectedTeam'] = teamsToProcess[0]
             
             weeksToProcess = range(1, 19, 1) if weekOfSeason == 100 else [weekOfSeason]
 
@@ -1255,7 +1256,6 @@ def getPlays(request):
             
             pageDictionary['resultArray'] = resultArray
             pageDictionary['weekNum'] = weekOfSeason
-            pageDictionary['selectedTeam'] = selectedTeamAbbr
             pageDictionary['selectedYear'] = yearOfSeason
             
             return render(request, 'nfl/plays.html', pageDictionary)
