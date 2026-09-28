@@ -1265,6 +1265,16 @@ def getPlays(request):
     return render(request, 'nfl/plays.html', pageDictionary)
 
 
+# Rushing and passing touchdowns are stored as an ordinary RUSH or COMPLETED
+# PASS flagged as an offensive score, so name them for display.
+scoringPlayLabels = {1: "RUSHING TD", 2: "PASSING TD"}
+
+def playTypeLabel(play):
+    if play.scoringPlay and play.offenseScored and play.playType in scoringPlayLabels:
+        return scoringPlayLabels[play.playType]
+    return play.get_playType_display()
+
+
 def retrievePlaysForMatch(s_match, teamId):
     """
     Retrieve all plays for a match, organized by drives.
@@ -1279,12 +1289,14 @@ def retrievePlaysForMatch(s_match, teamId):
     result_drives_array = []
     
     for s_drive in drives:
-        # Get all plays for this drive, sorted by sequence
-        plays = playByPlay.objects.filter(driveOfPlay=s_drive).order_by('sequenceNumber')
+        # Get all plays for this drive, sorted by sequence. Official timeouts
+        # aren't plays anyone is looking for, so leave them out.
+        plays = playByPlay.objects.filter(driveOfPlay=s_drive).exclude(playType=34).order_by('sequenceNumber')
         
         result_plays_array = []
         
         for play in plays:
+            play.displayType = playTypeLabel(play)
             # Attach existing stat splits to the play object for display
             play.passer_stats = passerStatSplit.objects.filter(play=play).first()
             play.rusher_stats = rusherStatSplit.objects.filter(play=play).first()

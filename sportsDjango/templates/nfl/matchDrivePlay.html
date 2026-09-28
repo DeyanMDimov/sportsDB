@@ -21,15 +21,9 @@
                         <tr class="indiv-play">
                             <td class="plays-col-quarter">Q{{play.quarter}}</td>
                             <td class="plays-col-time"> {{play.displayClockTime}}</td>
-                            <td class="plays-col-type">{{play.get_playType_display}}</td>
+                            <td class="plays-col-type">{{play.displayType}}</td>
+                            <td class="plays-col-down">{% if play.playDown > 0 and play.playType != 28 %}{{play.playDown}} &amp; {{play.distanceTilFirstDown}}{% endif %}</td>
                             <td class="plays-col-yards">{{play.yardsOnPlay}}</td>
-                            {% if play.get_playType_display == "KICKOFF" or play.get_playType_display == "OFFICIAL TIMEOUT" %}
-                            <td class="plays-col-down"></td>
-                            <td class="plays-col-time"></td>
-                            {% else %}
-                            <td class="plays-col-down">{{play.playDown}}</td>
-                            <td class="plays-col-time">&amp; {{play.distanceTilFirstDown}}</td>
-                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>

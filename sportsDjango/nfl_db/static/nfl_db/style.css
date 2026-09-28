@@ -589,6 +589,7 @@ table thead tr th:first-child {
 .plays-in-drive-table
 {
   border: none;
+  width: auto;
 }
 
 .plays-col-quarter{
@@ -601,13 +602,13 @@ table thead tr th:first-child {
   width: 350px;
 }
 .plays-col-yards{
-  width: 30px;
+  width: 50px;
   text-align:right;
 }
 
 .plays-col-down{
-  padding-left:30px;
-  width: 42px;
+  width: 80px;
+  white-space: nowrap;
 }
 
 #prev-week-arrow a, #next-week-arrow a{
