@@ -1,0 +1,19 @@
+{% comment %}
+Tabs across the model pages. They are separate views, so these are links
+rather than Bootstrap tab panes; the caller says which one it is with
+{% include 'nfl/modelTabs.html' with activeModelTab='predictions' %}
+{% endcomment %}
+<ul class="nav nav-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if activeModelTab == 'predictions' %}active{% endif %}" href="/loadModel"
+           {% if activeModelTab == 'predictions' %}aria-current="page"{% endif %}>Generate Predictions</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if activeModelTab == 'weekly' %}active{% endif %}" href="/loadModelSummary"
+           {% if activeModelTab == 'weekly' %}aria-current="page"{% endif %}>Weekly Summary</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link {% if activeModelTab == 'yearly' %}active{% endif %}" href="/loadYearlySummary"
+           {% if activeModelTab == 'yearly' %}aria-current="page"{% endif %}>Yearly Summary</a>
+    </li>
+</ul>

@@ -3,6 +3,7 @@
 {% load bootstrap_icons %}
 {% block loadModel %}
     <div class = "container">
+        {% include 'nfl/modelTabs.html' with activeModelTab='weekly' %}
         
        <div>
             Plug data into model for:

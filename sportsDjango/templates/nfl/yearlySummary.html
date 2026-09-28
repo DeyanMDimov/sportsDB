@@ -3,6 +3,7 @@
 {% load templateFilters%}
 {% block loadYearlySummary %}
     <div class = "container">
+        {% include 'nfl/modelTabs.html' with activeModelTab='yearly' %}
         
         <div>
             Get Games for :

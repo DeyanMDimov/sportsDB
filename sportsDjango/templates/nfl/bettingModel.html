@@ -3,6 +3,7 @@
 
 {% block loadModel %}
     <div class = "container">
+        {% include 'nfl/modelTabs.html' with activeModelTab='predictions' %}
         <div>
             <form method="GET" class="p-3">
                 Plug data into model for:
