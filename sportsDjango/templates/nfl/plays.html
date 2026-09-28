@@ -3,43 +3,127 @@
 {% load templateFilters%}
 {% block plays %}
     <div class = "container">
-        
-        <div>
-            <form method="GET" class="p-3">
-                Get plays for:
-                <div class="row g-2">
-                    <div class="mb-1 col-2">
-                        <div class="form-floating">
-                            <select name="season" id="season" class="form-control">
-                                {% for yr in years %}
-                                <option value="{{yr}}" 
-                                {%if yr|stringformat:"i" == selectedYear %}
-                                        selected
-                                    {% endif %} >{{yr}}</option>    
-                                {% endfor %} 
-                            </select> 
-                            <label for="season">Season:</label>
+        <ul class="nav nav-tabs" id="playsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if not filterActive %}active{% endif %}" id="byMatchTab" data-bs-toggle="tab" data-bs-target="#byMatchPane" type="button" role="tab" aria-controls="byMatchPane" aria-selected="{% if not filterActive %}true{% else %}false{% endif %}">By Match</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if filterActive %}active{% endif %}" id="byFilterTab" data-bs-toggle="tab" data-bs-target="#byFilterPane" type="button" role="tab" aria-controls="byFilterPane" aria-selected="{% if filterActive %}true{% else %}false{% endif %}">By Filter</button>
+            </li>
+        </ul>
+
+        <div class="tab-content border border-top-0 mb-3" id="playsTabsContent">
+            <div class="tab-pane fade {% if not filterActive %}show active{% endif %}" id="byMatchPane" role="tabpanel" aria-labelledby="byMatchTab">
+                <form method="GET" class="p-3">
+                    Get plays for:
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="season" id="season" class="form-control">
+                                    {% for yr in years %}
+                                    <option value="{{yr}}" 
+                                    {%if yr|stringformat:"i" == selectedYear %}
+                                            selected
+                                        {% endif %} >{{yr}}</option>    
+                                    {% endfor %} 
+                                </select> 
+                                <label for="season">Season:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="week" id="week" class="form-control">
+                                    {% for wk in weeks %}
+                                    <option value="{{wk.0}}"
+                                        {% if wk.0 == selectedWeek %}
+                                            selected
+                                        {% endif %} > {{ wk.1 }}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="week">Week:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            {% include 'nfl/teamDropdown.html' %}
                         </div>
                     </div>
-                    <div class="mb-1 col-2">
-                        <div class="form-floating">
-                            <select name="week" id="week" class="form-control">
-                                {% for wk in weeks %}
-                                <option value="{{wk.0}}"
-                                    {% if wk.0 == selectedWeek %}
-                                        selected
-                                    {% endif %} > {{ wk.1 }}</option>
-                                {% endfor %}
-                            </select>
-                            <label for="week">Week:</label>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+
+            <div class="tab-pane fade {% if filterActive %}show active{% endif %}" id="byFilterPane" role="tabpanel" aria-labelledby="byFilterTab">
+                <form method="GET" class="p-3">
+                    Find plays matching:
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="filterSeason" id="filterSeason" class="form-control">
+                                    {% for yr in years %}
+                                    <option value="{{yr}}" {% if yr|stringformat:"i" == filterSeason %}selected{% endif %}>{{yr}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="filterSeason">Season:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="filterWeek" id="filterWeek" class="form-control">
+                                    <option value="">All</option>
+                                    {% for wk in filterWeeks %}
+                                    <option value="{{wk.0}}" {% if wk.0|stringformat:"i" == filterWeek %}selected{% endif %}>{{wk.1}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="filterWeek">Week:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="filterTeam" id="filterTeam" class="form-control">
+                                    <option value="">All</option>
+                                    {% for team in teams %}
+                                    <option value="{{team.abbreviation}}" {% if team.abbreviation == filterTeam %}selected{% endif %}>{{team.abbreviation}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="filterTeam">Team:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="filterType" id="filterType" class="form-control">
+                                    <option value="">All</option>
+                                    {% for value, label in filterTypes %}
+                                    <option value="{{value}}" {% if value == filterType %}selected{% endif %}>{{label}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="filterType">Type:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="filterDown" id="filterDown" class="form-control">
+                                    <option value="">Any</option>
+                                    {% for down in "1234" %}
+                                    <option value="{{down}}" {% if down == filterDown %}selected{% endif %}>{{down}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="filterDown">Down:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="filterFieldPos" id="filterFieldPos" class="form-control">
+                                    <option value="">Any</option>
+                                    {% for value, label, query in filterFieldPositions %}
+                                    <option value="{{value}}" {% if value == filterFieldPos %}selected{% endif %}>{{label}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="filterFieldPos">Field Pos:</label>
+                            </div>
                         </div>
                     </div>
-                    <div class="mb-1 col-2">
-                        {% include 'nfl/teamDropdown.html' %}
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-outline-primary">Load!</button>
-            </form>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
         </div>
         {% if responseMessage %}
         <h2>{{responseMessage}}</h2>
@@ -109,6 +193,46 @@
                     {% include 'nfl/matchDrivePlay.html' with result=result %}
                 {%endfor%} 
             </div>
+        {% endif %}
+        {% if filterActive %}
+            <h3>
+                {{ filteredPlayCount }} play{{ filteredPlayCount|pluralize }}
+                {% if filteredPlayCount > filterRowLimit %}<small class="text-muted">(showing the first {{ filterRowLimit }} - narrow the filters to see the rest)</small>{% endif %}
+            </h3>
+            {% if filteredPlays %}
+            <table class="table table-striped table-sm mt-2 filtered-plays-table">
+                <thead>
+                    <tr class="text-nowrap">
+                        <th>Week</th>
+                        <th>Match</th>
+                        <th>Offense</th>
+                        <th>Qtr</th>
+                        <th>Time</th>
+                        <th>Type</th>
+                        <th>Down</th>
+                        <th>Ball On</th>
+                        <th class="text-end">Yards</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for play in filteredPlays %}
+                    <tr>
+                        <td>{{ play.nflMatch.weekOfSeason }}</td>
+                        <td class="text-nowrap">{{ play.matchLabel }}</td>
+                        <td>{{ play.teamOnOffense.abbreviation }}</td>
+                        <td>Q{{ play.quarter }}</td>
+                        <td>{{ play.displayClockTime }}</td>
+                        <td class="text-nowrap">{{ play.displayType }}</td>
+                        <td class="text-nowrap">{% if play.playDown > 0 and play.playType != 28 %}{{ play.playDown }} &amp; {{ play.distanceTilFirstDown }}{% endif %}</td>
+                        <td class="text-nowrap">{{ play.fieldPosLabel }}</td>
+                        <td class="text-end">{{ play.yardsOnPlay }}</td>
+                        <td class="filtered-play-description">{{ play.playDescription }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
         {% endif %}
     </div>
     

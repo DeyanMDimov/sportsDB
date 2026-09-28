@@ -1024,3 +1024,8 @@ table thead tr th:first-child {
 .byTeamTable .byTeamTotalRow td {
   border-top: 2px solid var(--bs-border-color);
 }
+
+.filtered-play-description{
+  font-size: 0.85em;
+  color: #9ca3af;
+}

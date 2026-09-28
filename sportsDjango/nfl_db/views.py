@@ -1207,9 +1207,15 @@ def getPlays(request):
     pageDictionary['weeks'] = weeksOnPage
     pageDictionary['years'] = yearsOnPage
     pageDictionary['teams'] = nflTeams
+    pageDictionary['filterWeeks'] = weeksOnPage_Helper()
+    pageDictionary['filterTypes'] = playFilterTypeOptions()
+    pageDictionary['filterFieldPositions'] = playFilterFieldPositions
     
     if request.method == 'GET':
-        if 'week' in request.GET and 'teamName' in request.GET:
+        if 'filterSeason' in request.GET:
+            pageDictionary.update(getFilteredPlays(request.GET, nflTeams))
+            return render(request, 'nfl/plays.html', pageDictionary)
+        elif 'week' in request.GET and 'teamName' in request.GET:
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
             weekOfSeason = int(inputReq['week'].strip())
@@ -1263,6 +1269,81 @@ def getPlays(request):
             return render(request, 'nfl/plays.html', pageDictionary)
     
     return render(request, 'nfl/plays.html', pageDictionary)
+
+
+# Plays page "By Filter" tab.
+# Timeouts, end of period and the like aren't plays, so they are never offered or listed.
+nonPlayTypes = [33, 34, 35, 36, 37, 38, 39]
+# Field position is stored as yards from the end zone the offense is attacking.
+playFilterFieldPositions = [
+    ("redZone", "Red zone", models.Q(yardsFromEndzone__lte = 20)),
+    ("opponentHalf", "Opponent half", models.Q(yardsFromEndzone__lt = 50)),
+    ("ownHalf", "Own half", models.Q(yardsFromEndzone__gte = 50)),
+]
+# Filtered results are capped - a whole season is ~50k plays.
+playFilterRowLimit = 500
+
+def playFilterTypeOptions():
+    options = []
+    for value, label in playByPlay.playTypes:
+        if value in nonPlayTypes:
+            continue
+        options.append((str(value), label))
+        # Rushing and passing TDs are only a flag on a RUSH / COMPLETED PASS,
+        # but they're worth filtering on directly.
+        if value in scoringPlayLabels:
+            options.append((str(value) + "td", scoringPlayLabels[value]))
+    return options
+
+def getFilteredPlays(inputReq, nflTeams):
+    filterSeason = inputReq.get('filterSeason', '').strip()
+    filterWeek = inputReq.get('filterWeek', '').strip()
+    filterTeam = inputReq.get('filterTeam', '').strip()
+    filterType = inputReq.get('filterType', '').strip()
+    filterDown = inputReq.get('filterDown', '').strip()
+    filterFieldPos = inputReq.get('filterFieldPos', '').strip()
+
+    plays = playByPlay.objects.filter(nflMatch__yearOfSeason = filterSeason).exclude(playType__in = nonPlayTypes)
+    if filterWeek:
+        plays = plays.filter(nflMatch__weekOfSeason = filterWeek)
+    if filterTeam:
+        plays = plays.filter(teamOnOffense__abbreviation = filterTeam)
+    if filterType.endswith("td"):
+        plays = plays.filter(playType = filterType[:-2], scoringPlay = True, offenseScored = True)
+    elif filterType:
+        plays = plays.filter(playType = filterType)
+    if filterDown:
+        plays = plays.filter(playDown = filterDown)
+    for value, label, fieldPosQuery in playFilterFieldPositions:
+        if filterFieldPos == value:
+            plays = plays.filter(fieldPosQuery)
+
+    playCount = plays.count()
+    plays = list(plays.select_related('nflMatch', 'teamOnOffense')
+                 .order_by('nflMatch__weekOfSeason', 'nflMatch_id', 'sequenceNumber')[:playFilterRowLimit])
+
+    teamsByEspnId = {t.espnId: t.abbreviation for t in nflTeams}
+    for play in plays:
+        match = play.nflMatch
+        offenseIsHome = play.teamOnOffense.espnId == match.homeTeamEspnId
+        defenseAbbr = teamsByEspnId.get(match.awayTeamEspnId if offenseIsHome else match.homeTeamEspnId, "")
+        play.displayType = playTypeLabel(play)
+        play.matchLabel = teamsByEspnId.get(match.awayTeamEspnId, "") + " @ " + teamsByEspnId.get(match.homeTeamEspnId, "")
+        play.defenseAbbr = defenseAbbr
+        # Show the line of scrimmage the way a broadcast would, e.g. "BUF 24" / "DET 38".
+        if play.yardsFromEndzone > 50:
+            play.fieldPosLabel = play.teamOnOffense.abbreviation + " " + str(100 - play.yardsFromEndzone)
+        elif play.yardsFromEndzone < 50:
+            play.fieldPosLabel = defenseAbbr + " " + str(play.yardsFromEndzone)
+        else:
+            play.fieldPosLabel = "50"
+
+    return {
+        'filterActive': True,
+        'filterSeason': filterSeason, 'filterWeek': filterWeek, 'filterTeam': filterTeam,
+        'filterType': filterType, 'filterDown': filterDown, 'filterFieldPos': filterFieldPos,
+        'filteredPlays': plays, 'filteredPlayCount': playCount, 'filterRowLimit': playFilterRowLimit,
+    }
 
 
 # Rushing and passing touchdowns are stored as an ordinary RUSH or COMPLETED
