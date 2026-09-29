@@ -627,6 +627,10 @@ table thead tr th:first-child {
   white-space: nowrap;
 }
 
+.filtered-plays-table thead th{
+  font-size: 11pt;
+}
+
 #prev-week-arrow a, #next-week-arrow a{
   color:#fff !important;
 }
