@@ -91,11 +91,22 @@
                             <div class="form-floating">
                                 <select name="filterType" id="filterType" class="form-control">
                                     <option value="">All</option>
-                                    {% for value, label in filterTypes %}
-                                    <option value="{{value}}" {% if value == filterType %}selected{% endif %}>{{label}}</option>
+                                    {% for value, label, directionGroup in filterTypes %}
+                                    <option value="{{value}}" data-direction-group="{{directionGroup}}" {% if value == filterType %}selected{% endif %}>{{label}}</option>
                                     {% endfor %}
                                 </select>
                                 <label for="filterType">Type:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="filterDirection" id="filterDirection" class="form-control">
+                                    <option value="">Any</option>
+                                    {% for value, label, directionGroup in filterDirections %}
+                                    <option value="{{value}}" data-direction-group="{{directionGroup}}" {% if value == filterDirection %}selected{% endif %}>{{label}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="filterDirection">Direction:</label>
                             </div>
                         </div>
                         <div class="mb-1 col-2">
@@ -226,6 +237,7 @@
                         <th>Qtr</th>
                         <th>Time</th>
                         <th>Type</th>
+                        <th>Direction</th>
                         <th>Down</th>
                         <th>Ball On</th>
                         <th class="text-end">Yards</th>
@@ -244,6 +256,7 @@
                         <td>Q{{ play.quarter }}</td>
                         <td>{{ play.displayClockTime }}</td>
                         <td class="text-nowrap">{{ play.displayType }}</td>
+                        <td class="text-nowrap">{{ play.directionLabel }}</td>
                         <td class="text-nowrap">{% if play.playDown > 0 and play.playType != 28 %}{{ play.playDown }} &amp; {{ play.distanceTilFirstDown }}{% endif %}</td>
                         <td class="text-nowrap">{{ play.fieldPosLabel }}</td>
                         <td class="text-end">{{ play.yardsOnPlay }}</td>
@@ -258,5 +271,27 @@
             {% endif %}
         {% endif %}
     </div>
-    
+
+    <script>
+        // Direction only means something for runs and passes, and the two have
+        // different directions, so it follows whatever Type is picked.
+        (function () {
+            var typeSelect = document.getElementById("filterType");
+            var directionSelect = document.getElementById("filterDirection");
+
+            function syncDirectionOptions() {
+                var group = typeSelect.selectedOptions[0].dataset.directionGroup;
+                Array.prototype.forEach.call(directionSelect.options, function (option) {
+                    option.hidden = option.value !== "" && option.dataset.directionGroup !== group;
+                });
+                if (directionSelect.selectedOptions[0].hidden) {
+                    directionSelect.value = "";
+                }
+                directionSelect.disabled = !group;
+            }
+
+            typeSelect.addEventListener("change", syncDirectionOptions);
+            syncDirectionOptions();
+        })();
+    </script>
 {% endblock %}

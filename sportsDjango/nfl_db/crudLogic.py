@@ -1208,6 +1208,8 @@ def createPlayByPlay (individualPlay, driveEspnId, matchData, offenseTeam):
         print(individualPlay['text'])
         raise(e)
 
+    createdPlay.playDirection = playByPlay.directionFromDescription(createdPlay.playType, createdPlay.playDescription)
+
     if createdPlay.playType in [15, 16, 19, 20]:  # Interception and fumble plays
         createdPlay.turnover = True
 

@@ -1211,6 +1211,7 @@ def getPlays(request):
     pageDictionary['filterTypes'] = playFilterTypeOptions()
     pageDictionary['filterFieldPositions'] = playFilterFieldPositions
     pageDictionary['filterYardOptions'] = playFilterYards
+    pageDictionary['filterDirections'] = playFilterDirectionOptions()
     
     if request.method == 'GET':
         if 'filterSeason' in request.GET:
@@ -1303,9 +1304,18 @@ playerStatSplitPriority = [receiverStatSplit, rusherStatSplit, passerStatSplit, 
 # the touchdown play (see patResult) - so there's nothing to filter on for them.
 patPlayTypes = range(5, 13)
 
+# Direction can only be picked once a Type is, and which directions make sense depends on it.
+directionGroupByPlayType = {1: "run", 2: "pass", 3: "pass", 15: "pass"}
+
+def directionGroup(direction):
+    return "run" if direction in playByPlay.runDirections else "pass"
+
 def playFilterTypeOptions():
-    return [(str(value), prettyPlayType(label)) for value, label in playByPlay.playTypes
+    return [(str(value), prettyPlayType(label), directionGroupByPlayType.get(value, "")) for value, label in playByPlay.playTypes
             if value not in nonPlayTypes and value not in touchdownPlayTypeBase and value not in patPlayTypes]
+
+def playFilterDirectionOptions():
+    return [(str(value), prettyPlayType(label), directionGroup(value)) for value, label in playByPlay.playDirections]
 
 def patResult(description):
     """Extra point / two-point try after a touchdown, read from the play description."""
@@ -1338,6 +1348,7 @@ def getFilteredPlays(inputReq, nflTeams):
     filterFieldPos = inputReq.get('filterFieldPos', '').strip()
     filterYards = inputReq.get('filterYards', '').strip()
     filterTouchdown = inputReq.get('filterTouchdown', '') == 'true'
+    filterDirection = inputReq.get('filterDirection', '').strip()
 
     plays = playByPlay.objects.filter(nflMatch__yearOfSeason = filterSeason).exclude(playType__in = nonPlayTypes)
     if filterWeek:
@@ -1347,6 +1358,13 @@ def getFilteredPlays(inputReq, nflTeams):
     if filterType:
         typeValue = int(filterType)
         plays = plays.filter(playType__in = [typeValue] + [t for t, base in touchdownPlayTypeBase.items() if base == typeValue])
+        # Ignore a direction left over from a different kind of play.
+        if filterDirection and directionGroupByPlayType.get(typeValue) == directionGroup(int(filterDirection)):
+            plays = plays.filter(playDirection = filterDirection)
+        else:
+            filterDirection = ''
+    else:
+        filterDirection = ''
     if filterDown:
         plays = plays.filter(playDown = filterDown)
     for value, label, fieldPosQuery in playFilterFieldPositions:
@@ -1375,6 +1393,7 @@ def getFilteredPlays(inputReq, nflTeams):
         offenseIsHome = play.teamOnOffense.espnId == match.homeTeamEspnId
         defenseAbbr = teamsByEspnId.get(match.awayTeamEspnId if offenseIsHome else match.homeTeamEspnId, "")
         play.displayType = prettyPlayType(playTypeNames[touchdownPlayTypeBase.get(play.playType, play.playType)])
+        play.directionLabel = prettyPlayType(play.get_playDirection_display()) if play.playDirection else ""
         play.isTouchdown = bool(play.scoringPlay and play.pointsScored == 6)
         play.patResult = patResult(play.playDescription) if play.isTouchdown else ""
         play.ballCarrier = playerByPlayId.get(play.id)
@@ -1392,19 +1411,21 @@ def getFilteredPlays(inputReq, nflTeams):
         'filterActive': True,
         'filterSeason': filterSeason, 'filterWeek': filterWeek, 'filterTeam': filterTeam,
         'filterType': filterType, 'filterDown': filterDown, 'filterFieldPos': filterFieldPos,
-        'filterYards': filterYards, 'filterTouchdown': filterTouchdown,
+        'filterYards': filterYards, 'filterTouchdown': filterTouchdown, 'filterDirection': filterDirection,
         'filteredPlays': plays, 'filteredPlayCount': playCount, 'filterRowLimit': playFilterRowLimit,
         'filteredHasTouchdown': any(play.isTouchdown for play in plays),
     }
 
 
 # Play types are stored in capitals ("COMPLETED PASS"); show them as "Completed Pass",
-# keeping abbreviations like PAT, FG, QB and 2PT in capitals ("End of Half" keeps "of" small).
+# keeping abbreviations like PAT, FG, QB and 2PT in capitals and small words small
+# ("End of Half", "Up the Middle").
 playTypeAbbreviations = {"PAT", "FG", "QB", "TD", "2PT"}
+playTypeSmallWords = {"Of", "The"}
 
 def prettyPlayType(label):
     words = [word if word in playTypeAbbreviations else word.title() for word in label.split(" ")]
-    return " ".join(word.lower() if word == "Of" and i > 0 else word for i, word in enumerate(words))
+    return " ".join(word.lower() if word in playTypeSmallWords and i > 0 else word for i, word in enumerate(words))
 
 
 # Rushing and passing touchdowns are stored as an ordinary RUSH or COMPLETED

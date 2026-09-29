@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
+import re
 
 
 
@@ -317,6 +318,25 @@ class playByPlay(models.Model):
     yardsOnPlay = models.SmallIntegerField(null = True, blank = True)
     playDown = models.SmallIntegerField(validators = [MinValueValidator(0), MaxValueValidator(4)], null = True, blank = True)
     distanceTilFirstDown = models.SmallIntegerField(null = True, blank = True)
+    # Where a run or pass went, read out of the play description ("left guard", "deep middle").
+    playDirections = (
+        (1, "LEFT END"),
+        (2, "LEFT TACKLE"),
+        (3, "LEFT GUARD"),
+        (4, "UP THE MIDDLE"),
+        (5, "RIGHT GUARD"),
+        (6, "RIGHT TACKLE"),
+        (7, "RIGHT END"),
+        (11, "SHORT LEFT"),
+        (12, "SHORT MIDDLE"),
+        (13, "SHORT RIGHT"),
+        (14, "DEEP LEFT"),
+        (15, "DEEP MIDDLE"),
+        (16, "DEEP RIGHT"),
+    )
+    runDirections = [1, 2, 3, 4, 5, 6, 7]
+    passDirections = [11, 12, 13, 14, 15, 16]
+    playDirection = models.SmallIntegerField(choices = playDirections, null = True, blank = True)
     # rusher = models.ManyToManyField(player, blank = True, related_name = 'ballCarrier')
     # passer = models.ManyToManyField(player, blank = True, related_name = 'passer')
     # reciever = models.ManyToManyField(player, blank = True, related_name = 'receiver')
@@ -332,6 +352,23 @@ class playByPlay(models.Model):
     displayClockTime = models.CharField(max_length = 5, null=True, blank=True)
     secondsRemainingInPeriod = models.SmallIntegerField(null=True, blank=True)
     sequenceNumber = models.IntegerField(null=True, blank=True)
+
+    # Kicks, punts, returns and clock stoppages never have a run/pass direction.
+    directionlessPlayTypes = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 24, 25, 26, 27, 28, 29, 33, 34, 35, 36, 37, 38, 39, 41]
+    directionPattern = re.compile(r'\b(' + '|'.join(label.lower() for value, label in playDirections) + r')\b')
+
+    @staticmethod
+    def directionFromDescription(playType, description):
+        """
+        The first direction phrase in the description is the play itself - later
+        ones belong to two-point tries, penalties or replay notes.
+        """
+        if playType in playByPlay.directionlessPlayTypes or not description:
+            return None
+        found = playByPlay.directionPattern.search(description)
+        if found == None:
+            return None
+        return next(value for value, label in playByPlay.playDirections if label.lower() == found.group(1))
 
 
 #-------Player Models-------#
