@@ -234,8 +234,7 @@
                         <th>Week</th>
                         <th>Match</th>
                         <th>Offense</th>
-                        <th>Qtr</th>
-                        <th>Time</th>
+                        <th>Quarter</th>
                         <th>Type</th>
                         <th>Direction</th>
                         <th>Down</th>
@@ -253,8 +252,7 @@
                         <td>{{ play.nflMatch.weekOfSeason }}</td>
                         <td class="text-nowrap">{{ play.matchLabel }}</td>
                         <td>{{ play.teamOnOffense.abbreviation }}</td>
-                        <td>Q{{ play.quarter }}</td>
-                        <td>{{ play.displayClockTime }}</td>
+                        <td class="text-nowrap">Q{{ play.quarter }} {{ play.displayClockTime }}</td>
                         <td class="text-nowrap">{{ play.displayType }}</td>
                         <td class="text-nowrap">{{ play.directionLabel }}</td>
                         <td class="text-nowrap">{% if play.playDown > 0 and play.playType != 28 %}{{ play.playDown }} &amp; {{ play.distanceTilFirstDown }}{% endif %}</td>
