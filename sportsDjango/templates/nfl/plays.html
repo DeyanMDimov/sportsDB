@@ -241,7 +241,7 @@
                         <th>Down</th>
                         <th>Ball On</th>
                         <th class="text-end">Yards</th>
-                        <th>Player</th>
+                        <th class="ps-4">Player</th>
                         <th>Position</th>
                         <th>TD</th>
                         {% if filteredHasTouchdown %}<th>PAT</th>{% endif %}
@@ -260,7 +260,7 @@
                         <td class="text-nowrap">{% if play.playDown > 0 and play.playType != 28 %}{{ play.playDown }} &amp; {{ play.distanceTilFirstDown }}{% endif %}</td>
                         <td class="text-nowrap">{{ play.fieldPosLabel }}</td>
                         <td class="text-end">{{ play.yardsOnPlay }}</td>
-                        <td class="text-nowrap">{{ play.ballCarrier.name }}</td>
+                        <td class="text-nowrap ps-4">{{ play.ballCarrier.name }}</td>
                         <td>{{ play.ballCarrier.get_playerPosition_display }}</td>
                         <td>{% if play.isTouchdown %}Yes{% endif %}</td>
                         {% if filteredHasTouchdown %}<td>{{ play.patResult }}</td>{% endif %}
