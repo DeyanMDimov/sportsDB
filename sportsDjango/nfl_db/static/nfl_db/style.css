@@ -248,6 +248,22 @@ thead th {
   color: #dbeafe !important; /* your desired text color */
 }
 
+/* Bootstrap's disabled look is a light grey box - keep it dark, just dimmed */
+.form-control:disabled, .form-select:disabled {
+  background-color: #181b21;
+  color: #6b7280;
+  border-color: #2a2e38;
+  cursor: not-allowed;
+}
+.form-floating > .form-control:disabled ~ label,
+.form-floating > .form-select:disabled ~ label {
+  color: #6b7280 !important;
+}
+.form-floating > .form-control:disabled ~ label::after,
+.form-floating > .form-select:disabled ~ label::after {
+  background-color: transparent !important;
+}
+
 /* ==========================
    Cards, Modals, Alerts
    ========================== */
