@@ -1210,6 +1210,7 @@ def getPlays(request):
     pageDictionary['filterWeeks'] = weeksOnPage_Helper()
     pageDictionary['filterTypes'] = playFilterTypeOptions()
     pageDictionary['filterFieldPositions'] = playFilterFieldPositions
+    pageDictionary['filterYardOptions'] = playFilterYards
     
     if request.method == 'GET':
         if 'filterSeason' in request.GET:
@@ -1274,26 +1275,59 @@ def getPlays(request):
 # Plays page "By Filter" tab.
 # Timeouts, end of period and the like aren't plays, so they are never offered or listed.
 nonPlayTypes = [33, 34, 35, 36, 37, 38, 39]
+# Return touchdowns have their own play types, but they're listed as the base
+# play with the TD column set, so they fold into that type everywhere here.
+touchdownPlayTypeBase = {16: 15, 18: 17, 20: 19}
 # Field position is stored as yards from the end zone the offense is attacking.
 playFilterFieldPositions = [
     ("redZone", "Red zone", models.Q(yardsFromEndzone__lte = 20)),
     ("opponentHalf", "Opponent half", models.Q(yardsFromEndzone__lt = 50)),
     ("ownHalf", "Own half", models.Q(yardsFromEndzone__gte = 50)),
 ]
+playFilterYards = [
+    ("loss", "Loss", models.Q(yardsOnPlay__lt = 0)),
+    ("0to4", "0 to 4", models.Q(yardsOnPlay__gte = 0, yardsOnPlay__lte = 4)),
+    ("5to9", "5 to 9", models.Q(yardsOnPlay__gte = 5, yardsOnPlay__lte = 9)),
+    ("10plus", "10+", models.Q(yardsOnPlay__gte = 10)),
+    ("20plus", "20+", models.Q(yardsOnPlay__gte = 20)),
+    ("40plus", "40+", models.Q(yardsOnPlay__gte = 40)),
+]
+touchdownQuery = models.Q(scoringPlay = True, pointsScored = 6)
 # Filtered results are capped - a whole season is ~50k plays.
 playFilterRowLimit = 500
+# Whoever had the ball: the receiver on a catch, the rusher on a run, the passer
+# on an incompletion or sack, the returner on an interception, punt or kickoff.
+playerStatSplitPriority = [receiverStatSplit, rusherStatSplit, passerStatSplit, returnerStatSplit]
+
+# PAT and two-point tries are never stored as plays of their own - the try is part of
+# the touchdown play (see patResult) - so there's nothing to filter on for them.
+patPlayTypes = range(5, 13)
 
 def playFilterTypeOptions():
-    options = []
-    for value, label in playByPlay.playTypes:
-        if value in nonPlayTypes:
-            continue
-        options.append((str(value), label))
-        # Rushing and passing TDs are only a flag on a RUSH / COMPLETED PASS,
-        # but they're worth filtering on directly.
-        if value in scoringPlayLabels:
-            options.append((str(value) + "td", scoringPlayLabels[value]))
-    return options
+    return [(str(value), prettyPlayType(label)) for value, label in playByPlay.playTypes
+            if value not in nonPlayTypes and value not in touchdownPlayTypeBase and value not in patPlayTypes]
+
+def patResult(description):
+    """Extra point / two-point try after a touchdown, read from the play description."""
+    d = description or ""
+    extraPoint = re.search(r"extra point is (\w+)", d, re.I)
+    if extraPoint:
+        return "Good" if extraPoint.group(1).upper() == "GOOD" else "Miss"
+    twoPoint = re.search(r"TWO-POINT CONVERSION ATTEMPT.*?ATTEMPT (SUCCEEDS|FAILS)", d)
+    if twoPoint:
+        return "Good (2PT)" if twoPoint.group(1) == "SUCCEEDS" else "Miss (2PT)"
+    # Older short-form descriptions: "... (Jake Elliott Kick)", "(Wil Lutz PAT failed)",
+    # "(Two-Point Run Conversion Failed)", "(James Conner Run for Two-Point Conversion)".
+    tail = re.search(r"\(([^()]*)\)\.?\s*$", d)
+    if tail:
+        tail = tail.group(1)
+        if "Two-Point" in tail:
+            return "Miss (2PT)" if "Failed" in tail else "Good (2PT)"
+        if tail.endswith("Kick"):
+            return "Good"
+        if re.search(r"PAT (failed|blocked)", tail):
+            return "Miss"
+    return ""
 
 def getFilteredPlays(inputReq, nflTeams):
     filterSeason = inputReq.get('filterSeason', '').strip()
@@ -1302,32 +1336,48 @@ def getFilteredPlays(inputReq, nflTeams):
     filterType = inputReq.get('filterType', '').strip()
     filterDown = inputReq.get('filterDown', '').strip()
     filterFieldPos = inputReq.get('filterFieldPos', '').strip()
+    filterYards = inputReq.get('filterYards', '').strip()
+    filterTouchdown = inputReq.get('filterTouchdown', '') == 'true'
 
     plays = playByPlay.objects.filter(nflMatch__yearOfSeason = filterSeason).exclude(playType__in = nonPlayTypes)
     if filterWeek:
         plays = plays.filter(nflMatch__weekOfSeason = filterWeek)
     if filterTeam:
         plays = plays.filter(teamOnOffense__abbreviation = filterTeam)
-    if filterType.endswith("td"):
-        plays = plays.filter(playType = filterType[:-2], scoringPlay = True, offenseScored = True)
-    elif filterType:
-        plays = plays.filter(playType = filterType)
+    if filterType:
+        typeValue = int(filterType)
+        plays = plays.filter(playType__in = [typeValue] + [t for t, base in touchdownPlayTypeBase.items() if base == typeValue])
     if filterDown:
         plays = plays.filter(playDown = filterDown)
     for value, label, fieldPosQuery in playFilterFieldPositions:
         if filterFieldPos == value:
             plays = plays.filter(fieldPosQuery)
+    for value, label, yardsQuery in playFilterYards:
+        if filterYards == value:
+            plays = plays.filter(yardsQuery)
+    if filterTouchdown:
+        plays = plays.filter(touchdownQuery)
 
     playCount = plays.count()
     plays = list(plays.select_related('nflMatch', 'teamOnOffense')
                  .order_by('nflMatch__weekOfSeason', 'nflMatch_id', 'sequenceNumber')[:playFilterRowLimit])
 
+    playerByPlayId = {}
+    playIds = [play.id for play in plays]
+    for statSplit in playerStatSplitPriority:
+        for split in statSplit.objects.filter(play_id__in = playIds).select_related('player'):
+            playerByPlayId.setdefault(split.play_id, split.player)
+
     teamsByEspnId = {t.espnId: t.abbreviation for t in nflTeams}
+    playTypeNames = dict(playByPlay.playTypes)
     for play in plays:
         match = play.nflMatch
         offenseIsHome = play.teamOnOffense.espnId == match.homeTeamEspnId
         defenseAbbr = teamsByEspnId.get(match.awayTeamEspnId if offenseIsHome else match.homeTeamEspnId, "")
-        play.displayType = playTypeLabel(play)
+        play.displayType = prettyPlayType(playTypeNames[touchdownPlayTypeBase.get(play.playType, play.playType)])
+        play.isTouchdown = bool(play.scoringPlay and play.pointsScored == 6)
+        play.patResult = patResult(play.playDescription) if play.isTouchdown else ""
+        play.ballCarrier = playerByPlayId.get(play.id)
         play.matchLabel = teamsByEspnId.get(match.awayTeamEspnId, "") + " @ " + teamsByEspnId.get(match.homeTeamEspnId, "")
         play.defenseAbbr = defenseAbbr
         # Show the line of scrimmage the way a broadcast would, e.g. "BUF 24" / "DET 38".
@@ -1342,8 +1392,19 @@ def getFilteredPlays(inputReq, nflTeams):
         'filterActive': True,
         'filterSeason': filterSeason, 'filterWeek': filterWeek, 'filterTeam': filterTeam,
         'filterType': filterType, 'filterDown': filterDown, 'filterFieldPos': filterFieldPos,
+        'filterYards': filterYards, 'filterTouchdown': filterTouchdown,
         'filteredPlays': plays, 'filteredPlayCount': playCount, 'filterRowLimit': playFilterRowLimit,
+        'filteredHasTouchdown': any(play.isTouchdown for play in plays),
     }
+
+
+# Play types are stored in capitals ("COMPLETED PASS"); show them as "Completed Pass",
+# keeping abbreviations like PAT, FG, QB and 2PT in capitals ("End of Half" keeps "of" small).
+playTypeAbbreviations = {"PAT", "FG", "QB", "TD", "2PT"}
+
+def prettyPlayType(label):
+    words = [word if word in playTypeAbbreviations else word.title() for word in label.split(" ")]
+    return " ".join(word.lower() if word == "Of" and i > 0 else word for i, word in enumerate(words))
 
 
 # Rushing and passing touchdowns are stored as an ordinary RUSH or COMPLETED
@@ -1352,8 +1413,8 @@ scoringPlayLabels = {1: "RUSHING TD", 2: "PASSING TD"}
 
 def playTypeLabel(play):
     if play.scoringPlay and play.offenseScored and play.playType in scoringPlayLabels:
-        return scoringPlayLabels[play.playType]
-    return play.get_playType_display()
+        return prettyPlayType(scoringPlayLabels[play.playType])
+    return prettyPlayType(play.get_playType_display())
 
 
 def retrievePlaysForMatch(s_match, teamId):
