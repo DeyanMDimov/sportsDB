@@ -1365,6 +1365,8 @@ def getFilteredPlays(inputReq, nflTeams):
             filterDirection = ''
     else:
         filterDirection = ''
+        # Plays wiped out by a penalty only clutter the list - show them only when asked for.
+        plays = plays.exclude(playType = 32)
     if filterDown:
         plays = plays.filter(playDown = filterDown)
     for value, label, fieldPosQuery in playFilterFieldPositions:
