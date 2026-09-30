@@ -1679,6 +1679,18 @@ def predictTouchdowns(request):
     
     return render(request, 'nfl/predictTouchdowns.html', pageDictionary)
 
+def getMatchup(request):
+    pageDictionary = {}
+    pageDictionary['years'] = yearsOnPage_Helper()
+    pageDictionary['teams'] = nflTeam.objects.all().order_by('abbreviation')
+    pageDictionary['categories'] = [
+        ('rushing', 'Rushing'),
+        ('receiving', 'Receiving'),
+        ('scoring', 'Scoring'),
+    ]
+
+    return render(request, 'nfl/matchup.html', pageDictionary)
+
 def getTouchdownsByWeek(request):
     yearsOnPage = yearsOnPage_Helper()
     weeksOnPage = weeksOnPage_Helper()

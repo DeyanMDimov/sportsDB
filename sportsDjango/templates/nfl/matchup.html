@@ -1,0 +1,45 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% block matchup %}
+    <div class="container">
+        <ul class="nav nav-tabs" id="matchupTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="matchTab" data-bs-toggle="tab" data-bs-target="#matchPane" type="button" role="tab" aria-controls="matchPane" aria-selected="true">Match</button>
+            </li>
+        </ul>
+
+        <div class="tab-content border border-top-0 mb-3" id="matchupTabsContent">
+            <div class="tab-pane fade show active" id="matchPane" role="tabpanel" aria-labelledby="matchTab">
+                <form method="GET" class="p-3" id="matchupForm">
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="season" id="season" class="form-control">
+                                    {% for yr in years %}
+                                    <option value="{{yr}}">{{yr}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="season">Season:</label>
+                            </div>
+                        </div>
+                        <div class="mb-1 col-2">
+                            {% include 'nfl/teamDropdown.html' %}
+                        </div>
+                        <div class="mb-1 col-2">
+                            <div class="form-floating">
+                                <select name="category" id="category" class="form-control">
+                                    {% for value, label in categories %}
+                                    <option value="{{value}}">{{label}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="category">Category:</label>
+                            </div>
+                        </div>
+                    </div>
+                    {% comment %} Not wired up yet, so it doesn't submit the form. {% endcomment %}
+                    <button type="button" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
