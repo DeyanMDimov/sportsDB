@@ -1668,20 +1668,85 @@ PLAY_YARDS_REGEX = re.compile(r"for (-?\d+) yards?|for no gain")
 # Scoring plays sometimes carry ESPN's summary wording instead: "JuJu
 # Smith-Schuster 13 Yd pass from Patrick Mahomes".
 SCORING_PLAY_YARDS_REGEX = re.compile(r"(-?\d+) Yd\b")
+# Field spots read "CIN 27", or just "50" at midfield.
+FIELD_SPOT_PATTERN = r"(?:([A-Z]{2,3}) )?(\d{1,2})"
+# Where the ball ended up, right before the gain: "to CIN 5 for 87 yards",
+# "pushed ob at CIN 19 for 11 yards".
+PLAY_END_SPOT_REGEX = re.compile(r"\b(?:to|at) " + FIELD_SPOT_PATTERN + r" $")
+PENALTY_ENFORCED_SPOT_REGEX = re.compile(r"enforced at " + FIELD_SPOT_PATTERN)
+# The team an enforced (not declined) penalty went against.
+ENFORCED_PENALTY_TEAM_REGEX = re.compile(r"PENALTY on ([A-Z]{2,3})-[^,]+, [^,]+, \d+ yards?, enforced at", re.IGNORECASE)
 
 
-def yardsGainedOnPlay(playDescription):
+def yardsGainedOnPlay(playDescription, yardsFromEndzone = None):
     # The first "for N yards" in a description is the gain on the play itself;
     # anything after it belongs to a penalty or a return.
     description = playDescription or ""
     yardsMatch = PLAY_YARDS_REGEX.search(description)
     if yardsMatch != None:
-        return int(yardsMatch.group(1)) if yardsMatch.group(1) else 0
+        gain = int(yardsMatch.group(1)) if yardsMatch.group(1) else 0
+        return yardsCreditedBeforePenaltySpot(description, yardsMatch, gain, yardsFromEndzone)
 
     scoringMatch = SCORING_PLAY_YARDS_REGEX.search(description)
     if scoringMatch != None:
         return int(scoringMatch.group(1))
     return 0
+
+
+def yardsCreditedBeforePenaltySpot(description, yardsMatch, gain, yardsFromEndzone):
+    # An accepted penalty enforced at a spot (offensive holding downfield, a
+    # late hit at the end of the run) leaves the play standing, but the ball
+    # carrier is only credited with the yards up to the enforcement spot. The
+    # description still says the whole run, so measure line of scrimmage to
+    # "enforced at" ourselves. Previous-spot enforcement is a "No Play", which
+    # playWasNullified already drops.
+    enforcedSpots = PENALTY_ENFORCED_SPOT_REGEX.findall(description)
+    if len(enforcedSpots) == 0 or yardsFromEndzone == None:
+        return gain
+
+    # Spots are written from either team's side, so pin down one team's
+    # abbreviation and which side it is. Normally that's the end-of-play spot,
+    # placed by where the play started and how far it went.
+    endSpot = PLAY_END_SPOT_REGEX.search(description[:yardsMatch.start()])
+    endYardsFromEndzone = yardsFromEndzone - gain
+    knownTeam = None
+    if endSpot != None and endSpot.group(1):
+        knownTeam, endSpotYardLine = endSpot.group(1), int(endSpot.group(2))
+        if endSpotYardLine == endYardsFromEndzone:
+            knownTeamIsDefense = True
+        elif 100 - endSpotYardLine == endYardsFromEndzone:
+            knownTeamIsDefense = False
+        else:
+            return gain
+    elif "TOUCHDOWN NULLIFIED" in description and ENFORCED_PENALTY_TEAM_REGEX.search(description) != None:
+        # "for 53 yards, TOUCHDOWN NULLIFIED by Penalty" has no end spot, but
+        # only an offensive foul takes a touchdown away.
+        knownTeam = ENFORCED_PENALTY_TEAM_REGEX.search(description).group(1)
+        knownTeamIsDefense = False
+
+    creditedYards = gain
+    for spotTeam, spotYardLine in enforcedSpots:
+        spotYardLine = int(spotYardLine)
+        if spotTeam == "" or spotYardLine == 50:
+            spotYardsFromEndzone = spotYardLine
+        elif knownTeam != None:
+            spotYardsFromEndzone = spotYardLine if (spotTeam == knownTeam) == knownTeamIsDefense else 100 - spotYardLine
+        else:
+            # No side to go on (the play ended at midfield): take whichever
+            # reading of the spot lands between the snap and the end of the play.
+            possibleSpots = [yardLine for yardLine in [spotYardLine, 100 - spotYardLine]
+                             if min(0, gain) <= yardsFromEndzone - yardLine <= max(0, gain)]
+            if len(possibleSpots) != 1:
+                return gain
+            spotYardsFromEndzone = possibleSpots[0]
+
+        # A spot behind the line of scrimmage credits nothing, and a spot past
+        # the end of the play (a dead-ball foul after it) doesn't add any.
+        yardsToSpot = yardsFromEndzone - spotYardsFromEndzone
+        yardsToSpot = max(min(0, gain), min(max(0, gain), yardsToSpot))
+        if abs(yardsToSpot) < abs(creditedYards):
+            creditedYards = yardsToSpot
+    return creditedYards
 
 
 def playWasNullified(playDescription):
@@ -1805,7 +1870,7 @@ def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
         if passerSplit.play.playType in [2, 3]:
             matchStats['passingAttempts'] += 1
         if passerSplit.play.playType == 2:
-            matchStats['passingYards'] += yardsGainedOnPlay(passerSplit.play.playDescription)
+            matchStats['passingYards'] += yardsGainedOnPlay(passerSplit.play.playDescription, passerSplit.play.yardsFromEndzone)
         if passerSplit.play.playType == 4:
             matchStats['sacks'] += 1
         if passerSplit.passingTdScored:
@@ -1817,7 +1882,7 @@ def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
         countedRusherPlayIds.add(rusherSplit.play_id)
         matchStats = statsByMatchId[rusherSplit.play.nflMatch_id]
         matchStats['rushingAttempts'] += 1
-        matchStats['rushingYards'] += yardsGainedOnPlay(rusherSplit.play.playDescription)
+        matchStats['rushingYards'] += yardsGainedOnPlay(rusherSplit.play.playDescription, rusherSplit.play.yardsFromEndzone)
         if rusherSplit.rushingTdScored:
             matchStats['rushingTds'] += 1
 
@@ -1829,7 +1894,7 @@ def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
         matchStats['receptions'] += 1
         # A catch is a target as well; incompletions are added from the descriptions.
         matchStats['targets'] += 1
-        matchStats['receivingYards'] += yardsGainedOnPlay(receiverSplit.play.playDescription)
+        matchStats['receivingYards'] += yardsGainedOnPlay(receiverSplit.play.playDescription, receiverSplit.play.yardsFromEndzone)
         if receiverSplit.receivingTdScored:
             matchStats['receivingTds'] += 1
 
@@ -1905,8 +1970,8 @@ def seasonHasStoredPlays(team, seasonYear):
 
 # Players page -> By Team tab: stat key -> (split model, what one play is worth).
 TEAM_WEEKLY_STATS = {
-    "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
-    "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
+    "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
+    "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     "rushingTds": (rusherStatSplit, lambda statSplit: 1 if statSplit.rushingTdScored else 0),
     "receivingTds": (receiverStatSplit, lambda statSplit: 1 if statSplit.receivingTdScored else 0),
 }
@@ -4051,11 +4116,11 @@ PLAYER_RANKING_STATS_BY_POSITION = {
 }
 
 
-def playRankingValue(statKey, playType, playDescription, tdScored):
+def playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdScored):
     # What one play is worth for the chosen stat, matching how the Performances
     # tab counts the same thing.
     if statKey == "passingYards":
-        return yardsGainedOnPlay(playDescription) if playType == 2 else 0
+        return yardsGainedOnPlay(playDescription, yardsFromEndzone) if playType == 2 else 0
     if statKey == "passingAttempts":
         return 1 if playType in [2, 3] else 0
     if statKey == "sacks":
@@ -4063,7 +4128,7 @@ def playRankingValue(statKey, playType, playDescription, tdScored):
     if statKey in ["passingTds", "rushingTds", "receivingTds"]:
         return 1 if tdScored else 0
     if statKey in ["rushingYards", "receivingYards"]:
-        return yardsGainedOnPlay(playDescription)
+        return yardsGainedOnPlay(playDescription, yardsFromEndzone)
     if statKey in ["rushingAttempts", "receptions"]:
         return 1
     return 0
@@ -4081,13 +4146,13 @@ def getPlayerRankings(seasonYear, playerPosition, statKey, weekParam):
     countedPlays = set()
     valuesByPlayerId = {}
     teamPlayCountsByPlayerId = {}
-    for playerId, playId, weekOfSeason, teamOnOffenseId, playType, playDescription, tdScored in splitModel.objects.filter(
+    for playerId, playId, weekOfSeason, teamOnOffenseId, playType, playDescription, yardsFromEndzone, tdScored in splitModel.objects.filter(
         player__playerPosition = int(playerPosition),
         play__nflMatch__yearOfSeason = int(seasonYear),
         play__nflMatch__weekOfSeason__in = weekNumbers,
     ).values_list(
         'player_id', 'play_id', 'play__nflMatch__weekOfSeason', 'play__teamOnOffense_id',
-        'play__playType', 'play__playDescription', tdFieldName,
+        'play__playType', 'play__playDescription', 'play__yardsFromEndzone', tdFieldName,
     ):
         if playWasNullified(playDescription) or (playerId, playId) in countedPlays:
             continue
@@ -4099,7 +4164,7 @@ def getPlayerRankings(seasonYear, playerPosition, statKey, weekParam):
         teamCounts[teamOnOffenseId] = teamCounts.get(teamOnOffenseId, 0) + 1
 
         playerWeeks = valuesByPlayerId.setdefault(playerId, {})
-        playerWeeks[weekOfSeason] = playerWeeks.get(weekOfSeason, 0) + playRankingValue(statKey, playType, playDescription, tdScored)
+        playerWeeks[weekOfSeason] = playerWeeks.get(weekOfSeason, 0) + playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdScored)
 
     if len(valuesByPlayerId) == 0:
         return weekNumbers, []
