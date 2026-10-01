@@ -248,6 +248,22 @@ thead th {
   color: #dbeafe !important; /* your desired text color */
 }
 
+/* Bootstrap's disabled look is a light grey box - keep it dark, just dimmed */
+.form-control:disabled, .form-select:disabled {
+  background-color: #181b21;
+  color: #6b7280;
+  border-color: #2a2e38;
+  cursor: not-allowed;
+}
+.form-floating > .form-control:disabled ~ label,
+.form-floating > .form-select:disabled ~ label {
+  color: #6b7280 !important;
+}
+.form-floating > .form-control:disabled ~ label::after,
+.form-floating > .form-select:disabled ~ label::after {
+  background-color: transparent !important;
+}
+
 /* ==========================
    Cards, Modals, Alerts
    ========================== */
@@ -589,6 +605,7 @@ table thead tr th:first-child {
 .plays-in-drive-table
 {
   border: none;
+  width: auto;
 }
 
 .plays-col-quarter{
@@ -601,13 +618,17 @@ table thead tr th:first-child {
   width: 350px;
 }
 .plays-col-yards{
-  width: 30px;
+  width: 50px;
   text-align:right;
 }
 
 .plays-col-down{
-  padding-left:30px;
-  width: 42px;
+  width: 80px;
+  white-space: nowrap;
+}
+
+.filtered-plays-table thead th{
+  font-size: 11pt;
 }
 
 #prev-week-arrow a, #next-week-arrow a{
@@ -1017,4 +1038,96 @@ table thead tr th:first-child {
 .byTeamTable .byTeamOpponent {
   font-weight: normal;
   font-size: 0.8em;
+}
+
+.byTeamTable .byTeamTotalRow th,
+.byTeamTable .byTeamTotalRow td {
+  border-top: 2px solid var(--bs-border-color);
+}
+
+/* ==========================
+   Matchup page
+   ========================== */
+
+/* Fixed column widths so the stacked tables line up; the table's own width is
+   set inline from the week count. */
+.matchupTable {
+  table-layout: fixed;
+}
+.matchupTable .matchupRankCol,
+.matchupTable .matchupTotalCol {
+  width: 72px;
+}
+.matchupTable .matchupLabelCol {
+  width: 200px;
+}
+.matchupTable .matchupWeekCol {
+  width: 50px;
+}
+.matchupTable .byTeamPlayer {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Opponent row under the week headers: less side padding so "@NYG" fits 50px. */
+.matchupTable .byTeamOpponent {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* Headings and the split line sit on the same centered column as the tables
+   (same centering as .byTeamTableWrap) so everything shares one left edge. */
+.matchupColumn {
+  max-width: calc(100vw - 32px);
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Every team-color underline on the page is the same length (about as wide as
+   "CLE Offense"), however long the text above it is. */
+:root {
+  --matchup-underline-width: 8.5rem;
+}
+
+/* Section heading underlined in the team's two colors, like .team-border. The
+   faint outline keeps dark team colors visible on the dark page. */
+.matchupSectionTitle {
+  display: inline-block;
+  position: relative;
+  margin-top: 0.75rem;
+  padding-bottom: 8px;
+}
+.matchupSectionTitle::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: var(--matchup-underline-width);
+  bottom: 0;
+  height: 5px;
+  background: linear-gradient(to right, var(--team-color-1) 50%, var(--team-color-2) 50%);
+  box-shadow: 0 0 0 1px #4b5563;
+}
+
+/* Team-colored underline on a stat label (tables that mix both teams), with the
+   same faint outline as the headings so dark team colors still show. */
+.matchupTable .team-border::after {
+  left: 10px;
+  right: auto;
+  width: var(--matchup-underline-width);
+  box-shadow: 0 0 0 1px #4b5563;
+}
+
+/* The previewed match's own numbers are on the page from the start but stay
+   invisible until Show result is ticked. */
+.matchupResultsHidden .matchupResult {
+  visibility: hidden;
+}
+#matchupResults:not(.matchupResultsHidden) .matchupResultCell {
+  --bs-table-bg-state: rgba(59, 130, 246, 0.18);
+}
+
+/* Splits the picked team's attack from the opponent's. */
+.matchupSplit {
+  border-top: 3px solid #9ca3af;
+  opacity: 1;
+  margin: 2rem 0 1rem;
 }
