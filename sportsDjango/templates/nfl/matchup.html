@@ -70,7 +70,7 @@
         {% else %}
         <h3>{{ selectedTeam.abbreviation }} {% if awayGame %}@{% else %}vs{% endif %} {{ opponent.abbreviation }} &mdash; {{ selectedYear }} {{ selectedWeekLabel }}{% if resultAvailable and selectedTeamPoints is not None %}<span class="matchupResult"> &middot; Final: {{ selectedTeam.abbreviation }} {{ selectedTeamPoints }}, {{ opponent.abbreviation }} {{ opponentPoints }}</span>{% endif %}</h3>
         {% if not categoryBuilt %}
-        <p class="text-muted">{{ selectedCategory|capfirst }} isn't built yet &mdash; only Rushing and Receiving so far.</p>
+        <p class="text-muted">There's no &ldquo;{{ selectedCategory }}&rdquo; category &mdash; pick one from the list.</p>
         {% elif throughWeek < 1 %}
         <p class="text-muted">No games before week 1 to look at.</p>
         {% else %}
@@ -83,12 +83,16 @@
         {% if section.kind == "split" %}
         <div class="matchupColumn" style="width: {{ matchupTableWidth }}px"><hr class="matchupSplit"></div>
         {% else %}
-        <div class="matchupColumn" style="width: {{ matchupTableWidth }}px"><h4 class="matchupSectionTitle team-{{ section.team.abbreviation }}">{{ section.title }}{% if section.statLabel %} <small class="text-muted">{{ section.statLabel }}</small>{% endif %}</h4></div>
+        <div class="matchupColumn" style="width: {{ matchupTableWidth }}px">
+            <h4 class="matchupSectionTitle team-{{ section.team.abbreviation }}"{% if section.collapsible %} role="button" tabindex="0" data-bs-toggle="collapse" data-bs-target="#matchupSection{{ forloop.counter }}" aria-expanded="true" aria-controls="matchupSection{{ forloop.counter }}"{% endif %}>{% if section.collapsible %}<span class="matchupToggleArrow bi-chevron-down"></span>{% endif %}{{ section.title }}{% if section.statLabel %} <small class="text-muted">{{ section.statLabel }}</small>{% endif %}</h4>
+        </div>
+        {% if section.collapsible %}<div class="collapse show" id="matchupSection{{ forloop.counter }}">{% endif %}
         {% if section.kind == "team" %}
         {% include 'nfl/matchupStatTable.html' with statRows=section.rows opponents=section.opponents %}
         {% else %}
         {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition %}
         {% endif %}
+        {% if section.collapsible %}</div>{% endif %}
         {% endif %}
         {% endfor %}
         {% endif %}

@@ -1911,8 +1911,20 @@ TEAM_WEEKLY_STATS = {
     "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
     "rushingTds": (rusherStatSplit, lambda statSplit: 1 if statSplit.rushingTdScored else 0),
     "receivingTds": (receiverStatSplit, lambda statSplit: 1 if statSplit.receivingTdScored else 0),
+    # Matchup page -> Scoring: touches from the 20 or closer.
+    "redZoneCarries": (rusherStatSplit, lambda statSplit: 1 if statSplit.play.yardsFromEndzone != None and statSplit.play.yardsFromEndzone <= 20 else 0),
+    "redZoneReceptions": (receiverStatSplit, lambda statSplit: 1 if statSplit.play.yardsFromEndzone != None and statSplit.play.yardsFromEndzone <= 20 else 0),
+    # Matchup page -> Special Teams: kickoff and punt return yards.
+    "returnYards": (returnerStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
 }
 TEAM_WEEKLY_TD_STATS = ["rushingTds", "receivingTds"]
+
+# Which split rows belong to the team, where it isn't simply "the team was on
+# offense". Kickoffs list the receiving team on offense but punts list the
+# punting team, so a team's punt returns are the ones on its opponent's plays.
+TEAM_WEEKLY_STAT_TEAM_FILTERS = {
+    "returnYards": lambda team: (Q(returnType = 1) & Q(play__teamOnOffense = team)) | (Q(returnType = 2) & ~Q(play__teamOnOffense = team)),
+}
 
 
 def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
@@ -1950,10 +1962,10 @@ def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
     valuesByPlayerId = {}
     playersById = {}
     splitModel, playValue = TEAM_WEEKLY_STATS[statKey]
+    teamFilter = TEAM_WEEKLY_STAT_TEAM_FILTERS[statKey](team) if statKey in TEAM_WEEKLY_STAT_TEAM_FILTERS else Q(play__teamOnOffense = team)
     splitRows = splitModel.objects.filter(
         play__nflMatch__in = seasonMatches,
-        play__teamOnOffense = team,
-    ).select_related('play', 'player')
+    ).filter(teamFilter).select_related('play', 'player')
     for statSplit in splitRows:
         if (statSplit.player_id, statSplit.play_id) in countedPlays or playWasNullified(statSplit.play.playDescription):
             continue
@@ -4140,3 +4152,321 @@ def getPlayerRankings(seasonYear, playerPosition, statKey, weekParam):
         rankingRow['rank'] = rankIndex + 1
 
     return weekNumbers, rankingRows
+
+
+# ---------------------------------------------------------------------------
+# Matchup page
+#
+# Every stat the Matchup tables show, worked out per team per game for a whole
+# season so each one can be ranked league-wide. A stat is a count (summed over
+# the weeks), a ratio (made/attempts - weekly cells show "2/3", the total and
+# the ranking use the overall percentage) or an average (drive start). An
+# "allowed" stat is the same figure read off the opponent in that game.
+#
+# Some team figures can't come straight off teamMatchPerformance:
+#   * redZoneAttempts is copied from driveOfPlay.reachedRedZone, which is set on
+#     almost every drive, so red zone trips are worked out from the plays: a
+#     drive is a trip if it ran a play from the 20 or closer;
+#   * defensiveTouchdownsScored double counts, so defensive TDs are the
+#     interception and fumble return TDs added together;
+#   * the two-point conversion fields are always 0 - conversions come from
+#     totalTwoPointConvs over the pass and rush attempts;
+#   * PATs and two-point tries are not stored as plays, so points rebuilt from
+#     plays read the try off the touchdown's description.
+# ---------------------------------------------------------------------------
+
+# Plays where the offense actually snapped the ball from a spot on the field.
+MATCHUP_SCRIMMAGE_PLAY_TYPES = [1, 2, 3, 4, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 30, 31, 41]
+MATCHUP_FIELD_GOAL_PLAY_TYPES = [13, 14, 41]
+MATCHUP_EXTRA_POINT_REGEX = re.compile(r"extra point is GOOD|\([^)]*Kick\)", re.IGNORECASE)
+MATCHUP_TWO_POINT_REGEX = re.compile(r"TWO-POINT CONVERSION ATTEMPT.*?ATTEMPT SUCCEEDS", re.IGNORECASE)
+
+# key -> label, num (raw keys summed), den (raw keys summed, ratio/average
+# only), kind, lowerIsBetter, allowed (read off the opponent).
+MATCHUP_METRICS = {
+    # Rushing / Receiving
+    "totalYardsGained": {"label": "Total Yards Gained", "num": ["totalYardsGained"]},
+    "rushingYards": {"label": "Rushing Yards", "num": ["rushingYards"]},
+    "totalPassingYards": {"label": "Passing Yards", "num": ["totalPassingYards"]},
+    "totalYardsAllowedByDefense": {"label": "Total Yards Allowed", "num": ["totalYardsAllowedByDefense"], "lowerIsBetter": True},
+    "totalRushYardsAllowed": {"label": "Rush Yards Allowed", "num": ["totalRushYardsAllowed"], "lowerIsBetter": True},
+    "totalPassYardsAllowed": {"label": "Pass Yards Allowed", "num": ["totalPassYardsAllowed"], "lowerIsBetter": True},
+    "intsThrown": {"label": "INTs Thrown", "num": ["interceptionsOnOffense"], "lowerIsBetter": True},
+    "intsCaught": {"label": "INTs Caught", "num": ["defenseInterceptions"]},
+
+    # Scoring - offense, and the same figures allowed by a defense
+    "points": {"label": "Points", "num": ["totalPointsScored"]},
+    "pointsAllowed": {"label": "Points Allowed", "num": ["totalPointsScored"], "allowed": True, "lowerIsBetter": True},
+    "touchdowns": {"label": "Touchdowns", "num": ["totalTouchdownsScored"]},
+    "touchdownsAllowed": {"label": "Touchdowns Allowed", "num": ["totalTouchdownsScored"], "allowed": True, "lowerIsBetter": True},
+    "rushingTds": {"label": "Rushing TDs", "num": ["rushingTouchdowns"]},
+    "rushingTdsAllowed": {"label": "Rushing TDs Allowed", "num": ["rushingTouchdowns"], "allowed": True, "lowerIsBetter": True},
+    "passingTds": {"label": "Passing TDs", "num": ["passingTouchdowns"]},
+    "passingTdsAllowed": {"label": "Passing TDs Allowed", "num": ["passingTouchdowns"], "allowed": True, "lowerIsBetter": True},
+    "tdsOutsideRedZone": {"label": "TDs Outside Red Zone", "num": ["tdsOutsideRedZone"]},
+    "tdsOutsideRedZoneAllowed": {"label": "TDs Allowed Outside RZ", "num": ["tdsOutsideRedZone"], "allowed": True, "lowerIsBetter": True},
+    "pointsOffTurnovers": {"label": "Points Off Turnovers", "num": ["pointsOffTurnovers"]},
+    "pointsOffTurnoversAllowed": {"label": "Pts Off Turnovers Allowed", "num": ["pointsOffTurnovers"], "allowed": True, "lowerIsBetter": True},
+    "firstHalfPoints": {"label": "1st Half Points", "num": ["firstHalfPoints"]},
+    "firstHalfPointsAllowed": {"label": "1st Half Pts Allowed", "num": ["firstHalfPoints"], "allowed": True, "lowerIsBetter": True},
+    "secondHalfPoints": {"label": "2nd Half + OT Points", "num": ["secondHalfPoints"]},
+    "secondHalfPointsAllowed": {"label": "2nd Half + OT Allowed", "num": ["secondHalfPoints"], "allowed": True, "lowerIsBetter": True},
+    "twoPointPct": {"label": "2PT Conversions", "num": ["totalTwoPointConvs"], "den": ["twoPtPassAttempts", "twoPtRushAttempts"], "kind": "ratio"},
+    "defensiveTds": {"label": "Defensive TDs", "num": ["defenseInterceptionTouchdowns", "defenseFumbleTouchdowns"]},
+
+    # Scoring - red zone and downs
+    "redZoneTrips": {"label": "RZ Trips", "num": ["redZoneTrips"]},
+    "redZoneTripsAllowed": {"label": "RZ Trips Allowed", "num": ["redZoneTrips"], "allowed": True, "lowerIsBetter": True},
+    "redZoneTdPct": {"label": "RZ TD %", "num": ["redZoneTds"], "den": ["redZoneTrips"], "kind": "ratio"},
+    "redZoneTdPctAllowed": {"label": "RZ TD % Allowed", "num": ["redZoneTds"], "den": ["redZoneTrips"], "kind": "ratio", "allowed": True, "lowerIsBetter": True},
+    "insideFiveTdPct": {"label": "Inside-5 TD %", "num": ["insideFiveTds"], "den": ["insideFiveTrips"], "kind": "ratio"},
+    "insideFiveTdPctAllowed": {"label": "Inside-5 TD % Allowed", "num": ["insideFiveTds"], "den": ["insideFiveTrips"], "kind": "ratio", "allowed": True, "lowerIsBetter": True},
+    "redZoneTurnovers": {"label": "RZ Turnovers", "num": ["redZoneTurnovers"], "lowerIsBetter": True},
+    "redZoneTakeaways": {"label": "RZ Takeaways", "num": ["redZoneTurnovers"], "allowed": True},
+    "redZoneDowns": {"label": "RZ Turnovers on Downs", "num": ["redZoneDowns"], "lowerIsBetter": True},
+    "redZoneStopsOnDowns": {"label": "RZ Stops on Downs", "num": ["redZoneDowns"], "allowed": True},
+    "thirdDownPct": {"label": "3rd Down %", "num": ["thirdDownConvs"], "den": ["thirdDownAttempts"], "kind": "ratio"},
+    "thirdDownPctAllowed": {"label": "3rd Down % Allowed", "num": ["thirdDownConvs"], "den": ["thirdDownAttempts"], "kind": "ratio", "allowed": True, "lowerIsBetter": True},
+    "fourthDownPct": {"label": "4th Down %", "num": ["fourthDownConvs"], "den": ["fourthDownAttempts"], "kind": "ratio"},
+    "fourthDownPctAllowed": {"label": "4th Down % Allowed", "num": ["fourthDownConvs"], "den": ["fourthDownAttempts"], "kind": "ratio", "allowed": True, "lowerIsBetter": True},
+
+    # Special teams
+    "fieldGoalsMade": {"label": "FGs Made", "num": ["fieldGoalsMade"]},
+    "fieldGoalAttempts": {"label": "FG Attempts", "num": ["fieldGoalAttempts"]},
+    "fieldGoalPct": {"label": "FG %", "num": ["fieldGoalsMade"], "den": ["fieldGoalAttempts"], "kind": "ratio"},
+    "longFieldGoalPct": {"label": "FG % 40+", "num": ["longFieldGoalsMade"], "den": ["longFieldGoalAttempts"], "kind": "ratio"},
+    "extraPointPct": {"label": "XP %", "num": ["extraPointsMade"], "den": ["extraPointAttempts"], "kind": "ratio"},
+    "punts": {"label": "Punts", "num": ["totalPunts"], "lowerIsBetter": True},
+    "puntsInsideTen": {"label": "Punts Inside 10", "num": ["opponentPinnedInsideTen"]},
+    "returnTds": {"label": "Return TDs", "num": ["returnTds"]},
+    "returnTdsAllowed": {"label": "Return TDs Allowed", "num": ["returnTds"], "allowed": True, "lowerIsBetter": True},
+    "kicksBlocked": {"label": "Kicks Blocked", "num": ["kicksBlocked"]},
+    "kicksBlockedAllowed": {"label": "Kicks Had Blocked", "num": ["kicksBlocked"], "allowed": True, "lowerIsBetter": True},
+    "averageDriveStart": {"label": "Avg Drive Start", "num": ["driveStartYards"], "den": ["drivesWithStart"], "kind": "average"},
+    "averageDriveStartAllowed": {"label": "Opp Avg Drive Start", "num": ["driveStartYards"], "den": ["drivesWithStart"], "kind": "average", "allowed": True, "lowerIsBetter": True},
+}
+
+# Raw keys worked out from drives and plays rather than read off teamMatchPerformance.
+MATCHUP_PLAY_KEYS = [
+    "redZoneTrips", "redZoneTds", "insideFiveTrips", "insideFiveTds", "redZoneTurnovers", "redZoneDowns",
+    "tdsOutsideRedZone", "pointsOffTurnovers", "firstHalfPoints", "secondHalfPoints",
+    "longFieldGoalsMade", "longFieldGoalAttempts", "returnTds", "kicksBlocked",
+    "driveStartYards", "drivesWithStart",
+]
+
+
+def matchupScoringPlayPoints(pointsScored, playDescription):
+    # Touchdowns carry 6; the try after them is only in the description.
+    if pointsScored != 6:
+        return pointsScored or 0
+    description = playDescription or ""
+    if MATCHUP_EXTRA_POINT_REGEX.search(description):
+        return 7
+    if MATCHUP_TWO_POINT_REGEX.search(description):
+        return 8
+    return 6
+
+
+def getMatchupSeasonStats(seasonYear):
+    # Everything the Matchup tables rank, for every team-game in a season:
+    # returns ({(teamEspnId, week): {raw key: value}}, {(teamEspnId, week): opponentEspnId}).
+    # A team-game has the teamMatchPerformance keys once its stats are pulled,
+    # and the play keys once its play-by-play is pulled.
+    seasonYear = int(seasonYear)
+    espnIdByTeamId = dict(nflTeam.objects.values_list('id', 'espnId'))
+
+    seasonMatches = {}
+    opponentByTeamWeek = {}
+    for matchId, weekOfSeason, homeEspnId, awayEspnId in nflMatch.objects.filter(
+        yearOfSeason = seasonYear, weekOfSeason__gte = 1,
+    ).values_list('id', 'weekOfSeason', 'homeTeamEspnId', 'awayTeamEspnId'):
+        seasonMatches[matchId] = (weekOfSeason, homeEspnId, awayEspnId)
+        opponentByTeamWeek[(homeEspnId, weekOfSeason)] = awayEspnId
+        opponentByTeamWeek[(awayEspnId, weekOfSeason)] = homeEspnId
+
+    def otherTeam(matchId, teamEspnId):
+        weekOfSeason, homeEspnId, awayEspnId = seasonMatches[matchId]
+        return awayEspnId if teamEspnId == homeEspnId else homeEspnId
+
+    teamGameStats = {}
+    performanceFields = sorted({rawKey for metric in MATCHUP_METRICS.values()
+        for rawKey in metric["num"] + metric.get("den", []) if rawKey not in MATCHUP_PLAY_KEYS})
+    for performanceRow in teamMatchPerformance.objects.filter(
+        yearOfSeason = seasonYear, weekOfSeason__gte = 1,
+    ).values('teamEspnId', 'weekOfSeason', *performanceFields):
+        # A re-pull can leave more than one row for a team's week; they carry the
+        # same figures, so the last one read stands.
+        rawStats = teamGameStats.setdefault((performanceRow['teamEspnId'], performanceRow['weekOfSeason']), {})
+        for fieldName in performanceFields:
+            rawStats[fieldName] = float(performanceRow[fieldName]) if performanceRow[fieldName] != None else None
+
+    # --- Drives: red zone trips, turnovers there, drive starts, points off turnovers ---
+    drivesByMatch = {}
+    for driveId, matchId, offenseTeamId, sequenceNumber, driveResult in driveOfPlay.objects.filter(
+        nflMatch_id__in = list(seasonMatches),
+    ).values_list('id', 'nflMatch_id', 'teamOnOffense_id', 'sequenceNumber', 'driveResult'):
+        drivesByMatch.setdefault(matchId, []).append({
+            'id': driveId, 'team': espnIdByTeamId.get(offenseTeamId), 'sequence': sequenceNumber,
+            'result': driveResult, 'closest': None, 'firstSequence': None, 'start': None,
+        })
+    drivesById = {drive['id']: drive for matchDrives in drivesByMatch.values() for drive in matchDrives}
+
+    playStats = {}
+    def addPlayStat(matchId, teamEspnId, rawKey, amount = 1):
+        playStats.setdefault((matchId, teamEspnId), dict.fromkeys(MATCHUP_PLAY_KEYS, 0))[rawKey] += amount
+
+    for driveId, matchId, offenseTeamId, playType, yardsFromEndzone, sequenceNumber in playByPlay.objects.filter(
+        nflMatch_id__in = list(seasonMatches), playType__in = MATCHUP_SCRIMMAGE_PLAY_TYPES,
+    ).values_list('driveOfPlay_id', 'nflMatch_id', 'teamOnOffense_id', 'playType', 'yardsFromEndzone', 'sequenceNumber'):
+        if yardsFromEndzone == None:
+            continue
+        drive = drivesById.get(driveId)
+        if drive != None:
+            if drive['closest'] == None or yardsFromEndzone < drive['closest']:
+                drive['closest'] = yardsFromEndzone
+            if sequenceNumber != None and (drive['firstSequence'] == None or sequenceNumber < drive['firstSequence']):
+                drive['firstSequence'] = sequenceNumber
+                drive['start'] = 100 - yardsFromEndzone
+        if playType in MATCHUP_FIELD_GOAL_PLAY_TYPES and yardsFromEndzone + 17 >= 40:
+            kickingTeam = espnIdByTeamId.get(offenseTeamId)
+            addPlayStat(matchId, kickingTeam, "longFieldGoalAttempts")
+            if playType == 13:
+                addPlayStat(matchId, kickingTeam, "longFieldGoalsMade")
+        if playType == 41:
+            addPlayStat(matchId, otherTeam(matchId, espnIdByTeamId.get(offenseTeamId)), "kicksBlocked")
+
+    # Blocked punts aren't scrimmage plays, so they're counted on their own.
+    for matchId, offenseTeamId in playByPlay.objects.filter(
+        nflMatch_id__in = list(seasonMatches), playType = 25,
+    ).values_list('nflMatch_id', 'teamOnOffense_id'):
+        addPlayStat(matchId, otherTeam(matchId, espnIdByTeamId.get(offenseTeamId)), "kicksBlocked")
+
+    # --- Scoring plays: points by half, long TDs, return TDs, points per drive ---
+    pointsByDriveTeam = {}
+    for driveId, matchId, offenseTeamId, playType, pointsScored, offenseScored, yardsFromEndzone, quarter, playDescription in playByPlay.objects.filter(
+        nflMatch_id__in = list(seasonMatches), scoringPlay = True,
+    ).values_list('driveOfPlay_id', 'nflMatch_id', 'teamOnOffense_id', 'playType', 'pointsScored',
+                  'offenseScored', 'yardsFromEndzone', 'quarter', 'playDescription'):
+        offenseEspnId = espnIdByTeamId.get(offenseTeamId)
+        scoringTeam = offenseEspnId if offenseScored else otherTeam(matchId, offenseEspnId)
+        playPoints = matchupScoringPlayPoints(pointsScored, playDescription)
+        addPlayStat(matchId, scoringTeam, "firstHalfPoints" if quarter in ["1", "2"] else "secondHalfPoints", playPoints)
+        pointsByDriveTeam[(driveId, scoringTeam)] = pointsByDriveTeam.get((driveId, scoringTeam), 0) + playPoints
+        if (pointsScored or 0) >= 6:
+            if offenseScored and playType in [1, 2] and yardsFromEndzone != None and yardsFromEndzone > 20:
+                addPlayStat(matchId, scoringTeam, "tdsOutsideRedZone")
+            # Kickoffs list the receiving team on offense; punts list the punting team.
+            if (playType == 28 and offenseScored) or (playType == 24 and not offenseScored):
+                addPlayStat(matchId, scoringTeam, "returnTds")
+
+    for matchId, matchDrives in drivesByMatch.items():
+        matchDrives.sort(key = lambda drive: drive['sequence'] or 0)
+        for driveIndex, drive in enumerate(matchDrives):
+            if drive['team'] == None:
+                continue
+            # Every team with a drive has play stats, even if they're all 0.
+            playStats.setdefault((matchId, drive['team']), dict.fromkeys(MATCHUP_PLAY_KEYS, 0))
+            if drive['start'] != None:
+                addPlayStat(matchId, drive['team'], "driveStartYards", drive['start'])
+                addPlayStat(matchId, drive['team'], "drivesWithStart")
+            if drive['closest'] != None and drive['closest'] <= 20:
+                addPlayStat(matchId, drive['team'], "redZoneTrips")
+                if drive['result'] in [1, 11]:
+                    addPlayStat(matchId, drive['team'], "redZoneTds")
+                if drive['result'] in [7, 8, 9, 10]:
+                    addPlayStat(matchId, drive['team'], "redZoneTurnovers")
+                if drive['result'] == 12:
+                    addPlayStat(matchId, drive['team'], "redZoneDowns")
+            if drive['closest'] != None and drive['closest'] <= 5:
+                addPlayStat(matchId, drive['team'], "insideFiveTrips")
+                if drive['result'] in [1, 11]:
+                    addPlayStat(matchId, drive['team'], "insideFiveTds")
+            if drive['result'] in [7, 8, 9, 10]:
+                # A return TD scores on the turnover drive itself; otherwise the
+                # points come on the next drive, if the other team has it.
+                takeawayTeam = otherTeam(matchId, drive['team'])
+                pointsAfter = pointsByDriveTeam.get((drive['id'], takeawayTeam), 0)
+                if driveIndex + 1 < len(matchDrives) and matchDrives[driveIndex + 1]['team'] == takeawayTeam:
+                    pointsAfter += pointsByDriveTeam.get((matchDrives[driveIndex + 1]['id'], takeawayTeam), 0)
+                addPlayStat(matchId, takeawayTeam, "pointsOffTurnovers", pointsAfter)
+
+    for (matchId, teamEspnId), rawPlayStats in playStats.items():
+        if teamEspnId == None:
+            continue
+        weekOfSeason = seasonMatches[matchId][0]
+        teamGameStats.setdefault((teamEspnId, weekOfSeason), {}).update(rawPlayStats)
+
+    return teamGameStats, opponentByTeamWeek
+
+
+def matchupMetricValue(metricKey, teamGameStats, opponentByTeamWeek, teamEspnId, weekOfSeason):
+    # One team-game's (num, den) for a metric - den is None for counts - or None
+    # when that game isn't stored (a bye, not played, or not pulled yet).
+    metric = MATCHUP_METRICS[metricKey]
+    sourceTeam = opponentByTeamWeek.get((teamEspnId, weekOfSeason)) if metric.get("allowed") else teamEspnId
+    if sourceTeam == None or (teamEspnId, weekOfSeason) not in opponentByTeamWeek:
+        return None
+    rawStats = teamGameStats.get((sourceTeam, weekOfSeason))
+    if rawStats == None:
+        return None
+    rawKeys = metric["num"] + metric.get("den", [])
+    if any(rawStats.get(rawKey) == None for rawKey in rawKeys):
+        return None
+    numerator = sum(rawStats[rawKey] for rawKey in metric["num"])
+    denominator = sum(rawStats[rawKey] for rawKey in metric["den"]) if "den" in metric else None
+    return (numerator, denominator)
+
+
+def matchupMetricScore(metricKey, numerator, denominator):
+    # What a metric is ranked on: the count, the percentage or the average.
+    kind = MATCHUP_METRICS[metricKey].get("kind", "count")
+    if kind == "count":
+        return numerator
+    if not denominator:
+        return None
+    return numerator / denominator * (100 if kind == "ratio" else 1)
+
+
+def formatMatchupMetric(metricKey, numerator, denominator, isTotal):
+    # Weekly ratio cells read "2/3"; totals read "57.1%". Averages one decimal.
+    kind = MATCHUP_METRICS[metricKey].get("kind", "count")
+    if kind == "count":
+        return f"{numerator:g}"
+    if kind == "ratio" and not isTotal:
+        return f"{numerator:g}/{denominator:g}"
+    score = matchupMetricScore(metricKey, numerator, denominator)
+    if score == None:
+        return "0/0" if kind == "ratio" else "–"
+    return f"{score:.1f}%" if kind == "ratio" else f"{score:.1f}"
+
+
+def rankMatchupMetric(metricKey, teamGameStats, opponentByTeamWeek, throughWeek):
+    # {teamEspnId: {'rank', 'teamCount', 'numerator', 'denominator'}} over weeks
+    # 1..throughWeek, best first. Teams with nothing to go on are left out.
+    metric = MATCHUP_METRICS[metricKey]
+    teamTotals = {}
+    for teamEspnId in {teamEspnId for teamEspnId, weekOfSeason in opponentByTeamWeek}:
+        numerator, denominator, gamesCounted = 0, 0, 0
+        for weekOfSeason in range(1, throughWeek + 1):
+            weekValue = matchupMetricValue(metricKey, teamGameStats, opponentByTeamWeek, teamEspnId, weekOfSeason)
+            if weekValue == None:
+                continue
+            gamesCounted += 1
+            numerator += weekValue[0]
+            denominator += weekValue[1] or 0
+        if gamesCounted == 0:
+            continue
+        totalDenominator = denominator if "den" in metric else None
+        score = matchupMetricScore(metricKey, numerator, totalDenominator)
+        teamTotals[teamEspnId] = {'numerator': numerator, 'denominator': totalDenominator, 'score': score}
+
+    # Ties go alphabetically, as on the Teams -> Rankings tab.
+    abbreviationsByEspnId = dict(nflTeam.objects.values_list('espnId', 'abbreviation'))
+    rankedTeams = sorted((teamEspnId for teamEspnId in teamTotals if teamTotals[teamEspnId]['score'] != None),
+        key = lambda teamEspnId: (teamTotals[teamEspnId]['score'] if metric.get("lowerIsBetter") else -teamTotals[teamEspnId]['score'],
+                                  abbreviationsByEspnId.get(teamEspnId, "")))
+    for rankIndex, teamEspnId in enumerate(rankedTeams):
+        teamTotals[teamEspnId]['rank'] = rankIndex + 1
+    for teamTotal in teamTotals.values():
+        teamTotal['teamCount'] = len(rankedTeams)
+    return teamTotals

@@ -1059,7 +1059,7 @@ table thead tr th:first-child {
   width: 72px;
 }
 .matchupTable .matchupLabelCol {
-  width: 200px;
+  width: 240px;
 }
 .matchupTable .matchupWeekCol {
   width: 50px;
@@ -1068,6 +1068,12 @@ table thead tr th:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Number cells get less side padding so weekly ratios like "10/15" fit 50px. */
+.matchupTable .byTeamNum {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
 /* Opponent row under the week headers: less side padding so "@NYG" fits 50px. */
 .matchupTable .byTeamOpponent {
   padding-left: 4px;
@@ -1123,6 +1129,22 @@ table thead tr th:first-child {
 }
 #matchupResults:not(.matchupResultsHidden) .matchupResultCell {
   --bs-table-bg-state: rgba(59, 130, 246, 0.18);
+}
+
+/* Collapsible sections (player tables on Scoring / Special Teams): the title
+   toggles the table, and its chevron turns to point right while collapsed. */
+.matchupSectionTitle[data-bs-toggle="collapse"] {
+  cursor: pointer;
+}
+.matchupToggleArrow {
+  display: inline-block;
+  font-size: 0.7em;
+  margin-right: 0.4rem;
+  vertical-align: 0.1em;
+  transition: transform 0.15s ease;
+}
+.matchupSectionTitle.collapsed .matchupToggleArrow {
+  transform: rotate(-90deg);
 }
 
 /* Splits the picked team's attack from the opponent's. */

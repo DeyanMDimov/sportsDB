@@ -1679,105 +1679,166 @@ def predictTouchdowns(request):
     
     return render(request, 'nfl/predictTouchdowns.html', pageDictionary)
 
-# What each Matchup category shows: the picked team's offense stats, its
-# opponent's defense stats, the team's player tables as (title, stat key from
-# crudLogic.TEAM_WEEKLY_STATS, how many players - None for all, whether to show
-# each player's position after their name), and whether to add the
-# interceptions table.
+# What each Matchup category shows, as a list of tables. Each side of the
+# matchup gets the whole list - "offense" is that side's attacking team and
+# "defense" the team it faces - and the page shows one side, a split line, and
+# then the other.
+#   team:   one team's stats (keys from crudLogic.MATCHUP_METRICS), with an
+#           opponent row under the week headers;
+#   paired: rows from both teams, each label prefixed with and underlined in
+#           its team's colors;
+#   player: the attacking team's players for one or more summed stat keys from
+#           crudLogic.TEAM_WEEKLY_STATS, top `count` (None for everyone who
+#           has any), optionally with positions, optionally collapsible.
 MATCHUP_CATEGORIES = {
-    'rushing': {
-        'offense': ["totalYardsGained", "rushingYards"],
-        'defense': ["totalYardsAllowedByDefense", "totalRushYardsAllowed"],
-        'playerTables': [("Top Rushers", "rushingYards", 5, False)],
-        'interceptions': False,
-    },
-    'receiving': {
-        'offense': ["totalYardsGained", "totalPassingYards"],
-        'defense': ["totalYardsAllowedByDefense", "totalPassYardsAllowed"],
-        'playerTables': [("QBs", "passingYards", None, False), ("Top Receivers", "receivingYards", 5, True)],
-        'interceptions': True,
-    },
+    'rushing': [
+        {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "rushingYards"]},
+        {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalRushYardsAllowed"]},
+        {'kind': 'player', 'title': "Top Rushers", 'statKeys': ["rushingYards"], 'statLabel': "Rush Yds", 'count': 5},
+    ],
+    'receiving': [
+        {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "totalPassingYards"]},
+        {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalPassYardsAllowed"]},
+        {'kind': 'player', 'title': "QBs", 'statKeys': ["passingYards"], 'statLabel': "Pass Yds", 'count': None},
+        {'kind': 'player', 'title': "Top Receivers", 'statKeys': ["receivingYards"], 'statLabel': "Rec Yds", 'count': 5, 'showPosition': True},
+        {'kind': 'paired', 'title': "INTs", 'rows': [('offense', "intsThrown"), ('defense', "intsCaught")]},
+    ],
+    'scoring': [
+        {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': [
+            "points", "touchdowns", "rushingTds", "passingTds", "tdsOutsideRedZone", "pointsOffTurnovers",
+            "firstHalfPoints", "secondHalfPoints", "twoPointPct"]},
+        {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': [
+            "pointsAllowed", "touchdownsAllowed", "rushingTdsAllowed", "passingTdsAllowed", "tdsOutsideRedZoneAllowed",
+            "pointsOffTurnoversAllowed", "firstHalfPointsAllowed", "secondHalfPointsAllowed", "defensiveTds"]},
+        {'kind': 'paired', 'title': "Red Zone", 'rows': [
+            ('offense', "redZoneTrips"), ('defense', "redZoneTripsAllowed"),
+            ('offense', "redZoneTdPct"), ('defense', "redZoneTdPctAllowed"),
+            ('offense', "insideFiveTdPct"), ('defense', "insideFiveTdPctAllowed"),
+            ('offense', "redZoneTurnovers"), ('defense', "redZoneTakeaways"),
+            ('offense', "redZoneDowns"), ('defense', "redZoneStopsOnDowns")]},
+        {'kind': 'paired', 'title': "Downs", 'rows': [
+            ('offense', "thirdDownPct"), ('defense', "thirdDownPctAllowed"),
+            ('offense', "fourthDownPct"), ('defense', "fourthDownPctAllowed")]},
+        {'kind': 'player', 'title': "TD Scorers", 'statKeys': ["rushingTds", "receivingTds"], 'statLabel': "Rush + Rec TDs",
+         'count': None, 'showPosition': True, 'collapsible': True},
+        {'kind': 'player', 'title': "Red Zone Touches", 'statKeys': ["redZoneCarries", "redZoneReceptions"], 'statLabel': "Carries + Catches",
+         'count': 6, 'showPosition': True, 'collapsible': True},
+    ],
+    'specialTeams': [
+        {'kind': 'team', 'side': 'offense', 'title': "Kicking", 'metrics': [
+            "fieldGoalsMade", "fieldGoalAttempts", "fieldGoalPct", "longFieldGoalPct", "extraPointPct", "punts", "puntsInsideTen"]},
+        {'kind': 'paired', 'title': "Returns & Blocks", 'rows': [
+            ('offense', "returnTds"), ('defense', "returnTdsAllowed"),
+            ('offense', "kicksBlocked"), ('defense', "kicksBlockedAllowed"),
+            ('offense', "averageDriveStart"), ('defense', "averageDriveStartAllowed")]},
+        {'kind': 'player', 'title': "Returners", 'statKeys': ["returnYards"], 'statLabel': "Ret Yds",
+         'count': 4, 'showPosition': True, 'collapsible': True},
+    ],
 }
 
 
-# Shorter names for the Matchup tables so every table's Stat column fits the same width.
-MATCHUP_STAT_LABELS = {
-    "totalYardsAllowedByDefense": "Total Yards Allowed",
-    "totalRushYardsAllowed": "Rush Yards Allowed",
-    "totalPassYardsAllowed": "Pass Yards Allowed",
-    "totalPassingYards": "Passing Yards",
-}
-
-
-def matchupTeamStatRows(team, seasonYear, statFields, throughWeek, weekColumns, resultWeek, label = None, underlineTeam = False):
-    # One Rankings-style row per stat for a single team: its league rank, its
-    # total over weeks 1..throughWeek and the week-by-week figures. resultWeek is
-    # the match being previewed when its stats are stored - its cell carries the
-    # result, which the page keeps hidden until Show result is ticked. label
-    # replaces the stat's own name (only used with a single stat). underlineTeam
-    # puts the team's colors under the label, for tables mixing both teams.
+def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultWeek, labelWithTeam = False):
+    # One Rankings-style row per (team, metric): the team's league rank, its total
+    # over weeks 1..throughWeek and the week-by-week figures. resultWeek is the
+    # match being previewed when its stats are stored - its cell carries the
+    # result, which the page keeps hidden until Show result is ticked.
+    # labelWithTeam prefixes the label with the team and underlines it in the
+    # team's colors, for tables mixing both teams.
+    teamGameStats, opponentByTeamWeek = seasonStats
     statRows = []
-    for statField in statFields:
-        weekNumbers, rankingRows, lowerIsBetter, isAveraged = crudLogic.getTeamRankings(seasonYear, statField, 1, throughWeek)
-        teamRow = next((rankingRow for rankingRow in rankingRows if rankingRow['team'].espnId == team.espnId), None)
-        if teamRow == None:
+    for team, metricKey in rowSpecs:
+        teamTotal = crudLogic.rankMatchupMetric(metricKey, teamGameStats, opponentByTeamWeek, throughWeek).get(team.espnId)
+        if teamTotal == None:
             continue
 
-        # Weeks after this match get empty cells so every table runs the whole season.
-        weekCells = list(teamRow['weekCells'])
-        for weekColumn in weekColumns[throughWeek:]:
-            if weekColumn['week'] == resultWeek:
-                resultValue = teamMatchPerformance.objects.filter(
-                    yearOfSeason = int(seasonYear), weekOfSeason = resultWeek, teamEspnId = team.espnId,
-                ).values_list(statField, flat = True).first()
-                weekCells.append({'played': resultValue != None, 'value': resultValue, 'result': True})
-            else:
-                weekCells.append({'played': False, 'future': True})
+        weekCells = []
+        for weekColumn in weekColumns:
+            weekNumber = weekColumn['week']
+            isResult = weekNumber == resultWeek
+            if weekNumber > throughWeek and not isResult:
+                # Weeks after this match stay empty so every table runs the whole season.
+                weekCells.append({'future': True})
+                continue
+            weekValue = crudLogic.matchupMetricValue(metricKey, teamGameStats, opponentByTeamWeek, team.espnId, weekNumber)
+            weekCells.append({
+                'played': weekValue != None,
+                'display': crudLogic.formatMatchupMetric(metricKey, weekValue[0], weekValue[1], False) if weekValue != None else None,
+                'result': isResult,
+            })
 
+        metricLabel = crudLogic.MATCHUP_METRICS[metricKey]['label']
         statRows.append({
-            'label': label or MATCHUP_STAT_LABELS.get(statField) or teamStatLabel(statField),
-            'team': team if underlineTeam else None,
-            'rank': teamRow['rank'],
-            'teamCount': len(rankingRows),
-            'seasonTotal': teamRow['seasonTotal'],
-            'isAveraged': isAveraged,
+            'label': f"{team.abbreviation} {metricLabel}" if labelWithTeam else metricLabel,
+            'team': team if labelWithTeam else None,
+            'rank': teamTotal.get('rank'),
+            'teamCount': teamTotal['teamCount'],
+            'seasonDisplay': crudLogic.formatMatchupMetric(metricKey, teamTotal['numerator'], teamTotal['denominator'], True),
             'weekCells': weekCells,
         })
     return statRows
 
 
-def matchupPlayerRows(team, seasonYear, statKey, throughWeek, weekColumns, resultWeek, playerCount):
-    # The team's leading players for one stat over weeks 1..throughWeek, laid out
-    # on the same week columns as the team tables so bye weeks line up. The
-    # ranking only looks at those weeks; resultWeek's cells ride along hidden.
-    playedWeeks, playerRows, teamTotalRow = crudLogic.getTeamStatByWeek(team, seasonYear, statKey, throughWeek = throughWeek)
-    weekIndexes = {playedWeek['week']: weekIndex for weekIndex, playedWeek in enumerate(playedWeeks)}
+MATCHUP_COUNTING_PLAYER_STATS = ["rushingTds", "receivingTds", "redZoneCarries", "redZoneReceptions"]
 
-    resultCellsByPlayerId = {}
-    if resultWeek != None:
-        resultWeeks, resultRows, resultTotalRow = crudLogic.getTeamStatByWeek(team, seasonYear, statKey, throughWeek = resultWeek)
-        resultIndex = next((weekIndex for weekIndex, resultWeekColumn in enumerate(resultWeeks) if resultWeekColumn['week'] == resultWeek), None)
-        if resultIndex != None:
-            resultCellsByPlayerId = {resultRow['player'].id: resultRow['weekCells'][resultIndex] for resultRow in resultRows}
+
+def matchupPlayerRows(team, seasonYear, statKeys, throughWeek, weekColumns, resultWeek, playerCount):
+    # The team's leading players over weeks 1..throughWeek for one stat, or
+    # several added together (rushing + receiving TDs), laid out on the same week
+    # columns as the team tables so bye weeks line up. The ranking only looks at
+    # those weeks; resultWeek's cells ride along hidden.
+    def combinedWeekCells(throughWeekLimit):
+        # {player id: player}, {player id: {week: cell}} with the stat keys summed.
+        playersById, cellsByPlayerId = {}, {}
+        for statKey in statKeys:
+            playedWeeks, playerRows, teamTotalRow = crudLogic.getTeamStatByWeek(team, seasonYear, statKey, throughWeek = throughWeekLimit)
+            for playerRow in playerRows:
+                playersById[playerRow['player'].id] = playerRow['player']
+                playerCells = cellsByPlayerId.setdefault(playerRow['player'].id, {})
+                for playedWeek, weekCell in zip(playedWeeks, playerRow['weekCells']):
+                    existingCell = playerCells.get(playedWeek['week'])
+                    if existingCell == None:
+                        playerCells[playedWeek['week']] = dict(weekCell)
+                    elif weekCell['state'] == 'value' or existingCell['state'] == 'value':
+                        playerCells[playedWeek['week']] = {'state': 'value',
+                            'value': existingCell.get('value', 0) + weekCell.get('value', 0)}
+            # Weeks the team played but nobody here touched the ball.
+            for playerCells in cellsByPlayerId.values():
+                for playedWeek in playedWeeks:
+                    playerCells.setdefault(playedWeek['week'], {'state': 'value', 'value': 0})
+        return playersById, cellsByPlayerId
+
+    playersById, cellsByPlayerId = combinedWeekCells(throughWeek)
+    resultCellsByPlayerId = combinedWeekCells(resultWeek)[1] if resultWeek != None else {}
+
+    seasonTotals = {playerId: sum(cell.get('value', 0) for cell in playerCells.values() if cell['state'] == 'value')
+        for playerId, playerCells in cellsByPlayerId.items()}
+    # Counting stats (TDs, red zone touches) only list players who have some;
+    # yardage tables keep everyone who touched the ball, as the Players page does.
+    countingStat = any(statKey in MATCHUP_COUNTING_PLAYER_STATS for statKey in statKeys)
+    rankedPlayerIds = sorted((playerId for playerId in seasonTotals if seasonTotals[playerId] > 0 or not countingStat),
+        key = lambda playerId: (-seasonTotals[playerId], playersById[playerId].name))
+    if playerCount != None:
+        rankedPlayerIds = rankedPlayerIds[:playerCount]
 
     topRows = []
-    for playerRow in playerRows[:playerCount]:
+    for playerId in rankedPlayerIds:
         weekCells = []
         for weekColumn in weekColumns:
             weekNumber = weekColumn['week']
             if weekNumber == resultWeek:
-                # Not in the result rows at all means no carries/catches that game.
-                weekCells.append(dict(resultCellsByPlayerId.get(playerRow['player'].id, {'state': 'value', 'value': 0}), result = True))
+                # Not in the result rows at all means no part in that game's stat.
+                resultCell = resultCellsByPlayerId.get(playerId, {}).get(weekNumber, {'state': 'value', 'value': 0})
+                weekCells.append(dict(resultCell, result = True))
             elif weekNumber > throughWeek:
                 weekCells.append({'state': 'future'})
-            elif weekNumber in weekIndexes:
-                weekCells.append(playerRow['weekCells'][weekIndexes[weekNumber]])
+            elif weekNumber in cellsByPlayerId[playerId]:
+                weekCells.append(cellsByPlayerId[playerId][weekNumber])
             else:
                 weekCells.append({'state': 'bye'})
         topRows.append({
             'rank': len(topRows) + 1,
-            'player': playerRow['player'],
-            'seasonTotal': playerRow['seasonTotal'],
+            'player': playersById[playerId],
+            'seasonTotal': seasonTotals[playerId],
             'weekCells': weekCells,
         })
     return topRows
@@ -1825,6 +1886,7 @@ def getMatchup(request):
         ('rushing', 'Rushing'),
         ('receiving', 'Receiving'),
         ('scoring', 'Scoring'),
+        ('specialTeams', 'Special Teams'),
     ]
 
     pageDictionary['playedWeeks'] = matchupPlayedWeeks()
@@ -1897,31 +1959,33 @@ def getMatchup(request):
         weekColumn['isResult'] = weekColumn['week'] == resultWeek
     pageDictionary['matchupWeeks'] = weekColumns
     # Every table gets the same fixed column widths (see .matchupTable in style.css)
-    # so their columns line up: rank 72 + label 200 + total 72 + 50 per week.
-    pageDictionary['matchupTableWidth'] = 72 + 200 + 72 + 50 * len(weekColumns)
+    # so their columns line up: rank 72 + label 240 + total 72 + 50 per week.
+    pageDictionary['matchupTableWidth'] = 72 + 240 + 72 + 50 * len(weekColumns)
 
     opponentsByTeamId = {matchupTeam.id: matchupOpponentsByWeek(matchupTeam, yearOfSeason, weekColumns)
         for matchupTeam in [selectedTeam, opponent]}
+    seasonStats = crudLogic.getMatchupSeasonStats(yearOfSeason)
 
     def sideSections(offenseTeam, defenseTeam):
         # One side of the matchup: offenseTeam's attack against defenseTeam's defense.
-        side = [
-            {'kind': 'team', 'title': f"{offenseTeam.abbreviation} Offense", 'team': offenseTeam,
-             'opponents': opponentsByTeamId[offenseTeam.id],
-             'rows': matchupTeamStatRows(offenseTeam, yearOfSeason, categorySetup['offense'], throughWeek, weekColumns, resultWeek)},
-            {'kind': 'team', 'title': f"{defenseTeam.abbreviation} Defense", 'team': defenseTeam,
-             'opponents': opponentsByTeamId[defenseTeam.id],
-             'rows': matchupTeamStatRows(defenseTeam, yearOfSeason, categorySetup['defense'], throughWeek, weekColumns, resultWeek)},
-        ]
-        for tableTitle, statKey, playerCount, showPosition in categorySetup['playerTables']:
-            side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {tableTitle}", 'team': offenseTeam,
-                'statLabel': crudLogic.PERFORMANCE_STAT_LABELS[statKey], 'showPosition': showPosition,
-                'rows': matchupPlayerRows(offenseTeam, yearOfSeason, statKey, throughWeek, weekColumns, resultWeek, playerCount)})
-        if categorySetup['interceptions']:
-            # Thrown by this side's offense against caught by the other team's defense.
-            side.append({'kind': 'team', 'title': f"{offenseTeam.abbreviation} INTs", 'team': offenseTeam,
-                'rows': matchupTeamStatRows(offenseTeam, yearOfSeason, ["interceptionsOnOffense"], throughWeek, weekColumns, resultWeek, f"{offenseTeam.abbreviation} INTs Thrown", underlineTeam = True)
-                    + matchupTeamStatRows(defenseTeam, yearOfSeason, ["defenseInterceptions"], throughWeek, weekColumns, resultWeek, f"{defenseTeam.abbreviation} INTs Caught", underlineTeam = True)})
+        sideTeams = {'offense': offenseTeam, 'defense': defenseTeam}
+        side = []
+        for sectionSetup in categorySetup:
+            if sectionSetup['kind'] == 'team':
+                sectionTeam = sideTeams[sectionSetup['side']]
+                side.append({'kind': 'team', 'title': f"{sectionTeam.abbreviation} {sectionSetup['title']}", 'team': sectionTeam,
+                    'opponents': opponentsByTeamId[sectionTeam.id],
+                    'rows': matchupTeamStatRows([(sectionTeam, metricKey) for metricKey in sectionSetup['metrics']],
+                        seasonStats, throughWeek, weekColumns, resultWeek)})
+            elif sectionSetup['kind'] == 'paired':
+                side.append({'kind': 'team', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
+                    'rows': matchupTeamStatRows([(sideTeams[rowSide], metricKey) for rowSide, metricKey in sectionSetup['rows']],
+                        seasonStats, throughWeek, weekColumns, resultWeek, labelWithTeam = True)})
+            else:
+                side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
+                    'statLabel': sectionSetup['statLabel'], 'showPosition': sectionSetup.get('showPosition', False),
+                    'collapsible': sectionSetup.get('collapsible', False),
+                    'rows': matchupPlayerRows(offenseTeam, yearOfSeason, sectionSetup['statKeys'], throughWeek, weekColumns, resultWeek, sectionSetup['count'])})
         return side
 
     sections = sideSections(selectedTeam, opponent) + [{'kind': 'split'}] + sideSections(opponent, selectedTeam)

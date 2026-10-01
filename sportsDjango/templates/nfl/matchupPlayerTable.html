@@ -24,7 +24,7 @@ columns as the team tables.
         {% for playerRow in playerRows %}
         <tr>
             <td class="byTeamNum">{{ playerRow.rank }}</td>
-            <td class="byTeamPlayer">{{ playerRow.player.name }}{% if showPosition %} ({{ playerRow.player.get_playerPosition_display }}){% endif %}</td>
+            <td class="byTeamPlayer" title="{{ playerRow.player.name }}">{{ playerRow.player.name }}{% if showPosition %} ({{ playerRow.player.get_playerPosition_display }}){% endif %}</td>
             <td class="byTeamNum"><b>{{ playerRow.seasonTotal }}</b></td>
             {% for weekCell in playerRow.weekCells %}
             {% if weekCell.state == "future" %}

@@ -1,5 +1,5 @@
 {% comment %}
-One team's stats on the Matchup page, laid out like the Teams -> Rankings table
+Team stats on the Matchup page (values come pre-formatted: "57.1%", "2/3"), laid out like the Teams -> Rankings table
 but with a row per stat instead of a row per team.
 {% include 'nfl/matchupStatTable.html' with statRows=section.rows opponents=section.opponents %}
 {% endcomment %}
@@ -30,15 +30,15 @@ but with a row per stat instead of a row per team.
     <tbody>
         {% for statRow in statRows %}
         <tr>
-            <td class="byTeamNum">{{ statRow.rank }} / {{ statRow.teamCount }}</td>
-            <td class="byTeamPlayer{% if statRow.team %} team-border team-{{ statRow.team.abbreviation }}{% endif %}">{{ statRow.label }}</td>
-            <td class="byTeamNum"><b>{{ statRow.seasonTotal|floatformat:"-1" }}</b></td>
+            <td class="byTeamNum">{% if statRow.rank %}{{ statRow.rank }} / {{ statRow.teamCount }}{% else %}&ndash;{% endif %}</td>
+            <td class="byTeamPlayer{% if statRow.team %} team-border team-{{ statRow.team.abbreviation }}{% endif %}" title="{{ statRow.label }}">{{ statRow.label }}</td>
+            <td class="byTeamNum"><b>{{ statRow.seasonDisplay }}</b></td>
             {% for weekCell in statRow.weekCells %}
             {% if weekCell.result %}
             {# The match being previewed: hidden until Show result is ticked #}
-            <td class="byTeamNum matchupResultCell"><span class="matchupResult">{% if weekCell.played %}{{ weekCell.value|floatformat:"-1" }}{% else %}&ndash;{% endif %}</span></td>
+            <td class="byTeamNum matchupResultCell"><span class="matchupResult">{% if weekCell.played %}{{ weekCell.display }}{% else %}&ndash;{% endif %}</span></td>
             {% elif weekCell.played %}
-            <td class="byTeamNum">{{ weekCell.value|floatformat:"-1" }}</td>
+            <td class="byTeamNum">{{ weekCell.display }}</td>
             {% elif weekCell.future %}
             <td class="byTeamNum"></td>
             {% else %}
