@@ -1,0 +1,46 @@
+{% comment %}
+A team's leading players for one stat on the Matchup page, on the same week
+columns as the team tables.
+{% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition %}
+{% endcomment %}
+{% if playerRows %}
+<div class="byTeamTableWrap">
+<table class="table table-bordered table-sm byTeamTable matchupTable" style="width: {{ matchupTableWidth }}px">
+    <colgroup>
+        <col class="matchupRankCol"><col class="matchupLabelCol"><col class="matchupTotalCol">
+        {% for wk in matchupWeeks %}<col class="matchupWeekCol">{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th class="byTeamNum">#</th>
+            <th class="byTeamPlayer">Player</th>
+            <th class="byTeamNum">Total</th>
+            {% for wk in matchupWeeks %}
+            <th class="byTeamNum{% if wk.isResult %} matchupResultCell{% endif %}">{{ wk.label }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for playerRow in playerRows %}
+        <tr>
+            <td class="byTeamNum">{{ playerRow.rank }}</td>
+            <td class="byTeamPlayer">{{ playerRow.player.name }}{% if showPosition %} ({{ playerRow.player.get_playerPosition_display }}){% endif %}</td>
+            <td class="byTeamNum"><b>{{ playerRow.seasonTotal }}</b></td>
+            {% for weekCell in playerRow.weekCells %}
+            {% if weekCell.state == "future" %}
+            <td class="byTeamNum"></td>
+            {% elif weekCell.state == "bye" %}
+            <td class="byTeamNum text-muted">&ndash;</td>
+            {% else %}
+            {# The match being previewed is hidden until Show result is ticked #}
+            <td class="byTeamNum{% if weekCell.result %} matchupResultCell{% endif %}"{% if weekCell.label %} title="{{ weekCell.label }}"{% endif %}>{% if weekCell.result %}<span class="matchupResult">{% endif %}{% if weekCell.state == "value" %}{{ weekCell.value }}{% elif weekCell.state == "out" %}&#10060;{% elif weekCell.state == "notInRoster" %}&#10134;{% else %}0{% endif %}{% if weekCell.result %}</span>{% endif %}</td>
+            {% endif %}
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<p class="text-muted">Nothing recorded for those weeks &mdash; play-by-play may not be pulled for them.</p>
+{% endif %}

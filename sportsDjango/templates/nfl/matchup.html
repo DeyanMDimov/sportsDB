@@ -12,34 +12,135 @@
             <div class="tab-pane fade show active" id="matchPane" role="tabpanel" aria-labelledby="matchTab">
                 <form method="GET" class="p-3" id="matchupForm">
                     <div class="row g-2">
-                        <div class="mb-1 col-2">
+                        <div class="mb-1 col-auto" style="width: 120px">
                             <div class="form-floating">
-                                <select name="season" id="season" class="form-control">
+                                <select name="season" id="season" class="form-select">
                                     {% for yr in years %}
-                                    <option value="{{yr}}">{{yr}}</option>
+                                    <option value="{{yr}}" {% if yr|stringformat:"i" == selectedYear %}selected{% endif %}>{{yr}}</option>
                                     {% endfor %}
                                 </select>
                                 <label for="season">Season:</label>
                             </div>
                         </div>
-                        <div class="mb-1 col-2">
+                        <div class="mb-1 col-auto" style="width: 120px">
+                            <div class="form-floating">
+                                <select name="week" id="week" class="form-select">
+                                    {% for wk in weeks %}
+                                    <option value="{{wk.0}}" {% if wk.0 == selectedWeek %}selected{% endif %}>{{wk.1}}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="week">Week:</label>
+                            </div>
+                        </div>
+                        {% comment %} col-auto because the team dropdown has a 250px min-width that overflows a col-2 into Category {% endcomment %}
+                        <div class="mb-1 col-auto">
                             {% include 'nfl/teamDropdown.html' %}
                         </div>
                         <div class="mb-1 col-2">
                             <div class="form-floating">
-                                <select name="category" id="category" class="form-control">
+                                <select name="category" id="category" class="form-select">
                                     {% for value, label in categories %}
-                                    <option value="{{value}}">{{label}}</option>
+                                    <option value="{{value}}" {% if value == selectedCategory %}selected{% endif %}>{{label}}</option>
                                     {% endfor %}
                                 </select>
                                 <label for="category">Category:</label>
                             </div>
                         </div>
+                        <div class="mb-1 col-auto d-flex align-items-center">
+                            <div class="form-check ms-2" id="showResultWrap">
+                                <input class="form-check-input" type="checkbox" name="showResult" value="1" id="showResult" {% if showResult %}checked{% endif %}>
+                                <label class="form-check-label" for="showResult">Show result</label>
+                            </div>
+                        </div>
                     </div>
-                    {% comment %} Not wired up yet, so it doesn't submit the form. {% endcomment %}
-                    <button type="button" class="btn btn-outline-primary">Load!</button>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                    <span class="text-danger ms-2" id="matchupTeamMissing" style="display:none">Pick a team first.</span>
                 </form>
             </div>
         </div>
+
+        {% if matchupActive %}
+        <div id="matchupResults" class="{% if not showResult %}matchupResultsHidden{% endif %}">
+        {% if not selectedTeam %}
+        <p class="text-muted">That team isn't stored.</p>
+        {% elif not selectedMatch %}
+        <p class="text-muted">{{ selectedTeam.abbreviation }} has no match stored for {{ selectedYear }} {{ selectedWeekLabel }} &mdash; likely a bye.</p>
+        {% elif not opponent %}
+        <p class="text-muted">The opponent for that match isn't stored.</p>
+        {% else %}
+        <h3>{{ selectedTeam.abbreviation }} {% if awayGame %}@{% else %}vs{% endif %} {{ opponent.abbreviation }} &mdash; {{ selectedYear }} {{ selectedWeekLabel }}{% if resultAvailable and selectedTeamPoints is not None %}<span class="matchupResult"> &middot; Final: {{ selectedTeam.abbreviation }} {{ selectedTeamPoints }}, {{ opponent.abbreviation }} {{ opponentPoints }}</span>{% endif %}</h3>
+        {% if not categoryBuilt %}
+        <p class="text-muted">{{ selectedCategory|capfirst }} isn't built yet &mdash; only Rushing and Receiving so far.</p>
+        {% elif throughWeek < 1 %}
+        <p class="text-muted">No games before week 1 to look at.</p>
+        {% else %}
+        <p class="text-muted">
+            Weeks 1&ndash;{{ throughWeek }}, the games before this one. Rank is league-wide over the same weeks.
+            &ndash; = bye week. In player tables, &#10060; = out that week and &#10134; = not on the roster.
+        </p>
+
+        {% for section in sections %}
+        {% if section.kind == "split" %}
+        <div class="matchupColumn" style="width: {{ matchupTableWidth }}px"><hr class="matchupSplit"></div>
+        {% else %}
+        <div class="matchupColumn" style="width: {{ matchupTableWidth }}px"><h4 class="matchupSectionTitle team-{{ section.team.abbreviation }}">{{ section.title }}{% if section.statLabel %} <small class="text-muted">{{ section.statLabel }}</small>{% endif %}</h4></div>
+        {% if section.kind == "team" %}
+        {% include 'nfl/matchupStatTable.html' with statRows=section.rows opponents=section.opponents %}
+        {% else %}
+        {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition %}
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+        {% endif %}
+        </div>
+        {% endif %}
     </div>
+
+    {{ playedWeeks|json_script:"matchupPlayedWeeks" }}
+    <script>
+        (function() {
+            // Show result is only offered for games whose stats are stored, and
+            // flips the already-loaded result cells on and off without reloading.
+            const playedWeeks = JSON.parse(document.getElementById('matchupPlayedWeeks').textContent);
+            const showResult = document.getElementById('showResult');
+            const seasonSelect = document.getElementById('season');
+            const weekSelect = document.getElementById('week');
+            const teamSelect = document.querySelector('#matchupForm select[name="teamName"]');
+            // The team dropdown has no blank option, so without this an untouched
+            // picker would quietly submit the first team in the list.
+            {% if not selectedTeam %}teamSelect.value = '';{% endif %}
+
+            function updateShowResultAvailability() {
+                const teamWeeks = (playedWeeks[seasonSelect.value] || {})[teamSelect.value] || [];
+                const available = teamWeeks.includes(parseInt(weekSelect.value, 10));
+                showResult.disabled = !available;
+                document.getElementById('showResultWrap').title = available ? '' : 'No stats stored for this game yet';
+            }
+            seasonSelect.addEventListener('change', updateShowResultAvailability);
+            weekSelect.addEventListener('change', updateShowResultAvailability);
+            // The team dropdown sets its hidden select without firing change.
+            document.querySelectorAll('#matchupForm .team-item').forEach(function(item) {
+                item.addEventListener('click', updateShowResultAvailability);
+            });
+
+            showResult.addEventListener('change', function() {
+                const results = document.getElementById('matchupResults');
+                if (results) {
+                    results.classList.toggle('matchupResultsHidden', !showResult.checked);
+                }
+            });
+            updateShowResultAvailability();
+        })();
+
+        (function() {
+            const teamSelect = document.querySelector('#matchupForm select[name="teamName"]');
+            document.getElementById('matchupForm').addEventListener('submit', function(e) {
+                if (!teamSelect.value) {
+                    e.preventDefault();
+                    document.getElementById('matchupTeamMissing').style.display = '';
+                }
+            });
+        })();
+    </script>
 {% endblock %}

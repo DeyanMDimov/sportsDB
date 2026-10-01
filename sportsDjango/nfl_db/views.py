@@ -1679,15 +1679,253 @@ def predictTouchdowns(request):
     
     return render(request, 'nfl/predictTouchdowns.html', pageDictionary)
 
+# What each Matchup category shows: the picked team's offense stats, its
+# opponent's defense stats, the team's player tables as (title, stat key from
+# crudLogic.TEAM_WEEKLY_STATS, how many players - None for all, whether to show
+# each player's position after their name), and whether to add the
+# interceptions table.
+MATCHUP_CATEGORIES = {
+    'rushing': {
+        'offense': ["totalYardsGained", "rushingYards"],
+        'defense': ["totalYardsAllowedByDefense", "totalRushYardsAllowed"],
+        'playerTables': [("Top Rushers", "rushingYards", 5, False)],
+        'interceptions': False,
+    },
+    'receiving': {
+        'offense': ["totalYardsGained", "totalPassingYards"],
+        'defense': ["totalYardsAllowedByDefense", "totalPassYardsAllowed"],
+        'playerTables': [("QBs", "passingYards", None, False), ("Top Receivers", "receivingYards", 5, True)],
+        'interceptions': True,
+    },
+}
+
+
+# Shorter names for the Matchup tables so every table's Stat column fits the same width.
+MATCHUP_STAT_LABELS = {
+    "totalYardsAllowedByDefense": "Total Yards Allowed",
+    "totalRushYardsAllowed": "Rush Yards Allowed",
+    "totalPassYardsAllowed": "Pass Yards Allowed",
+    "totalPassingYards": "Passing Yards",
+}
+
+
+def matchupTeamStatRows(team, seasonYear, statFields, throughWeek, weekColumns, resultWeek, label = None, underlineTeam = False):
+    # One Rankings-style row per stat for a single team: its league rank, its
+    # total over weeks 1..throughWeek and the week-by-week figures. resultWeek is
+    # the match being previewed when its stats are stored - its cell carries the
+    # result, which the page keeps hidden until Show result is ticked. label
+    # replaces the stat's own name (only used with a single stat). underlineTeam
+    # puts the team's colors under the label, for tables mixing both teams.
+    statRows = []
+    for statField in statFields:
+        weekNumbers, rankingRows, lowerIsBetter, isAveraged = crudLogic.getTeamRankings(seasonYear, statField, 1, throughWeek)
+        teamRow = next((rankingRow for rankingRow in rankingRows if rankingRow['team'].espnId == team.espnId), None)
+        if teamRow == None:
+            continue
+
+        # Weeks after this match get empty cells so every table runs the whole season.
+        weekCells = list(teamRow['weekCells'])
+        for weekColumn in weekColumns[throughWeek:]:
+            if weekColumn['week'] == resultWeek:
+                resultValue = teamMatchPerformance.objects.filter(
+                    yearOfSeason = int(seasonYear), weekOfSeason = resultWeek, teamEspnId = team.espnId,
+                ).values_list(statField, flat = True).first()
+                weekCells.append({'played': resultValue != None, 'value': resultValue, 'result': True})
+            else:
+                weekCells.append({'played': False, 'future': True})
+
+        statRows.append({
+            'label': label or MATCHUP_STAT_LABELS.get(statField) or teamStatLabel(statField),
+            'team': team if underlineTeam else None,
+            'rank': teamRow['rank'],
+            'teamCount': len(rankingRows),
+            'seasonTotal': teamRow['seasonTotal'],
+            'isAveraged': isAveraged,
+            'weekCells': weekCells,
+        })
+    return statRows
+
+
+def matchupPlayerRows(team, seasonYear, statKey, throughWeek, weekColumns, resultWeek, playerCount):
+    # The team's leading players for one stat over weeks 1..throughWeek, laid out
+    # on the same week columns as the team tables so bye weeks line up. The
+    # ranking only looks at those weeks; resultWeek's cells ride along hidden.
+    playedWeeks, playerRows, teamTotalRow = crudLogic.getTeamStatByWeek(team, seasonYear, statKey, throughWeek = throughWeek)
+    weekIndexes = {playedWeek['week']: weekIndex for weekIndex, playedWeek in enumerate(playedWeeks)}
+
+    resultCellsByPlayerId = {}
+    if resultWeek != None:
+        resultWeeks, resultRows, resultTotalRow = crudLogic.getTeamStatByWeek(team, seasonYear, statKey, throughWeek = resultWeek)
+        resultIndex = next((weekIndex for weekIndex, resultWeekColumn in enumerate(resultWeeks) if resultWeekColumn['week'] == resultWeek), None)
+        if resultIndex != None:
+            resultCellsByPlayerId = {resultRow['player'].id: resultRow['weekCells'][resultIndex] for resultRow in resultRows}
+
+    topRows = []
+    for playerRow in playerRows[:playerCount]:
+        weekCells = []
+        for weekColumn in weekColumns:
+            weekNumber = weekColumn['week']
+            if weekNumber == resultWeek:
+                # Not in the result rows at all means no carries/catches that game.
+                weekCells.append(dict(resultCellsByPlayerId.get(playerRow['player'].id, {'state': 'value', 'value': 0}), result = True))
+            elif weekNumber > throughWeek:
+                weekCells.append({'state': 'future'})
+            elif weekNumber in weekIndexes:
+                weekCells.append(playerRow['weekCells'][weekIndexes[weekNumber]])
+            else:
+                weekCells.append({'state': 'bye'})
+        topRows.append({
+            'rank': len(topRows) + 1,
+            'player': playerRow['player'],
+            'seasonTotal': playerRow['seasonTotal'],
+            'weekCells': weekCells,
+        })
+    return topRows
+
+
+def matchupOpponentsByWeek(team, seasonYear, weekColumns):
+    # The team's opponent for each week column ("@" for away games, BYE when it
+    # had none), for the row under the week headers.
+    abbreviationsByEspnId = dict(nflTeam.objects.values_list('espnId', 'abbreviation'))
+    opponentsByWeek = {}
+    for weekOfSeason, homeEspnId, awayEspnId in nflMatch.objects.filter(
+        yearOfSeason = int(seasonYear),
+    ).filter(
+        models.Q(homeTeamEspnId = team.espnId) | models.Q(awayTeamEspnId = team.espnId)
+    ).values_list('weekOfSeason', 'homeTeamEspnId', 'awayTeamEspnId'):
+        if awayEspnId == team.espnId:
+            opponentsByWeek[weekOfSeason] = "@" + abbreviationsByEspnId.get(homeEspnId, "?")
+        else:
+            opponentsByWeek[weekOfSeason] = abbreviationsByEspnId.get(awayEspnId, "?")
+    return [opponentsByWeek.get(weekColumn['week'], "BYE") for weekColumn in weekColumns]
+
+
+def matchupPlayedWeeks():
+    # {season: {team abbreviation: [weeks with stats stored]}} - lets the page
+    # switch Show result on and off as the Season/Week/Team inputs change.
+    abbreviationsByEspnId = dict(nflTeam.objects.values_list('espnId', 'abbreviation'))
+    playedWeeks = {}
+    for yearOfSeason, teamEspnId, weekOfSeason in teamMatchPerformance.objects.values_list(
+        'yearOfSeason', 'teamEspnId', 'weekOfSeason').distinct():
+        abbreviation = abbreviationsByEspnId.get(teamEspnId)
+        if abbreviation:
+            playedWeeks.setdefault(str(yearOfSeason), {}).setdefault(abbreviation, []).append(weekOfSeason)
+    return playedWeeks
+
+
 def getMatchup(request):
+    yearsOnPage = yearsOnPage_Helper()
     pageDictionary = {}
-    pageDictionary['years'] = yearsOnPage_Helper()
+    pageDictionary['years'] = yearsOnPage
+    # Short playoff labels so the narrow Week dropdown doesn't clip them
+    shortPlayoffLabels = {19: "WC", 20: "DIV", 21: "CONF", 22: "SB"}
+    pageDictionary['weeks'] = [[wk, shortPlayoffLabels.get(wk, label)] for wk, label in weeksOnPage_Helper()]
     pageDictionary['teams'] = nflTeam.objects.all().order_by('abbreviation')
     pageDictionary['categories'] = [
         ('rushing', 'Rushing'),
         ('receiving', 'Receiving'),
         ('scoring', 'Scoring'),
     ]
+
+    pageDictionary['playedWeeks'] = matchupPlayedWeeks()
+
+    inputReq = request.GET
+    if 'teamName' not in inputReq:
+        return render(request, 'nfl/matchup.html', pageDictionary)
+
+    yearOfSeason = inputReq.get('season', str(yearsOnPage[0])).strip()
+    weekOfSeason = int(inputReq.get('week', 1))
+    category = inputReq.get('category', 'rushing').strip()
+    selectedTeam = nflTeam.objects.filter(abbreviation = inputReq['teamName'].strip()).first()
+
+    pageDictionary['matchupActive'] = True
+    pageDictionary['selectedYear'] = yearOfSeason
+    pageDictionary['selectedWeek'] = weekOfSeason
+    pageDictionary['selectedCategory'] = category
+    pageDictionary['selectedTeam'] = selectedTeam
+    # "Week 4", or the round's full name for a playoff game
+    fullWeekLabels = dict(weeksOnPage_Helper())
+    pageDictionary['selectedWeekLabel'] = f"Week {weekOfSeason}" if weekOfSeason <= 18 else fullWeekLabels.get(weekOfSeason, f"Week {weekOfSeason}")
+    if selectedTeam == None:
+        return render(request, 'nfl/matchup.html', pageDictionary)
+
+    selectedMatch = nflMatch.objects.filter(
+        yearOfSeason = yearOfSeason,
+        weekOfSeason = weekOfSeason,
+    ).filter(
+        models.Q(homeTeamEspnId = selectedTeam.espnId) | models.Q(awayTeamEspnId = selectedTeam.espnId)
+    ).first()
+    if selectedMatch == None:
+        return render(request, 'nfl/matchup.html', pageDictionary)
+
+    awayGame = selectedMatch.awayTeamEspnId == selectedTeam.espnId
+    opponentEspnId = selectedMatch.homeTeamEspnId if awayGame else selectedMatch.awayTeamEspnId
+    pageDictionary['selectedMatch'] = selectedMatch
+    pageDictionary['awayGame'] = awayGame
+    pageDictionary['opponent'] = nflTeam.objects.filter(espnId = opponentEspnId).first()
+
+    # The result can only be shown once the match's stats have been pulled.
+    resultAvailable = teamMatchPerformance.objects.filter(
+        yearOfSeason = yearOfSeason, weekOfSeason = weekOfSeason, teamEspnId = selectedTeam.espnId,
+    ).exists()
+    resultWeek = weekOfSeason if resultAvailable else None
+    pageDictionary['resultAvailable'] = resultAvailable
+    pageDictionary['showResult'] = resultAvailable and inputReq.get('showResult') == '1'
+    if resultAvailable:
+        pageDictionary['selectedTeamPoints'] = selectedMatch.awayTeamPoints if awayGame else selectedMatch.homeTeamPoints
+        pageDictionary['opponentPoints'] = selectedMatch.homeTeamPoints if awayGame else selectedMatch.awayTeamPoints
+
+    pageDictionary['categoryBuilt'] = category in MATCHUP_CATEGORIES
+    if not pageDictionary['categoryBuilt']:
+        return render(request, 'nfl/matchup.html', pageDictionary)
+
+    # Only the games before this one count, capped at the regular season.
+    throughWeek = min(weekOfSeason - 1, crudLogic.regularSeasonWeekCount(yearOfSeason))
+    pageDictionary['throughWeek'] = throughWeek
+    if throughWeek < 1 or pageDictionary['opponent'] == None:
+        return render(request, 'nfl/matchup.html', pageDictionary)
+
+    categorySetup = MATCHUP_CATEGORIES[category]
+    opponent = pageDictionary['opponent']
+    # Columns for the whole regular season; only weeks 1..throughWeek have data.
+    # A playoff match's result gets a column of its own on the end.
+    weekColumns = [{'week': weekNumber, 'label': f"W{weekNumber}"}
+        for weekNumber in range(1, crudLogic.regularSeasonWeekCount(yearOfSeason) + 1)]
+    if resultWeek != None and resultWeek > weekColumns[-1]['week']:
+        weekColumns.append({'week': resultWeek, 'label': shortPlayoffLabels.get(resultWeek, f"W{resultWeek}")})
+    for weekColumn in weekColumns:
+        weekColumn['isResult'] = weekColumn['week'] == resultWeek
+    pageDictionary['matchupWeeks'] = weekColumns
+    # Every table gets the same fixed column widths (see .matchupTable in style.css)
+    # so their columns line up: rank 72 + label 200 + total 72 + 50 per week.
+    pageDictionary['matchupTableWidth'] = 72 + 200 + 72 + 50 * len(weekColumns)
+
+    opponentsByTeamId = {matchupTeam.id: matchupOpponentsByWeek(matchupTeam, yearOfSeason, weekColumns)
+        for matchupTeam in [selectedTeam, opponent]}
+
+    def sideSections(offenseTeam, defenseTeam):
+        # One side of the matchup: offenseTeam's attack against defenseTeam's defense.
+        side = [
+            {'kind': 'team', 'title': f"{offenseTeam.abbreviation} Offense", 'team': offenseTeam,
+             'opponents': opponentsByTeamId[offenseTeam.id],
+             'rows': matchupTeamStatRows(offenseTeam, yearOfSeason, categorySetup['offense'], throughWeek, weekColumns, resultWeek)},
+            {'kind': 'team', 'title': f"{defenseTeam.abbreviation} Defense", 'team': defenseTeam,
+             'opponents': opponentsByTeamId[defenseTeam.id],
+             'rows': matchupTeamStatRows(defenseTeam, yearOfSeason, categorySetup['defense'], throughWeek, weekColumns, resultWeek)},
+        ]
+        for tableTitle, statKey, playerCount, showPosition in categorySetup['playerTables']:
+            side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {tableTitle}", 'team': offenseTeam,
+                'statLabel': crudLogic.PERFORMANCE_STAT_LABELS[statKey], 'showPosition': showPosition,
+                'rows': matchupPlayerRows(offenseTeam, yearOfSeason, statKey, throughWeek, weekColumns, resultWeek, playerCount)})
+        if categorySetup['interceptions']:
+            # Thrown by this side's offense against caught by the other team's defense.
+            side.append({'kind': 'team', 'title': f"{offenseTeam.abbreviation} INTs", 'team': offenseTeam,
+                'rows': matchupTeamStatRows(offenseTeam, yearOfSeason, ["interceptionsOnOffense"], throughWeek, weekColumns, resultWeek, f"{offenseTeam.abbreviation} INTs Thrown", underlineTeam = True)
+                    + matchupTeamStatRows(defenseTeam, yearOfSeason, ["defenseInterceptions"], throughWeek, weekColumns, resultWeek, f"{defenseTeam.abbreviation} INTs Caught", underlineTeam = True)})
+        return side
+
+    sections = sideSections(selectedTeam, opponent) + [{'kind': 'split'}] + sideSections(opponent, selectedTeam)
+    pageDictionary['sections'] = sections
 
     return render(request, 'nfl/matchup.html', pageDictionary)
 

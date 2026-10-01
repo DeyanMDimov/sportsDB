@@ -1905,6 +1905,8 @@ def seasonHasStoredPlays(team, seasonYear):
 
 # Players page -> By Team tab: stat key -> (split model, what one play is worth).
 TEAM_WEEKLY_STATS = {
+    # Passer rows also exist for incompletions and sacks; only completions gain yards.
+    "passingYards": (passerStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription) if statSplit.play.playType == 2 else 0),
     "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
     "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
     "rushingTds": (rusherStatSplit, lambda statSplit: 1 if statSplit.rushingTdScored else 0),
@@ -1913,15 +1915,19 @@ TEAM_WEEKLY_STATS = {
 TEAM_WEEKLY_TD_STATS = ["rushingTds", "receivingTds"]
 
 
-def getTeamStatByWeek(team, seasonYear, statKey):
+def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
     # Players page -> By Team tab: every player with any of the chosen stat for
     # this team in the season, one cell per game, best season first, plus the
-    # team's total for each game.
-    seasonMatches = list(nflMatch.objects.filter(
+    # team's total for each game. throughWeek limits it to weeks 1..throughWeek
+    # (the Matchup page only looks at games before the one being previewed).
+    seasonMatches = nflMatch.objects.filter(
         yearOfSeason = int(seasonYear),
     ).filter(
         Q(homeTeamEspnId = team.espnId) | Q(awayTeamEspnId = team.espnId)
-    ).order_by('weekOfSeason'))
+    )
+    if throughWeek != None:
+        seasonMatches = seasonMatches.filter(weekOfSeason__gte = 1, weekOfSeason__lte = int(throughWeek))
+    seasonMatches = list(seasonMatches.order_by('weekOfSeason'))
 
     weekColumns = []
     for seasonMatch in seasonMatches:
