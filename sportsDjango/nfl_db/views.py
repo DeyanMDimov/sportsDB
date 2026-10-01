@@ -1771,6 +1771,7 @@ def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultW
             'label': f"{team.abbreviation} {metricLabel}" if labelWithTeam else metricLabel,
             'team': team if labelWithTeam else None,
             'rank': teamTotal.get('rank'),
+            'tied': teamTotal.get('tied', False),
             'teamCount': teamTotal['teamCount'],
             'seasonDisplay': crudLogic.formatMatchupMetric(metricKey, teamTotal['numerator'], teamTotal['denominator'], True),
             'weekCells': weekCells,

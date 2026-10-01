@@ -4460,13 +4460,22 @@ def rankMatchupMetric(metricKey, teamGameStats, opponentByTeamWeek, throughWeek)
         score = matchupMetricScore(metricKey, numerator, totalDenominator)
         teamTotals[teamEspnId] = {'numerator': numerator, 'denominator': totalDenominator, 'score': score}
 
-    # Ties go alphabetically, as on the Teams -> Rankings tab.
-    abbreviationsByEspnId = dict(nflTeam.objects.values_list('espnId', 'abbreviation'))
-    rankedTeams = sorted((teamEspnId for teamEspnId in teamTotals if teamTotals[teamEspnId]['score'] != None),
-        key = lambda teamEspnId: (teamTotals[teamEspnId]['score'] if metric.get("lowerIsBetter") else -teamTotals[teamEspnId]['score'],
-                                  abbreviationsByEspnId.get(teamEspnId, "")))
+    # Tied teams share a rank and the next rank skips ahead (1, 2, 2, 4); 'tied'
+    # marks them so the page can show "T-2". Scores are rounded before comparing
+    # so 2/3 and 4/6 count as the same percentage.
+    def sortScore(teamEspnId):
+        score = round(teamTotals[teamEspnId]['score'], 9)
+        return score if metric.get("lowerIsBetter") else -score
+    rankedTeams = sorted((teamEspnId for teamEspnId in teamTotals if teamTotals[teamEspnId]['score'] != None), key = sortScore)
+    teamsPerScore = {}
+    for teamEspnId in rankedTeams:
+        teamsPerScore[sortScore(teamEspnId)] = teamsPerScore.get(sortScore(teamEspnId), 0) + 1
     for rankIndex, teamEspnId in enumerate(rankedTeams):
-        teamTotals[teamEspnId]['rank'] = rankIndex + 1
+        if rankIndex > 0 and sortScore(teamEspnId) == sortScore(rankedTeams[rankIndex - 1]):
+            teamTotals[teamEspnId]['rank'] = teamTotals[rankedTeams[rankIndex - 1]]['rank']
+        else:
+            teamTotals[teamEspnId]['rank'] = rankIndex + 1
+        teamTotals[teamEspnId]['tied'] = teamsPerScore[sortScore(teamEspnId)] > 1
     for teamTotal in teamTotals.values():
         teamTotal['teamCount'] = len(rankedTeams)
     return teamTotals

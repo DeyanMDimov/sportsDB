@@ -30,7 +30,7 @@ but with a row per stat instead of a row per team.
     <tbody>
         {% for statRow in statRows %}
         <tr>
-            <td class="byTeamNum">{% if statRow.rank %}{{ statRow.rank }} / {{ statRow.teamCount }}{% else %}&ndash;{% endif %}</td>
+            <td class="byTeamNum">{% if statRow.rank %}{% if statRow.tied %}T-{% endif %}{{ statRow.rank }} / {{ statRow.teamCount }}{% else %}&ndash;{% endif %}</td>
             <td class="byTeamPlayer{% if statRow.team %} team-border team-{{ statRow.team.abbreviation }}{% endif %}" title="{{ statRow.label }}">{{ statRow.label }}</td>
             <td class="byTeamNum"><b>{{ statRow.seasonDisplay }}</b></td>
             {% for weekCell in statRow.weekCells %}
