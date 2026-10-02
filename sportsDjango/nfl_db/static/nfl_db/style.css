@@ -1044,3 +1044,112 @@ table thead tr th:first-child {
 .byTeamTable .byTeamTotalRow td {
   border-top: 2px solid var(--bs-border-color);
 }
+
+/* ==========================
+   Matchup page
+   ========================== */
+
+/* Fixed column widths so the stacked tables line up; the table's own width is
+   set inline from the week count. */
+.matchupTable {
+  table-layout: fixed;
+}
+.matchupTable .matchupRankCol,
+.matchupTable .matchupTotalCol {
+  width: 72px;
+}
+.matchupTable .matchupLabelCol {
+  width: 240px;
+}
+.matchupTable .matchupWeekCol {
+  width: 50px;
+}
+.matchupTable .byTeamPlayer {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Number cells get less side padding so weekly ratios like "10/15" fit 50px. */
+.matchupTable .byTeamNum {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+/* Opponent row under the week headers: less side padding so "@NYG" fits 50px. */
+.matchupTable .byTeamOpponent {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* Headings and the split line sit on the same centered column as the tables
+   (same centering as .byTeamTableWrap) so everything shares one left edge. */
+.matchupColumn {
+  max-width: calc(100vw - 32px);
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Every team-color underline on the page is the same length (about as wide as
+   "CLE Offense"), however long the text above it is. */
+:root {
+  --matchup-underline-width: 8.5rem;
+}
+
+/* Section heading underlined in the team's two colors, like .team-border. The
+   faint outline keeps dark team colors visible on the dark page. */
+.matchupSectionTitle {
+  display: inline-block;
+  position: relative;
+  margin-top: 0.75rem;
+  padding-bottom: 8px;
+}
+.matchupSectionTitle::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: var(--matchup-underline-width);
+  bottom: 0;
+  height: 5px;
+  background: linear-gradient(to right, var(--team-color-1) 50%, var(--team-color-2) 50%);
+  box-shadow: 0 0 0 1px #4b5563;
+}
+
+/* Team-colored underline on a stat label (tables that mix both teams), with the
+   same faint outline as the headings so dark team colors still show. */
+.matchupTable .team-border::after {
+  left: 10px;
+  right: auto;
+  width: var(--matchup-underline-width);
+  box-shadow: 0 0 0 1px #4b5563;
+}
+
+/* The previewed match's own numbers are on the page from the start but stay
+   invisible until Show result is ticked. */
+.matchupResultsHidden .matchupResult {
+  visibility: hidden;
+}
+#matchupResults:not(.matchupResultsHidden) .matchupResultCell {
+  --bs-table-bg-state: rgba(59, 130, 246, 0.18);
+}
+
+/* Collapsible sections (player tables on Scoring / Special Teams): the title
+   toggles the table, and its chevron turns to point right while collapsed. */
+.matchupSectionTitle[data-bs-toggle="collapse"] {
+  cursor: pointer;
+}
+.matchupToggleArrow {
+  display: inline-block;
+  font-size: 0.7em;
+  margin-right: 0.4rem;
+  vertical-align: 0.1em;
+  transition: transform 0.15s ease;
+}
+.matchupSectionTitle.collapsed .matchupToggleArrow {
+  transform: rotate(-90deg);
+}
+
+/* Splits the picked team's attack from the opponent's. */
+.matchupSplit {
+  border-top: 3px solid #9ca3af;
+  opacity: 1;
+  margin: 2rem 0 1rem;
+}

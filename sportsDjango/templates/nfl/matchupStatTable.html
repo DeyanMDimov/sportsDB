@@ -1,0 +1,55 @@
+{% comment %}
+Team stats on the Matchup page (values come pre-formatted: "57.1%", "2/3"), laid out like the Teams -> Rankings table
+but with a row per stat instead of a row per team.
+{% include 'nfl/matchupStatTable.html' with statRows=section.rows opponents=section.opponents %}
+{% endcomment %}
+{% if statRows %}
+<div class="byTeamTableWrap">
+<table class="table table-bordered table-sm byTeamTable matchupTable" style="width: {{ matchupTableWidth }}px">
+    <colgroup>
+        <col class="matchupRankCol"><col class="matchupLabelCol"><col class="matchupTotalCol">
+        {% for wk in matchupWeeks %}<col class="matchupWeekCol">{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th class="byTeamNum"{% if opponents %} rowspan="2"{% endif %}>Rank</th>
+            <th class="byTeamPlayer"{% if opponents %} rowspan="2"{% endif %}>Stat</th>
+            <th class="byTeamNum"{% if opponents %} rowspan="2"{% endif %}>Total</th>
+            {% for wk in matchupWeeks %}
+            <th class="byTeamNum{% if wk.isResult %} matchupResultCell{% endif %}">{{ wk.label }}</th>
+            {% endfor %}
+        </tr>
+        {% if opponents %}
+        <tr>
+            {% for opponentLabel in opponents %}
+            <th class="byTeamNum byTeamOpponent{% if opponentLabel == "BYE" %} text-muted{% endif %}">{{ opponentLabel }}</th>
+            {% endfor %}
+        </tr>
+        {% endif %}
+    </thead>
+    <tbody>
+        {% for statRow in statRows %}
+        <tr>
+            <td class="byTeamNum">{% if statRow.rank %}{% if statRow.tied %}T-{% endif %}{{ statRow.rank }} / {{ statRow.teamCount }}{% else %}&ndash;{% endif %}</td>
+            <td class="byTeamPlayer{% if statRow.team %} team-border team-{{ statRow.team.abbreviation }}{% endif %}" title="{{ statRow.label }}">{{ statRow.label }}</td>
+            <td class="byTeamNum"><b>{{ statRow.seasonDisplay }}</b></td>
+            {% for weekCell in statRow.weekCells %}
+            {% if weekCell.result %}
+            {# The match being previewed: hidden until Show result is ticked #}
+            <td class="byTeamNum matchupResultCell"><span class="matchupResult">{% if weekCell.played %}{{ weekCell.display }}{% else %}&ndash;{% endif %}</span></td>
+            {% elif weekCell.played %}
+            <td class="byTeamNum">{{ weekCell.display }}</td>
+            {% elif weekCell.future %}
+            <td class="byTeamNum"></td>
+            {% else %}
+            <td class="byTeamNum text-muted">&ndash;</td>
+            {% endif %}
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<p class="text-muted">No team stats stored for those weeks.</p>
+{% endif %}
