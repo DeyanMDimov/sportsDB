@@ -1,5 +1,5 @@
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, teamMatchRoster, driveOfPlay, playByPlay
-from nfl_db.models import playerMatchOffense, playerMatchDefense, playerWeekStatus, nflMatchOdds, bettingModelResult
+from nfl_db.models import playerMatchOffense, playerMatchDefense, playerMatchUsage, playerWeekStatus, nflMatchOdds, bettingModelResult
 from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit
 from nfl_db.models import kickerFgStatSplit, punterStatSplit, defenderStatSplit, penalizedStatSplit
 from django.core.management.base import BaseCommand, CommandError
@@ -126,7 +126,7 @@ class Command(BaseCommand):
                 pass
             elif options['keepMatches']:
                 for childModel in [teamMatchRoster, driveOfPlay, playerMatchOffense, playerMatchDefense,
-                                   nflMatchOdds, bettingModelResult]:
+                                   playerMatchUsage, nflMatchOdds, bettingModelResult]:
                     deletedCount, perModel = childModel.objects.filter(nflMatch__in = matchIds).delete()
                     mergeDeleteCounts(deletedByModel, perModel)
                 deletedCount, perModel = playByPlay.objects.filter(nflMatch__in = matchIds).delete()
@@ -153,6 +153,7 @@ class Command(BaseCommand):
                   + "&startWeek=" + str(seasonWeek) + "&endWeek=" + str(seasonWeek))
             if not options['keepAvailability']:
                 print("Injury rows were removed too, so re-run the availability pull for the week as well.")
+            print("Snap counts come from a separate pull: manage.py snapCountCommand --season " + str(seasonYear))
 
 
 def mergeDeleteCounts(runningTotals, perModelCounts):
@@ -171,6 +172,7 @@ def buildFullRowCounts(matches, performances, weekStatuses, matchIds):
         ("playByPlay", playByPlay.objects.filter(nflMatch__in = matchIds).count()),
         ("playerMatchOffense", playerMatchOffense.objects.filter(nflMatch__in = matchIds).count()),
         ("playerMatchDefense", playerMatchDefense.objects.filter(nflMatch__in = matchIds).count()),
+        ("playerMatchUsage", playerMatchUsage.objects.filter(nflMatch__in = matchIds).count()),
         ("nflMatchOdds", nflMatchOdds.objects.filter(nflMatch__in = matchIds).count()),
         ("bettingModelResult", bettingModelResult.objects.filter(nflMatch__in = matchIds).count()),
         ("playerWeekStatus", weekStatuses.count()),

@@ -407,6 +407,9 @@ class player(models.Model):
         (4, "Undefined")
     )
     sideOfBall = models.SmallIntegerField(choices = positionCategories, default = 4)
+    # Pro Football Reference id (e.g. "AltxJo01"). The nflverse snap counts identify
+    # players by this, so it is cached here once a player has been matched.
+    pfrId = models.CharField(max_length = 12, unique = True, null = True, blank = True)
 
 class playerTeamTenure(models.Model):
     player = models.ForeignKey(player, on_delete = models.CASCADE)
@@ -451,6 +454,27 @@ class playerMatchDefense(playerMatchPerformance, models.Model):
     forcedFumbles = models.SmallIntegerField()
     recoveredFumbles = models.SmallIntegerField()
     interceptions = models.SmallIntegerField()
+
+# How much a player was on the field and used in a match, one row per player per match.
+# Snap counts come from the nflverse snap_counts release; the percentages are of the
+# team's snaps for that phase. Targets come from a separate source and stay null until
+# that is pulled.
+class playerMatchUsage(models.Model):
+    nflMatch = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
+    team = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+    player = models.ForeignKey(player, on_delete = models.CASCADE)
+    offenseSnaps = models.PositiveSmallIntegerField(null = True, blank = True)
+    offenseSnapPct = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    defenseSnaps = models.PositiveSmallIntegerField(null = True, blank = True)
+    defenseSnapPct = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    specialTeamsSnaps = models.PositiveSmallIntegerField(null = True, blank = True)
+    specialTeamsSnapPct = models.DecimalField(max_digits = 5, decimal_places = 1, null = True, blank = True)
+    targets = models.PositiveSmallIntegerField(null = True, blank = True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields = ['player', 'nflMatch'], name = 'unique_player_match_usage')
+        ]
 
 class playerWeekStatus(models.Model):
     player = models.ForeignKey(player, on_delete = models.CASCADE)
