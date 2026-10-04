@@ -1,20 +1,23 @@
-from nfl_db import crudLogic, views
+from nfl_db import crudLogic
+from nfl_db.models import nflTeam
 from django.core.management.base import BaseCommand, CommandError
-from django.test import RequestFactory
 
 class Command(BaseCommand):
-    help = 'Command to pull odds during week.'
+    help = "Pulls every team's current roster from ESPN, moving players to the team they are on now."
 
     def add_argument(self, parser):
         pass
         
     def handle(self, *args, **options):
         try:
-           factory = RequestFactory()
-           request = factory.get('/players/?season=2025&teamName=ALL')
-           views.getPlayers(request)
-           print("Done - Pulled players.")
+            # This used to send ?teamName=ALL to the players page, which has no
+            # branch for it, so it never pulled anything.
+            for team in nflTeam.objects.all().order_by('abbreviation'):
+                roster, movedPlayers = crudLogic.refreshTeamRosterFromApi(team)
+                print(team.abbreviation + ": " + str(len(roster)) + " players, " + str(len(movedPlayers)) + " moved here.")
+                for move in movedPlayers:
+                    print("   " + move['name'] + " (was " + move['fromTeam'] + ")")
+            print("Done - Pulled players.")
             
         except Exception as e:
-            CommandError(repr(e))
-            print("Done")
+            raise CommandError(repr(e))

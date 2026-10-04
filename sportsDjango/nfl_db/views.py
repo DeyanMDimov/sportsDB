@@ -508,11 +508,35 @@ def getPlayers(request):
             inputReq = request.GET
             viewRosterTeamAbbreviation = inputReq['viewRosterTeam'].strip()
             viewRosterYear = inputReq.get('viewRosterSeason', str(yearsOnPage[0])).strip()
+            viewRosterPullFresh = 'viewRosterPullFresh' in inputReq
+            rosterPageDictionary = {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'viewRosterTeam': viewRosterTeamAbbreviation, 'viewRosterYear': viewRosterYear, 'viewRosterPullFresh': viewRosterPullFresh}
+
+            # Every team is 32 ESPN requests, past the host's web-worker time
+            # limit, so the page pulls them one at a time through rosterPullStep.
+            if viewRosterTeamAbbreviation == 'ALL':
+                if not viewRosterPullFresh:
+                    rosterPageDictionary['responseMessage'] = "Pick a team, or tick \"Pull Fresh\" to refresh every team's roster from ESPN."
+                    return renderPlayersPage(request, rosterPageDictionary)
+
+                rosterPageDictionary['rosterPull'] = {
+                    'teams': [team.abbreviation for team in nflTeams],
+                    'delaySeconds': crudLogic.AVAILABILITY_REQUEST_DELAY_SECONDS,
+                }
+                return renderPlayersPage(request, rosterPageDictionary)
+
             selectedTeam = nflTeam.objects.get(abbreviation = viewRosterTeamAbbreviation)
+            rosterPageDictionary['viewRosterTeamName'] = selectedTeam.teamName
+
+            # Pull Fresh fetches the team's current roster from ESPN and moves
+            # everyone on it to this team, rather than reading back week 1.
+            if viewRosterPullFresh:
+                viewRoster, movedPlayers = crudLogic.refreshTeamRosterFromApi(selectedTeam)
+                rosterPageDictionary.update({'viewRoster': viewRoster, 'viewRosterSource': "current" if len(viewRoster) > 0 else "none", 'viewRosterMoves': movedPlayers})
+                return renderPlayersPage(request, rosterPageDictionary)
 
             viewRoster, viewRosterSource = crudLogic.getStartOfSeasonRoster(selectedTeam, viewRosterYear)
-
-            return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'viewRoster': viewRoster, 'viewRosterSource': viewRosterSource, 'viewRosterTeam': viewRosterTeamAbbreviation, 'viewRosterTeamName': selectedTeam.teamName, 'viewRosterYear': viewRosterYear})
+            rosterPageDictionary.update({'viewRoster': viewRoster, 'viewRosterSource': viewRosterSource})
+            return renderPlayersPage(request, rosterPageDictionary)
 
         elif 'position' in request.GET:
             inputReq = request.GET
@@ -583,6 +607,22 @@ def getPlayers(request):
                 return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'athleteAvail': athleteAvailability, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekOfSeason, 'pullFresh': pullFresh})
 
     return renderPlayersPage(request, pageDictionary)
+
+def rosterPullStep(request):
+    # One team of an every-team roster refresh the players page is driving.
+    team = nflTeam.objects.filter(abbreviation = request.GET.get('team', '').strip()).first()
+    if team == None:
+        return JsonResponse({"status": "error", "error": "Unknown team"})
+
+    try:
+        roster, movedPlayers = crudLogic.refreshTeamRosterFromApi(team)
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"status": "error", "error": str(e)})
+
+    if len(roster) == 0:
+        return JsonResponse({"status": "error", "error": "ESPN returned no roster."})
+    return JsonResponse({"status": "ok", "playerCount": len(roster), "moved": movedPlayers})
 
 def availabilityPullStep(request):
     # One team-week of a pull the players page is driving (see getPlayers).

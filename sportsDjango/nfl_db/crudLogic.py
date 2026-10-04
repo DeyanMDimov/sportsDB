@@ -2183,25 +2183,54 @@ def sortPlayersByTeamThenName(playersToSort):
 
 
 def pullTeamRosterFromApi(team):
+    roster, movedPlayers = refreshTeamRosterFromApi(team)
+    return roster
+
+
+def refreshTeamRosterFromApi(team):
     # ESPN's team roster endpoint only ever serves the CURRENT roster. It accepts
     # a ?season= parameter and echoes it back, but the athlete list comes back
     # empty for any past season, so there is no year to pass in here.
+    #
+    # Storing it is what moves player.team on to the player's current team, and
+    # that foreign key is the "Team" every other page shows. Returns the roster
+    # plus who it moved: [{name, position, fromTeam, toTeam}, ...].
     teamRosterUrl = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/' + str(team.espnId) + '/roster'
     try:
-        rosterSubsections = requests.get(teamRosterUrl).json()['athletes']
+        rosterSubsections = requests.get(teamRosterUrl, timeout = 30).json()['athletes']
     except Exception as e:
         print("Team roster request failed for " + teamRosterUrl + ": " + str(e))
-        return []
+        return [], []
 
     rosteredEspnIds = []
     for subsection in rosterSubsections:
-        players.updatePlayerAthletesFromTeamRoster(subsection, team.espnId)
         for athlete in subsection['items']:
             rosteredEspnIds.append(int(athlete['id']))
 
+    # Note each player's team before the update so the caller can say who moved.
+    previousTeamByEspnId = {}
+    for espnId, previousTeamAbbreviation in player.objects.filter(espnId__in = rosteredEspnIds).values_list('espnId', 'team__abbreviation'):
+        previousTeamByEspnId[espnId] = previousTeamAbbreviation
+
+    for subsection in rosterSubsections:
+        players.updatePlayerAthletesFromTeamRoster(subsection, team.espnId)
+
     # Filter on the ids ESPN just listed rather than player.team: that foreign
     # key accumulates everyone who has ever been assigned to the team.
-    return sorted(player.objects.filter(espnId__in = rosteredEspnIds), key = lambda p: (p.playerPosition, p.name))
+    roster = sorted(player.objects.filter(espnId__in = rosteredEspnIds), key = lambda p: (p.playerPosition, p.name))
+
+    movedPlayers = []
+    for rosteredPlayer in roster:
+        # Not in the database before this pull means a new player, not a move.
+        if rosteredPlayer.espnId in previousTeamByEspnId and previousTeamByEspnId[rosteredPlayer.espnId] != team.abbreviation:
+            movedPlayers.append({
+                'name': rosteredPlayer.name,
+                'position': rosteredPlayer.get_playerPosition_display(),
+                'fromTeam': previousTeamByEspnId[rosteredPlayer.espnId] or "none",
+                'toTeam': team.abbreviation,
+            })
+
+    return roster, movedPlayers
 
 
 def fetchGameRoster(matchId, teamId):
@@ -2359,12 +2388,14 @@ def _availabilityStatusEntry(status):
     }
 
 
-def _serializeAvailabilityRow(playerObj, statusList):
-    teamAbbreviation = playerObj.team.abbreviation if playerObj.team else ""
+def _serializeAvailabilityRow(playerObj, team, statusList):
+    # The team is the one whose roster the row was stored under, not player.team:
+    # that is where the player is today, which for a past season (or a stale
+    # record) is not where they were that week.
     return {
         "espnId": playerObj.espnId,
         "name": playerObj.name,
-        "team": teamAbbreviation,
+        "team": team.abbreviation,
         "position": playerObj.get_playerPosition_display(),
         "isStarter": playerObj.isStarter,
         "starPlayer": playerObj.starPlayer,
@@ -2695,7 +2726,7 @@ def _weekAvailabilityFromDatabase(seasonYear, weekOfSeason, teams):
             yearOfSeason = int(seasonYear),
             weekOfSeason = weekOfSeason,
             team = s_team,
-        ).select_related('player', 'player__team')
+        ).select_related('player')
 
         # One row per player, carrying every status reported that week in order,
         # so the page can show how it changed rather than just where it ended up.
@@ -2706,7 +2737,7 @@ def _weekAvailabilityFromDatabase(seasonYear, weekOfSeason, teams):
             playersById[storedStatus.player_id] = storedStatus.player
 
         for playerObj in sorted(playersById.values(), key = lambda p: (p.playerPosition, p.name)):
-            rows.append(_serializeAvailabilityRow(playerObj, statusesByPlayerId[playerObj.id]))
+            rows.append(_serializeAvailabilityRow(playerObj, s_team, statusesByPlayerId[playerObj.id]))
 
     return {
         "type": "week",
@@ -2736,7 +2767,7 @@ def _seasonAvailabilityFromDatabase(seasonYear, teams):
             yearOfSeason = int(seasonYear),
             weekOfSeason__in = weekNumbers,
             team = s_team,
-        ).select_related('player', 'player__team').order_by('reportDate', 'id'):
+        ).select_related('player').order_by('reportDate', 'id'):
             playersById[storedStatus.player_id] = storedStatus.player
             # Later report dates overwrite earlier ones, leaving the status the
             # week ended on.
@@ -2751,7 +2782,7 @@ def _seasonAvailabilityFromDatabase(seasonYear, teams):
                     statusList.append(statusesByPlayerId[playerObj.id][weekNumber])
                 else:
                     statusList.append("Not in Roster")
-            rows.append(_serializeAvailabilityRow(playerObj, statusList))
+            rows.append(_serializeAvailabilityRow(playerObj, s_team, statusList))
 
     return {
         "type": "season",

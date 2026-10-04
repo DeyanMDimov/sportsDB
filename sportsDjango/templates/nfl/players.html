@@ -50,6 +50,7 @@
                         <div class="mb-1 col-2">
                             Team:
                             <select name="viewRosterTeam" id="viewRosterTeam" class="form-control">
+                                <option value="ALL" {% if viewRosterTeam == "ALL" %}selected{% endif %}>ALL</option>
                             {% for team in teams %}
                                 <option value="{{ team.abbreviation }}"
                                 {%if viewRosterTeam == team.abbreviation %}
@@ -59,7 +60,17 @@
                             {% endfor %}
                             </select>
                         </div>
+                        <div class="mb-1 col-auto align-self-center">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" value="1" id="viewRosterPullFresh" name="viewRosterPullFresh" {% if viewRosterPullFresh %}checked{% endif %}>
+                                <label class="form-check-label" for="viewRosterPullFresh">Pull Fresh</label>
+                            </div>
+                        </div>
                     </div>
+                    <p class="text-muted mb-2">
+                        Pull Fresh fetches today's roster from ESPN and moves everyone on it to
+                        that team, which is the team the rest of the site shows them under.
+                    </p>
                     <button type="submit" class="btn btn-outline-primary">Load!</button>
                 </form>
             </div>
@@ -428,7 +439,7 @@
         <h2>{{responseMessage}}</h2>
         {% endif %}
 
-        {% if viewRosterTeam %}
+        {% if viewRosterTeamName %}
         <h3>
             {{ viewRosterTeamName }} roster
             {% if viewRosterSource == "week1" %}
@@ -437,7 +448,23 @@
                 &mdash; current roster
             {% endif %}
         </h3>
-        {% if viewRosterSource == "current" %}
+        {% if viewRosterPullFresh and viewRosterSource == "current" %}
+        <p class="text-muted">
+            Pulled fresh from ESPN.
+            {% if viewRosterMoves %}These players were moved to {{ viewRosterTeam }}:{% else %}Nobody's team changed.{% endif %}
+        </p>
+        {% if viewRosterMoves %}
+        <ul>
+            {% for move in viewRosterMoves %}
+            <li>{{ move.name }} ({{ move.position }}) &mdash; was {{ move.fromTeam }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% elif viewRosterPullFresh %}
+        <p class="text-muted">
+            The current roster couldn't be fetched from ESPN.
+        </p>
+        {% elif viewRosterSource == "current" %}
         <p class="text-muted">
             Week 1 of {{ viewRosterYear }} hasn't been pulled yet, so this is the team's
             current roster from ESPN.
@@ -466,6 +493,76 @@
             </tbody>
         </table>
         {% endif %}
+        {% endif %}
+
+        {% if rosterPull %}
+        <div id="rosterPullProcessing" class="p-3">
+            <h3>Refreshing every team's roster&hellip;</h3>
+            <p class="text-muted">
+                This page pulls one team at a time, with a short pause between ESPN
+                requests, so it takes a few minutes. Keep this tab open.
+            </p>
+            <p><strong id="rosterPullProgress">Starting&hellip;</strong></p>
+            <div class="spinner-border" role="status" aria-label="Loading"></div>
+            <ul id="rosterPullProblems" class="text-danger mt-3"></ul>
+            <div id="rosterPullMoves"></div>
+        </div>
+        {{ rosterPull|json_script:"rosterPullData" }}
+        <script>
+            (function () {
+                var pull = JSON.parse(document.getElementById("rosterPullData").textContent);
+                var movedPlayers = [];
+                var playerCount = 0;
+                var stepIndex = 0;
+
+                function finish() {
+                    $("#rosterPullProcessing .spinner-border").hide();
+                    $("#rosterPullProgress").text("Done: " + playerCount + " players across " + pull.teams.length +
+                        " teams, " + movedPlayers.length + " moved to a new team.");
+                    if (movedPlayers.length === 0) {
+                        return;
+                    }
+                    var table = $("<table>").addClass("table table-bordered table-sm").append(
+                        $("<thead>").append($("<tr>").append($("<td>").text("Name"), $("<td>").text("Position"), $("<td>").text("Was"), $("<td>").text("Now"))));
+                    var body = $("<tbody>").appendTo(table);
+                    movedPlayers.forEach(function (move) {
+                        $("<tr>").append($("<td>").text(move.name), $("<td>").text(move.position),
+                            $("<td>").text(move.fromTeam), $("<td>").text(move.toTeam)).appendTo(body);
+                    });
+                    $("#rosterPullMoves").append($("<h4>").text("Moved players"), table);
+                }
+
+                function nextStep() {
+                    stepIndex++;
+                    if (stepIndex >= pull.teams.length) {
+                        finish();
+                        return;
+                    }
+                    setTimeout(runStep, pull.delaySeconds * 1000);
+                }
+
+                function runStep() {
+                    var team = pull.teams[stepIndex];
+                    $("#rosterPullProgress").text(team + " (" + (stepIndex + 1) + " / " + pull.teams.length + ")");
+                    $.getJSON("../ajax/rosterPullStep/", { team: team })
+                        .done(function (data) {
+                            if (data.status === "ok") {
+                                playerCount += data.playerCount;
+                                movedPlayers = movedPlayers.concat(data.moved);
+                            } else {
+                                $("<li>").text(team + ": " + (data.error || "something went wrong.")).appendTo("#rosterPullProblems");
+                            }
+                            nextStep();
+                        })
+                        .fail(function (xhr) {
+                            $("<li>").text(team + ": request failed (" + xhr.status + ").").appendTo("#rosterPullProblems");
+                            nextStep();
+                        });
+                }
+
+                runStep();
+            })();
+        </script>
         {% endif %}
 
         {% if availabilityPull %}
@@ -711,7 +808,7 @@
                                 {{player.0.name}}
                             {% comment %} </button> {% endcomment %}
                         </td>
-                        <td>{{player.0.team.abbreviation}}</td>
+                        <td>{{player.1.team.abbreviation}}</td>
                         <td>{{player.0.get_playerPosition_display}}</td>
                         <td>{{player.0.espnId}}</td>
                         <td><input type="checkbox" id="{{player.0.espnId}}-starter" name="{{player.0.espnId}}-starter" 
