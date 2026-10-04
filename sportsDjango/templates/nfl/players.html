@@ -118,7 +118,7 @@
                             Week: <select name="week" id="week" class="form-control">
                                 {% for wk in weeks %}
                                 <option value="{{wk.0}}"
-                                    {% if wk.0 == sel_Week %}
+                                    {% if wk.0|stringformat:"s" == sel_Week|stringformat:"s" %}
                                         selected
                                     {% endif %} > {{ wk.1 }}</option>
                                 {% endfor %}

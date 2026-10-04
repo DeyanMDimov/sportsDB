@@ -2211,7 +2211,8 @@ def fetchGameRoster(matchId, teamId):
     # a missing 'entries' key.
     gameRosterUrl = 'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/' + str(matchId) + '/competitions/' + str(matchId) + '/competitors/' + str(teamId) + '/roster'
     try:
-        rosterData = requests.get(gameRosterUrl).json()
+        # Timeout so one hung ESPN request can't stall a background pull forever.
+        rosterData = requests.get(gameRosterUrl, timeout = 30).json()
     except Exception as e:
         print("Game roster request failed for " + gameRosterUrl + ": " + str(e))
         return None
@@ -2384,7 +2385,8 @@ def _buildWeekAvailability(job, seasonYear, weekOfSeason, teamAbbreviation):
     for index, s_team in enumerate(teams):
         if index > 0:
             clock.sleep(AVAILABILITY_REQUEST_DELAY_SECONDS)
-        job.progress = str(index + 1) + " / " + str(len(teams)) + " teams"
+        # Name the week so a single-week pull can't be mistaken for a season one.
+        job.progress = "Week " + str(weekOfSeason) + ": " + s_team.abbreviation + " (" + str(index + 1) + " / " + str(len(teams)) + " teams)"
         job.save()
 
         teamId = s_team.espnId
@@ -2424,9 +2426,6 @@ def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
     rows = []
     rosterRequestsMade = 0
     for index, s_team in enumerate(teams):
-        job.progress = str(index + 1) + " / " + str(len(teams)) + " teams"
-        job.save()
-
         teamId = s_team.espnId
         teamSeasonAvailability = []
         for wk in range(1, endRangeWeek):
@@ -2437,6 +2436,9 @@ def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
                     for playerRecord in teamSeasonAvailability:
                         playerRecord[1].append("Bye")
                     continue
+
+            job.progress = "Whole season: " + s_team.abbreviation + " week " + str(wk) + " (" + str(index + 1) + " / " + str(len(teams)) + " teams)"
+            job.save()
 
             matchId = selectedMatchQuerySet[0].espnId
             # Bye weeks never get here, so this paces actual requests rather than
