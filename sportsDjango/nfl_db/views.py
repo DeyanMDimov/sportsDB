@@ -1700,7 +1700,7 @@ MATCHUP_CATEGORIES = {
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "totalPassingYards"]},
         {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalPassYardsAllowed"]},
         {'kind': 'player', 'title': "QBs", 'statKeys': ["passingYards"], 'statLabel': "Pass Yds", 'count': None},
-        {'kind': 'player', 'title': "Top Receivers", 'statKeys': ["receivingYards"], 'statLabel': "Rec Yds", 'count': 5, 'showPosition': True},
+        {'kind': 'player', 'title': "Receivers", 'statKeys': ["receivingYards"], 'statLabel': "Rec Yds", 'count': None, 'showPosition': True},
         {'kind': 'paired', 'title': "INTs", 'rows': [('offense', "intsThrown"), ('defense', "intsCaught")]},
     ],
     'scoring': [
