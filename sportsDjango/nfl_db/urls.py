@@ -18,6 +18,6 @@ urlpatterns = [
     path('matchup/', views.getMatchup, name="getMatchup"),
     path('ajax/playerSignificance/', views.playerSignificance, name="playerSignificance"),
     path('ajax/getInjuryStatus/', views.getInjuryStatus, name="getInjuryStatus"),
-    path('ajax/availabilityJobStatus/', views.availabilityJobStatus, name="availabilityJobStatus"),
+    path('ajax/availabilityPullStep/', views.availabilityPullStep, name="availabilityPullStep"),
     path('ajax/performancePlayerOptions/', views.performancePlayerOptions, name="performancePlayerOptions")
 ]

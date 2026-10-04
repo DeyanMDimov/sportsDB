@@ -5,7 +5,7 @@
     <div class = "container">
         
         {% comment %}Which tab opens on load: whichever one produced what is on the page.{% endcomment %}
-        {% firstof athleteAvail jobResult jobError availabilityJobId responseMessage sel_Week as availabilityView %}
+        {% firstof athleteAvail jobResult availabilityPull responseMessage sel_Week as availabilityView %}
         {% comment %}With nothing on the page yet, open on Performances.{% endcomment %}
         {% firstof viewRosterTeam allPlayers availabilityView byTeamActive playerRankingActive as otherTabView %}
         {% if not otherTabView %}{% firstof "1" as performanceDefault %}{% endif %}
@@ -468,47 +468,85 @@
         {% endif %}
         {% endif %}
 
-        {% if availabilityJobId %}
-        <div id="availabilityJobProcessing" class="p-3">
+        {% if availabilityPull %}
+        <div id="availabilityPullProcessing" class="p-3">
             <h3>Pulling player availability&hellip;</h3>
             <p class="text-muted">
-                This runs in the background so the page won't time out. All-team or
-                whole-season pulls take several minutes (there's a short pause between
-                teams). You can leave this tab open; it will load the results when done.
+                This page pulls one team-week at a time, with a short pause between
+                ESPN requests, so it takes a few minutes for every team and much
+                longer for a whole season. Keep this tab open; the results load
+                when it's done.
             </p>
-            <p><strong id="availabilityJobProgress">Starting&hellip;</strong></p>
+            <p><strong id="availabilityPullProgress">Starting&hellip;</strong></p>
             <div class="spinner-border" role="status" aria-label="Loading"></div>
+            <ul id="availabilityPullProblems" class="text-danger mt-3"></ul>
         </div>
+        {{ availabilityPull|json_script:"availabilityPullData" }}
         <script>
             (function () {
-                var jobId = "{{ availabilityJobId }}";
-                function pollAvailabilityJob() {
-                    $.getJSON("../ajax/availabilityJobStatus/", { jobId: jobId })
+                var pull = JSON.parse(document.getElementById("availabilityPullData").textContent);
+                var wholeSeason = pull.week === "100";
+                var resultsUrl = "?" + $.param({ season: pull.season, week: pull.week, team: pull.team });
+                // Whole season: a week with no roster published yet means none
+                // for that team's later weeks either.
+                var teamsWithNothingLeft = {};
+                var problemCount = 0;
+                var stepIndex = 0;
+
+                function noteProblem(step, text) {
+                    problemCount++;
+                    $("<li>").text(step[0] + " week " + step[1] + ": " + text).appendTo("#availabilityPullProblems");
+                }
+
+                function finish() {
+                    if (problemCount === 0) {
+                        window.location = resultsUrl;
+                        return;
+                    }
+                    $("#availabilityPullProcessing .spinner-border").hide();
+                    $("#availabilityPullProgress").text("Finished, with the problems below. ")
+                        .append($("<a>").attr("href", resultsUrl).text("Show what was stored"));
+                }
+
+                function nextStep() {
+                    stepIndex++;
+                    if (stepIndex >= pull.steps.length) {
+                        finish();
+                        return;
+                    }
+                    setTimeout(runStep, pull.delaySeconds * 1000);
+                }
+
+                function runStep() {
+                    while (stepIndex < pull.steps.length && teamsWithNothingLeft[pull.steps[stepIndex][0]]) {
+                        stepIndex++;
+                    }
+                    if (stepIndex >= pull.steps.length) {
+                        finish();
+                        return;
+                    }
+                    var step = pull.steps[stepIndex];
+                    $("#availabilityPullProgress").text(
+                        (wholeSeason ? "Whole season: " + step[0] + " week " + step[1] : "Week " + step[1] + ": " + step[0]) +
+                        " (" + (stepIndex + 1) + " / " + pull.steps.length + ")");
+                    $.getJSON("../ajax/availabilityPullStep/", { season: pull.season, week: step[1], team: step[0] })
                         .done(function (data) {
-                            if (data.status === "done") {
-                                window.location = "?jobResult=" + jobId;
-                                return;
+                            if (data.status === "notPublished" && wholeSeason) {
+                                teamsWithNothingLeft[step[0]] = true;
+                            } else if (data.status === "error") {
+                                noteProblem(step, data.error || "something went wrong.");
                             }
-                            if (data.status === "error") {
-                                $("#availabilityJobProgress").text("Error: " + (data.error || "something went wrong."));
-                                $("#availabilityJobProcessing .spinner-border").hide();
-                                return;
-                            }
-                            $("#availabilityJobProgress").text(data.progress || data.status);
-                            setTimeout(pollAvailabilityJob, 3000);
+                            nextStep();
                         })
-                        .fail(function () {
-                            // Transient hiccup (e.g. worker busy) — keep trying.
-                            setTimeout(pollAvailabilityJob, 5000);
+                        .fail(function (xhr) {
+                            noteProblem(step, "request failed (" + xhr.status + ").");
+                            nextStep();
                         });
                 }
-                pollAvailabilityJob();
+
+                runStep();
             })();
         </script>
-        {% endif %}
-
-        {% if jobError %}
-        <h2>Availability pull failed: {{ jobError }}</h2>
         {% endif %}
 
         {% if jobResult %}

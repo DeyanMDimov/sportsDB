@@ -63,7 +63,7 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
 def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
     
     url = athleteRosterData['athlete']['$ref']
-    response = requests.get(url)
+    response = requests.get(url, timeout = 30)
     athleteData = response.json()
     
 

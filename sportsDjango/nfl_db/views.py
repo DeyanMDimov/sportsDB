@@ -2,11 +2,11 @@ from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.core import serializers
 import json
-from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay, availabilityJob
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
 from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit
 from django.db import models
 from nfl_db import businessLogic, crudLogic, players
-import datetime, time, requests, traceback, threading, re
+import datetime, time, requests, traceback, re
 from zoneinfo import ZoneInfo
 
 # Create your views here.
@@ -524,12 +524,6 @@ def getPlayers(request):
 
             return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'allPlayers': playersLoaded, 'positionSelected': selectedPosition, 'positionName': positionName, 'positionYear': positionYear, 'positionSource': positionSource})
 
-        elif 'jobResult' in request.GET:
-            job = availabilityJob.objects.get(id = request.GET['jobResult'])
-            jobResult = json.loads(job.result) if job.result else None
-            jobError = job.error if job.status == 'error' else None
-            return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'jobResult': jobResult, 'jobError': jobError, 'sel_Team': job.team, 'sel_Year': job.season, 'sel_Week': job.week})
-
         elif 'week' in request.GET:
             inputReq = request.GET
             yearOfSeason = inputReq['season'].strip()
@@ -547,15 +541,21 @@ def getPlayers(request):
 
                 return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'jobResult': storedAvailability, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw, 'pullFresh': pullFresh})
 
-            # Heavy pulls (every team, or the whole season) fire many sequential
-            # ESPN requests and would blow past the host's web-worker time limit,
-            # so hand them to a background thread and let the page poll for the
-            # result. A single team + single week is fast, so it stays inline.
+            # Heavy pulls (every team, or the whole season) are one ESPN request
+            # per team-week, far past the host's web-worker time limit, and
+            # PythonAnywhere won't run a background thread from a web app. So the
+            # page drives them: it calls availabilityPullStep for each team-week
+            # in turn, then reloads without Pull Fresh to show what was stored.
+            # A single team + single week is fast, so it stays inline.
             if teamParam == 'ALL' or weekRaw == '100':
-                job = availabilityJob.objects.create(season = yearOfSeason, week = weekRaw, team = teamParam)
-                workerThread = threading.Thread(target = crudLogic.runAvailabilityJob, args = (job.id,), daemon = True)
-                workerThread.start()
-                return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'availabilityJobId': job.id, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw, 'pullFresh': pullFresh})
+                availabilityPull = {
+                    'season': yearOfSeason,
+                    'week': weekRaw,
+                    'team': teamParam,
+                    'steps': crudLogic.availabilityPullSteps(yearOfSeason, weekRaw, teamParam),
+                    'delaySeconds': crudLogic.AVAILABILITY_REQUEST_DELAY_SECONDS,
+                }
+                return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage, 'availabilityPull': availabilityPull, 'sel_Team': teamParam, 'sel_Year': yearOfSeason, 'sel_Week': weekRaw, 'pullFresh': pullFresh})
 
             weekOfSeason = int(weekRaw)
             if 'team' in inputReq:
@@ -584,19 +584,19 @@ def getPlayers(request):
 
     return renderPlayersPage(request, pageDictionary)
 
-def availabilityJobStatus(request):
-    # Polled by the players page while a background availability pull runs.
-    jobId = request.GET.get('jobId')
-    try:
-        job = availabilityJob.objects.get(id = jobId)
-    except availabilityJob.DoesNotExist:
-        return JsonResponse({"status": "error", "progress": "", "error": "Job not found"})
+def availabilityPullStep(request):
+    # One team-week of a pull the players page is driving (see getPlayers).
+    seasonYear = request.GET.get('season', '').strip()
+    weekOfSeason = int(request.GET.get('week', '0'))
+    team = nflTeam.objects.filter(abbreviation = request.GET.get('team', '').strip()).first()
+    if team == None:
+        return JsonResponse({"status": "error", "error": "Unknown team"})
 
-    return JsonResponse({
-        "status": job.status,
-        "progress": job.progress,
-        "error": job.error or "",
-    })
+    try:
+        return JsonResponse(crudLogic.pullTeamWeekAvailability(seasonYear, weekOfSeason, team))
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"status": "error", "error": str(e)})
 
 def getInjuryStatus(request):
     print("Hit this")

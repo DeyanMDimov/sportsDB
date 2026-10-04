@@ -2330,19 +2330,18 @@ def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear,
 
 
 # ---------------------------------------------------------------------------
-# Background player-availability jobs
+# Player-availability pulls across every team and/or the whole season
 #
-# The heavy availability pulls (every team, and/or the whole season) make many
-# sequential ESPN API calls. Running them inside the web request blocks long
-# enough that PythonAnywhere kills the worker, so getPlayers hands them to a
-# thread that calls runAvailabilityJob. The result is serialized to plain JSON
-# (see _availabilityStatusToken / _serializeAvailabilityRow) and stored on the
-# job row; the page polls for completion and then renders that JSON.
+# These are one ESPN roster request per team-week - minutes of work, far past
+# what one web request can take - and PythonAnywhere doesn't run threads started
+# from a web app. So the players page drives the pull itself: getPlayers hands
+# it availabilityPullSteps, it calls pullTeamWeekAvailability for each step
+# through a short ajax request, pausing between them, and then reads what was
+# stored back with buildAvailabilityFromDatabase.
 # ---------------------------------------------------------------------------
 
-# Paced so the host's proxy is less likely to rate limit us: every ESPN
-# roster request after the first waits this long, whether the iteration is
-# moving to the next team, the next week, or both.
+# Paced so the host's proxy is less likely to rate limit us: the page waits
+# this long between ESPN roster requests.
 AVAILABILITY_REQUEST_DELAY_SECONDS = 6
 
 
@@ -2373,102 +2372,56 @@ def _serializeAvailabilityRow(playerObj, statusList):
     }
 
 
-def _teamsForAvailabilityJob(teamAbbreviation):
+def _teamsForAvailability(teamAbbreviation):
     if teamAbbreviation == "ALL":
         return list(nflTeam.objects.all().order_by("abbreviation"))
     return [nflTeam.objects.get(abbreviation = teamAbbreviation)]
 
 
-def _buildWeekAvailability(job, seasonYear, weekOfSeason, teamAbbreviation):
-    teams = _teamsForAvailabilityJob(teamAbbreviation)
-    rows = []
-    for index, s_team in enumerate(teams):
-        if index > 0:
-            clock.sleep(AVAILABILITY_REQUEST_DELAY_SECONDS)
-        # Name the week so a single-week pull can't be mistaken for a season one.
-        job.progress = "Week " + str(weekOfSeason) + ": " + s_team.abbreviation + " (" + str(index + 1) + " / " + str(len(teams)) + " teams)"
-        job.save()
-
-        teamId = s_team.espnId
-        selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = seasonYear, homeTeamEspnId = teamId)
-        if len(selectedMatchQuerySet) == 0:
-            selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = weekOfSeason, yearOfSeason = seasonYear, awayTeamEspnId = teamId)
-            if len(selectedMatchQuerySet) == 0:
-                # Bye week for this team, nothing to show.
-                continue
-
-        matchId = selectedMatchQuerySet[0].espnId
-        gameRosterData = fetchGameRoster(matchId, teamId)
-        if gameRosterData is None:
-            # Roster isn't published for this game yet.
-            continue
-
-        try:
-            weekAvailability = processGameRosterForAvailability(gameRosterData, s_team, seasonYear, weekOfSeason)
-        except Exception as e:
-            print("Failed availability pull for " + s_team.abbreviation + " wk " + str(weekOfSeason) + ": " + str(e))
-            continue
-
-        for playerObj, playerWeekStatusObj in weekAvailability:
-            rows.append(_serializeAvailabilityRow(playerObj, [playerWeekStatusObj]))
-
-    return {
-        "type": "week",
-        "season": seasonYear,
-        "weekLabels": [str(weekOfSeason)],
-        "rows": rows,
-    }
+def _availabilityWeekNumbers(seasonYear, weekRaw):
+    # Week "100" is the dropdown's ALL: the whole regular season.
+    if str(weekRaw) == "100":
+        endRangeWeek = 12 if int(seasonYear) == 2024 else 19
+        return list(range(1, endRangeWeek))
+    return [int(weekRaw)]
 
 
-def _buildSeasonAvailability(job, seasonYear, teamAbbreviation):
-    endRangeWeek = 12 if int(seasonYear) == 2024 else 19
-    teams = _teamsForAvailabilityJob(teamAbbreviation)
-    rows = []
-    rosterRequestsMade = 0
-    for index, s_team in enumerate(teams):
-        teamId = s_team.espnId
-        teamSeasonAvailability = []
-        for wk in range(1, endRangeWeek):
-            selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = seasonYear, homeTeamEspnId = teamId)
-            if len(selectedMatchQuerySet) == 0:
-                selectedMatchQuerySet = nflMatch.objects.filter(weekOfSeason = wk, yearOfSeason = seasonYear, awayTeamEspnId = teamId)
-                if len(selectedMatchQuerySet) == 0:
-                    for playerRecord in teamSeasonAvailability:
-                        playerRecord[1].append("Bye")
-                    continue
+def _matchesForTeam(team, seasonYear, weekNumbers):
+    return nflMatch.objects.filter(
+        yearOfSeason = int(seasonYear),
+        weekOfSeason__in = weekNumbers,
+    ).filter(
+        Q(homeTeamEspnId = team.espnId) | Q(awayTeamEspnId = team.espnId)
+    )
 
-            job.progress = "Whole season: " + s_team.abbreviation + " week " + str(wk) + " (" + str(index + 1) + " / " + str(len(teams)) + " teams)"
-            job.save()
 
-            matchId = selectedMatchQuerySet[0].espnId
-            # Bye weeks never get here, so this paces actual requests rather than
-            # loop turns - across weeks within a team and on to the next team.
-            if rosterRequestsMade > 0:
-                clock.sleep(AVAILABILITY_REQUEST_DELAY_SECONDS)
-            gameRosterData = fetchGameRoster(matchId, teamId)
-            rosterRequestsMade += 1
-            if gameRosterData is None:
-                # Nothing published for this week yet, so the rest of the season
-                # won't have rosters either.
-                break
+def availabilityPullSteps(seasonYear, weekRaw, teamAbbreviation):
+    # [[team abbreviation, week], ...] for every team-week the pull covers, in
+    # order. Bye weeks are left out so every step is one ESPN request.
+    weekNumbers = _availabilityWeekNumbers(seasonYear, weekRaw)
+    steps = []
+    for s_team in _teamsForAvailability(teamAbbreviation):
+        playedWeeks = set(_matchesForTeam(s_team, seasonYear, weekNumbers).values_list('weekOfSeason', flat = True))
+        for weekNumber in weekNumbers:
+            if weekNumber in playedWeeks:
+                steps.append([s_team.abbreviation, weekNumber])
+    return steps
 
-            try:
-                weekAvailability = processGameRosterForAvailability(gameRosterData, s_team, seasonYear, wk)
-            except Exception as e:
-                print("Failed availability pull for " + s_team.abbreviation + " wk " + str(wk) + ": " + str(e))
-                break
 
-            teamSeasonAvailability = organizeRosterAvailabilityArrays(teamSeasonAvailability, weekAvailability, wk)
+def pullTeamWeekAvailability(seasonYear, weekOfSeason, team):
+    # One step of a pull: the team's game roster for that week, stored as
+    # playerWeekStatus rows. "notPublished" means ESPN has no roster for the
+    # game yet (it publishes them around kickoff).
+    selectedMatch = _matchesForTeam(team, seasonYear, [weekOfSeason]).first()
+    if selectedMatch == None:
+        return {"status": "bye", "players": 0}
 
-        for playerObj, statusList in teamSeasonAvailability:
-            rows.append(_serializeAvailabilityRow(playerObj, statusList))
+    gameRosterData = fetchGameRoster(selectedMatch.espnId, team.espnId)
+    if gameRosterData is None:
+        return {"status": "notPublished", "players": 0}
 
-    return {
-        "type": "season",
-        "season": seasonYear,
-        "weekLabels": [str(w) for w in range(1, endRangeWeek)],
-        "rows": rows,
-    }
+    weekAvailability = processGameRosterForAvailability(gameRosterData, team, seasonYear, weekOfSeason)
+    return {"status": "pulled", "players": len(weekAvailability)}
 
 
 # ---------------------------------------------------------------------------
@@ -2727,9 +2680,9 @@ def deleteRowsInChunks(rowModel, rowIds):
 
 def buildAvailabilityFromDatabase(seasonYear, weekRaw, teamAbbreviation):
     # The "Pull Fresh" box unticked: answer entirely from stored playerWeekStatus
-    # rows and make no ESPN requests at all. Shape matches what the background
-    # job produces so the page renders it with the same table.
-    teams = _teamsForAvailabilityJob(teamAbbreviation)
+    # rows and make no ESPN requests at all. A pull of every team or the whole
+    # season also ends here, once the page has stored each team-week.
+    teams = _teamsForAvailability(teamAbbreviation)
     if str(weekRaw) == "100":
         return _seasonAvailabilityFromDatabase(seasonYear, teams)
     return _weekAvailabilityFromDatabase(seasonYear, int(weekRaw), teams)
@@ -2806,37 +2759,6 @@ def _seasonAvailabilityFromDatabase(seasonYear, teams):
         "weekLabels": [str(w) for w in weekNumbers],
         "rows": rows,
     }
-
-
-def runAvailabilityJob(jobId):
-    # Thread entry point. Owns its own DB connection, so close it when done.
-    from nfl_db.models import availabilityJob
-    from django.db import connection
-
-    job = None
-    try:
-        job = availabilityJob.objects.get(id = jobId)
-        job.status = "running"
-        job.progress = "Starting..."
-        job.save()
-
-        if job.week == "100":
-            result = _buildSeasonAvailability(job, job.season, job.team)
-        else:
-            result = _buildWeekAvailability(job, job.season, int(job.week), job.team)
-
-        job.result = json.dumps(result)
-        job.progress = "Complete"
-        job.status = "done"
-        job.save()
-    except Exception as e:
-        traceback.print_exc()
-        if job is not None:
-            job.status = "error"
-            job.error = str(e)
-            job.save()
-    finally:
-        connection.close()
 
 
 def scheduledScorePull():
