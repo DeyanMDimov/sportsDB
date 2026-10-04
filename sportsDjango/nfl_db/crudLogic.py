@@ -4213,6 +4213,9 @@ MATCHUP_METRICS = {
     "totalPassYardsAllowed": {"label": "Pass Yards Allowed", "num": ["totalPassYardsAllowed"], "lowerIsBetter": True},
     "intsThrown": {"label": "INTs Thrown", "num": ["interceptionsOnOffense"], "lowerIsBetter": True},
     "intsCaught": {"label": "INTs Caught", "num": ["defenseInterceptions"]},
+    "wrReceivingYardsAllowed": {"label": "WR Rec Yards Allowed", "num": ["wrReceivingYards"], "allowed": True, "lowerIsBetter": True},
+    "teReceivingYardsAllowed": {"label": "TE Rec Yards Allowed", "num": ["teReceivingYards"], "allowed": True, "lowerIsBetter": True},
+    "rbReceivingYardsAllowed": {"label": "RB Rec Yards Allowed", "num": ["rbReceivingYards"], "allowed": True, "lowerIsBetter": True},
 
     # Scoring - offense, and the same figures allowed by a defense
     "points": {"label": "Points", "num": ["totalPointsScored"]},
@@ -4274,6 +4277,12 @@ MATCHUP_PLAY_KEYS = [
     "driveStartYards", "drivesWithStart",
 ]
 
+# player.playerPosition -> the receiving-yards key it counts toward. Fullbacks
+# go in with the running backs. These come from the receiver splits, so a game
+# only has them once its play-by-play is pulled - drives alone aren't enough.
+MATCHUP_RECEIVING_POSITION_KEYS = {2: "wrReceivingYards", 3: "teReceivingYards", 4: "rbReceivingYards", 5: "rbReceivingYards"}
+MATCHUP_RECEIVING_KEYS = sorted(set(MATCHUP_RECEIVING_POSITION_KEYS.values()))
+
 
 def matchupScoringPlayPoints(pointsScored, playDescription):
     # Touchdowns carry 6; the try after them is only in the description.
@@ -4310,7 +4319,7 @@ def getMatchupSeasonStats(seasonYear):
 
     teamGameStats = {}
     performanceFields = sorted({rawKey for metric in MATCHUP_METRICS.values()
-        for rawKey in metric["num"] + metric.get("den", []) if rawKey not in MATCHUP_PLAY_KEYS})
+        for rawKey in metric["num"] + metric.get("den", []) if rawKey not in MATCHUP_PLAY_KEYS + MATCHUP_RECEIVING_KEYS})
     for performanceRow in teamMatchPerformance.objects.filter(
         yearOfSeason = seasonYear, weekOfSeason__gte = 1,
     ).values('teamEspnId', 'weekOfSeason', *performanceFields):
@@ -4379,6 +4388,25 @@ def getMatchupSeasonStats(seasonYear):
             if (playType == 28 and offenseScored) or (playType == 24 and not offenseScored):
                 addPlayStat(matchId, scoringTeam, "returnTds")
 
+    # --- Receiving yards by the catcher's position ---
+    # Same counting as the players' receiving yards (TEAM_WEEKLY_STATS): one
+    # catch per player per play, nothing on a nullified play. Both teams in a
+    # game with any catches stored start at 0 for every position.
+    receivingStats = {}
+    countedCatches = set()
+    for playerId, playId, matchId, offenseTeamId, playDescription, yardsFromEndzone, playerPosition in receiverStatSplit.objects.filter(
+        play__nflMatch_id__in = list(seasonMatches),
+    ).values_list('player_id', 'play_id', 'play__nflMatch_id', 'play__teamOnOffense_id',
+                  'play__playDescription', 'play__yardsFromEndzone', 'player__playerPosition'):
+        for teamEspnId in seasonMatches[matchId][1:]:
+            receivingStats.setdefault((matchId, teamEspnId), dict.fromkeys(MATCHUP_RECEIVING_KEYS, 0))
+        positionKey = MATCHUP_RECEIVING_POSITION_KEYS.get(playerPosition)
+        receivingTeam = espnIdByTeamId.get(offenseTeamId)
+        if positionKey == None or (matchId, receivingTeam) not in receivingStats or (playerId, playId) in countedCatches or playWasNullified(playDescription):
+            continue
+        countedCatches.add((playerId, playId))
+        receivingStats[(matchId, receivingTeam)][positionKey] += yardsGainedOnPlay(playDescription, yardsFromEndzone)
+
     for matchId, matchDrives in drivesByMatch.items():
         matchDrives.sort(key = lambda drive: drive['sequence'] or 0)
         for driveIndex, drive in enumerate(matchDrives):
@@ -4410,7 +4438,7 @@ def getMatchupSeasonStats(seasonYear):
                     pointsAfter += pointsByDriveTeam.get((matchDrives[driveIndex + 1]['id'], takeawayTeam), 0)
                 addPlayStat(matchId, takeawayTeam, "pointsOffTurnovers", pointsAfter)
 
-    for (matchId, teamEspnId), rawPlayStats in playStats.items():
+    for (matchId, teamEspnId), rawPlayStats in list(playStats.items()) + list(receivingStats.items()):
         if teamEspnId == None:
             continue
         weekOfSeason = seasonMatches[matchId][0]

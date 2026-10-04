@@ -1,7 +1,7 @@
 {% comment %}
 A team's leading players for one stat on the Matchup page, on the same week
 columns as the team tables.
-{% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition %}
+{% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows %}
 {% endcomment %}
 {% if playerRows %}
 <div class="byTeamTableWrap">
@@ -10,16 +10,7 @@ columns as the team tables.
         <col class="matchupRankCol"><col class="matchupLabelCol"><col class="matchupTotalCol">
         {% for wk in matchupWeeks %}<col class="matchupWeekCol">{% endfor %}
     </colgroup>
-    <thead>
-        <tr>
-            <th class="byTeamNum">#</th>
-            <th class="byTeamPlayer">Player</th>
-            <th class="byTeamNum">Total</th>
-            {% for wk in matchupWeeks %}
-            <th class="byTeamNum{% if wk.isResult %} matchupResultCell{% endif %}">{{ wk.label }}</th>
-            {% endfor %}
-        </tr>
-    </thead>
+    {% include 'nfl/matchupTableHead.html' with rankHeader="#" labelHeader="Player" %}
     <tbody>
         {% for playerRow in playerRows %}
         <tr>

@@ -1723,13 +1723,14 @@ def predictTouchdowns(request):
 # matchup gets the whole list - "offense" is that side's attacking team and
 # "defense" the team it faces - and the page shows one side, a split line, and
 # then the other.
-#   team:   one team's stats (keys from crudLogic.MATCHUP_METRICS), with an
-#           opponent row under the week headers;
+#   team:   one team's stats (keys from crudLogic.MATCHUP_METRICS);
 #   paired: rows from both teams, each label prefixed with and underlined in
 #           its team's colors;
 #   player: the attacking team's players for one or more summed stat keys from
 #           crudLogic.TEAM_WEEKLY_STATS, top `count` (None for everyone who
 #           has any), optionally with positions, optionally collapsible.
+# Every table has its team's opponents under the week headers (both teams', each
+# labelled, on a paired table) so nobody has to scroll back up to see them.
 MATCHUP_CATEGORIES = {
     'rushing': [
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "rushingYards"]},
@@ -1741,6 +1742,8 @@ MATCHUP_CATEGORIES = {
         {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalPassYardsAllowed"]},
         {'kind': 'player', 'title': "QBs", 'statKeys': ["passingYards"], 'statLabel': "Pass Yds", 'count': None},
         {'kind': 'player', 'title': "Receivers", 'statKeys': ["receivingYards"], 'statLabel': "Rec Yds", 'count': None, 'showPosition': True},
+        {'kind': 'team', 'side': 'defense', 'title': "Receiving Allowed per Position", 'metrics': [
+            "wrReceivingYardsAllowed", "teReceivingYardsAllowed", "rbReceivingYardsAllowed"]},
         {'kind': 'paired', 'title': "INTs", 'rows': [('offense', "intsThrown"), ('defense', "intsCaught")]},
     ],
     'scoring': [
@@ -2007,6 +2010,10 @@ def getMatchup(request):
         for matchupTeam in [selectedTeam, opponent]}
     seasonStats = crudLogic.getMatchupSeasonStats(yearOfSeason)
 
+    def opponentRow(team, labelled = False):
+        # labelled names the team, for tables mixing both teams.
+        return {'team': team if labelled else None, 'labels': opponentsByTeamId[team.id]}
+
     def sideSections(offenseTeam, defenseTeam):
         # One side of the matchup: offenseTeam's attack against defenseTeam's defense.
         sideTeams = {'offense': offenseTeam, 'defense': defenseTeam}
@@ -2015,17 +2022,19 @@ def getMatchup(request):
             if sectionSetup['kind'] == 'team':
                 sectionTeam = sideTeams[sectionSetup['side']]
                 side.append({'kind': 'team', 'title': f"{sectionTeam.abbreviation} {sectionSetup['title']}", 'team': sectionTeam,
-                    'opponents': opponentsByTeamId[sectionTeam.id],
+                    'opponentRows': [opponentRow(sectionTeam)],
                     'rows': matchupTeamStatRows([(sectionTeam, metricKey) for metricKey in sectionSetup['metrics']],
                         seasonStats, throughWeek, weekColumns, resultWeek)})
             elif sectionSetup['kind'] == 'paired':
                 side.append({'kind': 'team', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
+                    'opponentRows': [opponentRow(offenseTeam, labelled = True), opponentRow(defenseTeam, labelled = True)],
                     'rows': matchupTeamStatRows([(sideTeams[rowSide], metricKey) for rowSide, metricKey in sectionSetup['rows']],
                         seasonStats, throughWeek, weekColumns, resultWeek, labelWithTeam = True)})
             else:
                 side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
                     'statLabel': sectionSetup['statLabel'], 'showPosition': sectionSetup.get('showPosition', False),
                     'collapsible': sectionSetup.get('collapsible', False),
+                    'opponentRows': [opponentRow(offenseTeam)],
                     'rows': matchupPlayerRows(offenseTeam, yearOfSeason, sectionSetup['statKeys'], throughWeek, weekColumns, resultWeek, sectionSetup['count'])})
         return side
 
