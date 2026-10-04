@@ -1690,7 +1690,8 @@ def predictTouchdowns(request):
 #           crudLogic.TEAM_WEEKLY_STATS, top `count` (None for everyone who
 #           has any), optionally with positions, optionally collapsible.
 # Every table has its team's opponents under the week headers (both teams', each
-# labelled, on a paired table) so nobody has to scroll back up to see them.
+# labelled, on a paired table) so nobody has to scroll back up to see them -
+# except a paired table with 'opponents': False, where two rows are too busy.
 MATCHUP_CATEGORIES = {
     'rushing': [
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "rushingYards"]},
@@ -1704,7 +1705,7 @@ MATCHUP_CATEGORIES = {
         {'kind': 'player', 'title': "Receivers", 'statKeys': ["receivingYards"], 'statLabel': "Rec Yds", 'count': None, 'showPosition': True},
         {'kind': 'team', 'side': 'defense', 'title': "Receiving Allowed per Position", 'metrics': [
             "wrReceivingYardsAllowed", "teReceivingYardsAllowed", "rbReceivingYardsAllowed"]},
-        {'kind': 'paired', 'title': "INTs", 'rows': [('offense', "intsThrown"), ('defense', "intsCaught")]},
+        {'kind': 'paired', 'title': "INTs", 'rows': [('offense', "intsThrown"), ('defense', "intsCaught")], 'opponents': False},
     ],
     'scoring': [
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': [
@@ -1987,7 +1988,8 @@ def getMatchup(request):
                         seasonStats, throughWeek, weekColumns, resultWeek)})
             elif sectionSetup['kind'] == 'paired':
                 side.append({'kind': 'team', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
-                    'opponentRows': [opponentRow(offenseTeam, labelled = True), opponentRow(defenseTeam, labelled = True)],
+                    'opponentRows': [opponentRow(offenseTeam, labelled = True), opponentRow(defenseTeam, labelled = True)]
+                        if sectionSetup.get('opponents', True) else [],
                     'rows': matchupTeamStatRows([(sideTeams[rowSide], metricKey) for rowSide, metricKey in sectionSetup['rows']],
                         seasonStats, throughWeek, weekColumns, resultWeek, labelWithTeam = True)})
             else:
