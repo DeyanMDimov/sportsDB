@@ -25,11 +25,11 @@
                     </button>
                     <div class="collapse navbar-collapse btn-group p-0" id="navbarSupportedContent">
                         <ul id="main_navigation_menu" class="nav-menu navbar-nav mb-2 mb-lg-0 btn-group p-0">
-                            <li id="menu-item-model" class="menu-item nav-item btn p-0"><a href="/loadModelSummary" class="nav-link p-3" role="button">Model</a></li>
+                            <li id="menu-item-model" class="menu-item nav-item btn p-0"><a href="/loadModelSummary" data-section-paths="/loadModel /loadYearlySummary" class="nav-link p-3" role="button">Model</a></li>
                             <li id="matchup" class="menu-item nav-item btn p-0"><a href="/matchup" class="nav-link p-3" role="button">Matchup</a></li>
                             <li id="all-team-stats" class="menu-item nav-item btn p-0"><a href="/fullTeamStats" class="nav-link p-3" role="button">Teams</a></li>
                             <li id="player-page" class="menu-item  nav-item btn p-0"><a href="/players" class="nav-link p-3" role="button">Players</a></li>
-                            <li id="tds" class="menu-item nav-item btn p-0"><a href="/touchdowns" class="nav-link p-3" role="button">Touchdowns</a></li>
+                            <li id="tds" class="menu-item nav-item btn p-0"><a href="/touchdowns" data-section-paths="/touchdowns-mp /touchdowns-week" class="nav-link p-3" role="button">Touchdowns</a></li>
                             <li id="plays" class="menu-item  nav-item btn p-0"><a href="/plays" class="nav-link p-3" role="button">Plays</a></li>
                             <li id="menu-item-pull-data" class="menu-item nav-item btn p-0"><a href="/getGames" class="nav-link p-3" role="button">Pull Data</a></li>
 
@@ -82,5 +82,31 @@
         </div>
         <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+        <script>
+            // Browser tab title: the open tab, then the nav section it's under,
+            // e.g. "Player Availability · Players · NFL DB", kept up to date as
+            // tabs are switched. The section comes from the nav link whose href
+            // (or one of its data-section-paths) matches this page's path.
+            (function () {
+                const trimSlash = function (path) { return path.replace(/\/+$/, '') || '/'; };
+                const currentPath = trimSlash(window.location.pathname);
+                let sectionName = '';
+                document.querySelectorAll('#main_navigation_menu a.nav-link').forEach(function (navLink) {
+                    const sectionPaths = [navLink.getAttribute('href')].concat((navLink.dataset.sectionPaths || '').split(' '));
+                    if (sectionPaths.some(function (path) { return path && trimSlash(path) === currentPath; })) {
+                        sectionName = navLink.textContent.trim();
+                    }
+                });
+
+                function updateTitle() {
+                    // Every page has at most one row of tabs.
+                    const activeTab = document.querySelector('.nav-tabs .nav-link.active');
+                    const titleParts = [activeTab ? activeTab.textContent.trim() : '', sectionName, 'NFL DB'];
+                    document.title = titleParts.filter(function (part) { return part; }).join(' · ');
+                }
+                document.addEventListener('shown.bs.tab', updateTitle);
+                updateTitle();
+            })();
+        </script>
     </body>
 </html>
