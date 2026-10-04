@@ -1,7 +1,7 @@
 {% comment %}
 Team stats on the Matchup page (values come pre-formatted: "57.1%", "2/3"), laid out like the Teams -> Rankings table
 but with a row per stat instead of a row per team.
-{% include 'nfl/matchupStatTable.html' with statRows=section.rows opponents=section.opponents %}
+{% include 'nfl/matchupStatTable.html' with statRows=section.rows opponentRows=section.opponentRows %}
 {% endcomment %}
 {% if statRows %}
 <div class="byTeamTableWrap">
@@ -10,23 +10,7 @@ but with a row per stat instead of a row per team.
         <col class="matchupRankCol"><col class="matchupLabelCol"><col class="matchupTotalCol">
         {% for wk in matchupWeeks %}<col class="matchupWeekCol">{% endfor %}
     </colgroup>
-    <thead>
-        <tr>
-            <th class="byTeamNum"{% if opponents %} rowspan="2"{% endif %}>Rank</th>
-            <th class="byTeamPlayer"{% if opponents %} rowspan="2"{% endif %}>Stat</th>
-            <th class="byTeamNum"{% if opponents %} rowspan="2"{% endif %}>Total</th>
-            {% for wk in matchupWeeks %}
-            <th class="byTeamNum{% if wk.isResult %} matchupResultCell{% endif %}">{{ wk.label }}</th>
-            {% endfor %}
-        </tr>
-        {% if opponents %}
-        <tr>
-            {% for opponentLabel in opponents %}
-            <th class="byTeamNum byTeamOpponent{% if opponentLabel == "BYE" %} text-muted{% endif %}">{{ opponentLabel }}</th>
-            {% endfor %}
-        </tr>
-        {% endif %}
-    </thead>
+    {% include 'nfl/matchupTableHead.html' with rankHeader="Rank" labelHeader="Stat" %}
     <tbody>
         {% for statRow in statRows %}
         <tr>

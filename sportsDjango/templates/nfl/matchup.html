@@ -88,9 +88,9 @@
         </div>
         {% if section.collapsible %}<div class="collapse show" id="matchupSection{{ forloop.counter }}">{% endif %}
         {% if section.kind == "team" %}
-        {% include 'nfl/matchupStatTable.html' with statRows=section.rows opponents=section.opponents %}
+        {% include 'nfl/matchupStatTable.html' with statRows=section.rows opponentRows=section.opponentRows %}
         {% else %}
-        {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition %}
+        {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows %}
         {% endif %}
         {% if section.collapsible %}</div>{% endif %}
         {% endif %}

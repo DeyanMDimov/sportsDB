@@ -1,0 +1,28 @@
+{% comment %}
+Header shared by the Matchup tables: the week labels, then a row of opponents
+under them for each team in opponentRows. On a table mixing both teams each
+opponent row is labelled with its team, underlined in the team's colors.
+{% include 'nfl/matchupTableHead.html' with rankHeader="Rank" labelHeader="Stat" opponentRows=opponentRows %}
+{% endcomment %}
+{% with headerRowSpan=opponentRows|length|add:1 %}
+<thead>
+    <tr>
+        <th class="byTeamNum" rowspan="{{ headerRowSpan }}">{{ rankHeader }}</th>
+        <th class="byTeamPlayer"{% if not opponentRows.0.team %} rowspan="{{ headerRowSpan }}"{% endif %}>{{ labelHeader }}</th>
+        <th class="byTeamNum" rowspan="{{ headerRowSpan }}">Total</th>
+        {% for wk in matchupWeeks %}
+        <th class="byTeamNum{% if wk.isResult %} matchupResultCell{% endif %}">{{ wk.label }}</th>
+        {% endfor %}
+    </tr>
+    {% for opponentRow in opponentRows %}
+    <tr>
+        {% if opponentRow.team %}
+        <th class="byTeamPlayer byTeamOpponent team-border team-{{ opponentRow.team.abbreviation }}">{{ opponentRow.team.abbreviation }} Opponent</th>
+        {% endif %}
+        {% for opponentLabel in opponentRow.labels %}
+        <th class="byTeamNum byTeamOpponent{% if opponentLabel == "BYE" %} text-muted{% endif %}">{{ opponentLabel }}</th>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+</thead>
+{% endwith %}
