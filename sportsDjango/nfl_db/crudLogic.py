@@ -1974,6 +1974,8 @@ TEAM_WEEKLY_STATS = {
     "passingYards": (passerStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone) if statSplit.play.playType == 2 else 0),
     "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
+    # Receiver rows are only written for catches, so each one is a reception.
+    "receptions": (receiverStatSplit, lambda statSplit: 1),
     "rushingTds": (rusherStatSplit, lambda statSplit: 1 if statSplit.rushingTdScored else 0),
     "receivingTds": (receiverStatSplit, lambda statSplit: 1 if statSplit.receivingTdScored else 0),
     # Matchup page -> Scoring: touches from the 20 or closer.
