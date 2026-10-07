@@ -248,7 +248,7 @@
                 </thead>
                 <tbody>
                     {% for play in filteredPlays %}
-                    <tr>
+                    <tr data-description="{{ play.playDescription|default:'' }}">
                         <td>{{ play.nflMatch.weekOfSeason }}</td>
                         <td class="text-nowrap">{{ play.matchLabel }}</td>
                         <td>{{ play.teamOnOffense.abbreviation }}</td>
@@ -266,6 +266,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+            <div id="playDescriptionTooltip" class="play-description-tooltip" hidden></div>
             {% endif %}
         {% endif %}
     </div>
@@ -290,6 +291,43 @@
 
             typeSelect.addEventListener("change", syncDirectionOptions);
             syncDirectionOptions();
+        })();
+
+        // Hovering a filtered play shows its description just under the cursor.
+        (function () {
+            var table = document.querySelector(".filtered-plays-table");
+            var tooltip = document.getElementById("playDescriptionTooltip");
+            if (!table || !tooltip) {
+                return;
+            }
+
+            table.addEventListener("mousemove", function (event) {
+                var row = event.target.closest("tbody tr");
+                var description = row ? row.dataset.description : "";
+                if (!description) {
+                    tooltip.hidden = true;
+                    return;
+                }
+                tooltip.textContent = description;
+                tooltip.hidden = false;
+
+                // Sit just below and right of the cursor, flipping back inside the viewport near the edges.
+                var offset = 16;
+                var left = event.clientX + offset;
+                var top = event.clientY + offset;
+                if (left + tooltip.offsetWidth > window.innerWidth) {
+                    left = Math.max(0, window.innerWidth - tooltip.offsetWidth - 4);
+                }
+                if (top + tooltip.offsetHeight > window.innerHeight) {
+                    top = event.clientY - tooltip.offsetHeight - 4;
+                }
+                tooltip.style.left = left + "px";
+                tooltip.style.top = top + "px";
+            });
+
+            table.addEventListener("mouseleave", function () {
+                tooltip.hidden = true;
+            });
         })();
     </script>
 {% endblock %}
