@@ -1,5 +1,5 @@
 from nfl_db import models, players, businessLogic
-from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus, playerMatchUsage
 from nfl_db.models import rusherStatSplit, receiverStatSplit, returnerStatSplit, passerStatSplit
 from django.db import IntegrityError
 from django.db.models import Q, Sum, Count
@@ -1649,6 +1649,7 @@ PERFORMANCE_STAT_LABELS = {
     "fumbles": "Fumbles",
     "sacks": "Sacks",
     "drops": "Drops",
+    "offenseSnaps": "Off Snaps",
 }
 
 RECEIVER_PERFORMANCE_STATS = ["receivingYards", "receptions", "targets", "receivingTds", "fumbles", "drops"]
@@ -1983,8 +1984,12 @@ TEAM_WEEKLY_STATS = {
     "redZoneReceptions": (receiverStatSplit, lambda statSplit: 1 if statSplit.play.yardsFromEndzone != None and statSplit.play.yardsFromEndzone <= 20 else 0),
     # Matchup page -> Special Teams: kickoff and punt return yards.
     "returnYards": (returnerStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
+    # Snap counts are stored per game, not per play: read from playerMatchUsage.
+    "offenseSnaps": (playerMatchUsage, None),
 }
 TEAM_WEEKLY_TD_STATS = ["rushingTds", "receivingTds"]
+# Linemen play every snap; the By Team tab is about who gets the ball.
+TEAM_WEEKLY_SNAP_POSITIONS = [1, 2, 3, 4, 5]
 
 # Which split rows belong to the team, where it isn't simply "the team was on
 # offense". Kickoffs list the receiving team on offense but punts list the
@@ -2028,19 +2033,39 @@ def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
     countedPlays = set()
     valuesByPlayerId = {}
     playersById = {}
-    splitModel, playValue = TEAM_WEEKLY_STATS[statKey]
-    teamFilter = TEAM_WEEKLY_STAT_TEAM_FILTERS[statKey](team) if statKey in TEAM_WEEKLY_STAT_TEAM_FILTERS else Q(play__teamOnOffense = team)
-    splitRows = splitModel.objects.filter(
-        play__nflMatch__in = seasonMatches,
-    ).filter(teamFilter).select_related('play', 'player')
-    for statSplit in splitRows:
-        if (statSplit.player_id, statSplit.play_id) in countedPlays or playWasNullified(statSplit.play.playDescription):
-            continue
-        countedPlays.add((statSplit.player_id, statSplit.play_id))
-        playersById[statSplit.player_id] = statSplit.player
-        playerWeeks = valuesByPlayerId.setdefault(statSplit.player_id, {})
-        weekNumber = weekByMatchId[statSplit.play.nflMatch_id]
-        playerWeeks[weekNumber] = playerWeeks.get(weekNumber, 0) + playValue(statSplit)
+    # Only for snaps: the team's own offensive snaps in each game, from whoever
+    # played the most of them (the percentages are rounded, so a 1-snap "1.0%"
+    # would make it a 100-snap game).
+    teamSnapsByWeek = {}
+    mostSnapsByWeek = {}
+    if statKey == "offenseSnaps":
+        for usage in playerMatchUsage.objects.filter(
+            team = team,
+            nflMatch__in = seasonMatches,
+            offenseSnaps__gt = 0,
+        ).select_related('player'):
+            weekNumber = weekByMatchId[usage.nflMatch_id]
+            if usage.offenseSnapPct and usage.offenseSnaps > mostSnapsByWeek.get(weekNumber, 0):
+                mostSnapsByWeek[weekNumber] = usage.offenseSnaps
+                teamSnapsByWeek[weekNumber] = round(usage.offenseSnaps * 100 / usage.offenseSnapPct)
+            if usage.player.playerPosition not in TEAM_WEEKLY_SNAP_POSITIONS:
+                continue
+            playersById[usage.player_id] = usage.player
+            valuesByPlayerId.setdefault(usage.player_id, {})[weekNumber] = usage.offenseSnaps
+    else:
+        splitModel, playValue = TEAM_WEEKLY_STATS[statKey]
+        teamFilter = TEAM_WEEKLY_STAT_TEAM_FILTERS[statKey](team) if statKey in TEAM_WEEKLY_STAT_TEAM_FILTERS else Q(play__teamOnOffense = team)
+        splitRows = splitModel.objects.filter(
+            play__nflMatch__in = seasonMatches,
+        ).filter(teamFilter).select_related('play', 'player')
+        for statSplit in splitRows:
+            if (statSplit.player_id, statSplit.play_id) in countedPlays or playWasNullified(statSplit.play.playDescription):
+                continue
+            countedPlays.add((statSplit.player_id, statSplit.play_id))
+            playersById[statSplit.player_id] = statSplit.player
+            playerWeeks = valuesByPlayerId.setdefault(statSplit.player_id, {})
+            weekNumber = weekByMatchId[statSplit.play.nflMatch_id]
+            playerWeeks[weekNumber] = playerWeeks.get(weekNumber, 0) + playValue(statSplit)
 
     # Out/not-on-roster only means something for weeks availability was pulled.
     weekNumbers = [weekColumn['week'] for weekColumn in weekColumns]
@@ -2084,8 +2109,13 @@ def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
 
     teamRows.sort(key = lambda teamRow: (-teamRow['seasonTotal'], teamRow['player'].name))
 
-    weekTotals = [sum(playerWeeks.get(weekNumber, 0) for playerWeeks in valuesByPlayerId.values()) for weekNumber in weekNumbers]
+    if statKey == "offenseSnaps":
+        # Adding up everyone's snaps would count each snap eleven times over.
+        weekTotals = [teamSnapsByWeek.get(weekNumber, 0) for weekNumber in weekNumbers]
+    else:
+        weekTotals = [sum(playerWeeks.get(weekNumber, 0) for playerWeeks in valuesByPlayerId.values()) for weekNumber in weekNumbers]
     teamTotalRow = {
+        'label': "Team Snaps" if statKey == "offenseSnaps" else "Total",
         'seasonTotal': sum(weekTotals),
         'weekTotals': weekTotals,
     }
