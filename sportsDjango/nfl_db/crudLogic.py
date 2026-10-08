@@ -2781,8 +2781,8 @@ def _weekAvailabilityFromDatabase(seasonYear, weekOfSeason, teams):
 
 def _seasonAvailabilityFromDatabase(seasonYear, teams):
     endRangeWeek = 12 if int(seasonYear) == 2024 else 19
-    weekNumbers = list(range(1, endRangeWeek))
-    rows = []
+    seasonWeekNumbers = list(range(1, endRangeWeek))
+    teamData = []
 
     for s_team in teams:
         # Weeks with no match are bye weeks; weeks that were played but hold no
@@ -2797,7 +2797,7 @@ def _seasonAvailabilityFromDatabase(seasonYear, teams):
         statusesByPlayerId = {}
         for storedStatus in playerWeekStatus.objects.filter(
             yearOfSeason = int(seasonYear),
-            weekOfSeason__in = weekNumbers,
+            weekOfSeason__in = seasonWeekNumbers,
             team = s_team,
         ).select_related('player').order_by('reportDate', 'id'):
             playersById[storedStatus.player_id] = storedStatus.player
@@ -2805,6 +2805,26 @@ def _seasonAvailabilityFromDatabase(seasonYear, teams):
             # week ended on.
             statusesByPlayerId.setdefault(storedStatus.player_id, {})[storedStatus.weekOfSeason] = storedStatus
 
+        teamData.append((s_team, playedWeeks, playersById, statusesByPlayerId))
+
+    # Only weeks with availability stored for at least one of the teams get a
+    # column. A bye has nothing stored by nature, so it keeps its column when it
+    # falls between the first and last week that do.
+    weeksWithData = set()
+    byeWeeks = set()
+    for s_team, playedWeeks, playersById, statusesByPlayerId in teamData:
+        for playerStatuses in statusesByPlayerId.values():
+            weeksWithData.update(playerStatuses.keys())
+        byeWeeks.update(w for w in seasonWeekNumbers if w not in playedWeeks)
+    firstDataWeek = min(weeksWithData, default = 0)
+    lastDataWeek = max(weeksWithData, default = 0)
+    weekNumbers = [
+        w for w in seasonWeekNumbers
+        if w in weeksWithData or (w in byeWeeks and firstDataWeek < w < lastDataWeek)
+    ]
+
+    rows = []
+    for s_team, playedWeeks, playersById, statusesByPlayerId in teamData:
         for playerObj in sorted(playersById.values(), key = lambda p: (p.playerPosition, p.name)):
             statusList = []
             for weekNumber in weekNumbers:
