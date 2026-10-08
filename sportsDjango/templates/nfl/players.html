@@ -656,10 +656,9 @@
             <table class="table table-bordered" id="player_table">
                 <thead>
                     <tr>
-                        <td style="width:320px">Name</td>
+                        <td style="width:400px">Name</td>
                         <td>Team</td>
                         <td>Position</td>
-                        <td>Espn ID</td>
                         <td>Starter</td>
                         <td>Star Player</td>
                         {% if jobResult.type == "season" %}
@@ -677,7 +676,6 @@
                         <td>{{ row.name }}</td>
                         <td>{{ row.team }}</td>
                         <td>{{ row.position }}</td>
-                        <td>{{ row.espnId }}</td>
                         <td><input type="checkbox" id="{{ row.espnId }}-starter" name="{{ row.espnId }}-starter"
                             {% if row.isStarter %} checked {% endif %} /></td>
                         <td><input type="checkbox" id="{{ row.espnId }}-starPlayer" name="{{ row.espnId }}-starPlayer"
@@ -777,10 +775,9 @@
             <table class="table table-bordered" id="player_table">
                 <thead>
                     <tr>
-                        <td style="width:320px">Name</td>
+                        <td style="width:400px">Name</td>
                         <td>Team</td>
                         <td>Position</td>
-                        <td>Espn ID</td>
                         <td>Starter</td>
                         <td>Star Player</td>
                         <td>Status</td>
@@ -812,7 +809,6 @@
                         </td>
                         <td>{{player.1.team.abbreviation}}</td>
                         <td>{{player.0.get_playerPosition_display}}</td>
-                        <td>{{player.0.espnId}}</td>
                         <td><input type="checkbox" id="{{player.0.espnId}}-starter" name="{{player.0.espnId}}-starter" 
                             {% if player.0.isStarter %} checked {% endif %} /></td>
                         <td><input type="checkbox" id="{{player.0.espnId}}-starPlayer" name="{{player.0.espnId}}-starPlayer" 
@@ -837,10 +833,9 @@
             <table class="table table-bordered" id="player_table">
                 <thead>
                     <tr>
-                        <td style="width:320px">Name</td>
+                        <td style="width:400px">Name</td>
                         <td>Team</td>
                         <td>Position</td>
-                        <td>Espn ID</td>
                         <td>Starter</td>
                         <td>Star Player</td>
                         <td class="weekAvailTableCell">1</td>
@@ -871,7 +866,6 @@
                         </td>
                         <td>{{player.0.team.abbreviation}}</td>
                         <td>{{player.0.get_playerPosition_display}}</td>
-                        <td>{{player.0.espnId}}</td>
                         <td><input type="checkbox" id="{{player.0.espnId}}-starter" name="{{player.0.espnId}}-starter"
                             {% if player.0.isStarter %} checked {% endif %} /></td>
                         <td><input type="checkbox" id="{{player.0.espnId}}-starPlayer" name="{{player.0.espnId}}-starPlayer"
