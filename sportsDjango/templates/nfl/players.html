@@ -154,7 +154,7 @@
                                 <label class="form-check-label" for="pullFresh">Pull Fresh</label>
                             </div>
                         </div>
-                        <div class="mb-1 col-auto align-self-center">
+                        <div class="mb-1 col-auto align-self-center ms-3">
                             <div class="form-check mt-4" title="Hide players not on the roster in the latest week (All weeks only)">
                                 <input class="form-check-input" type="checkbox" value="1" id="hideNotInRoster" name="hideX" {% if request.GET.hideX %}checked{% endif %}>
                                 <label class="form-check-label" for="hideNotInRoster">Hide &#10134;</label>
@@ -662,9 +662,7 @@
         <h3>
             Player Availability{% if jobResult.type == "season" %} for {{ jobResult.season }}{% endif %}
         </h3>
-        {% if jobResult.type == "season" %}
-        <p class="text-muted">&#9989; = available. &#128683; = out. &#10134; = not on the roster that week. Bye = bye week.</p>
-        {% endif %}
+        <p class="text-muted">&#9989; = available. &#128683; = out. &#10134; = not on the roster that week.</p>
         <div class="availabilityTableWrap">
             <table class="table table-bordered" id="player_table">
                 <thead>
@@ -803,6 +801,7 @@
         <h3> 
             Player Availability
         </h3>
+        <p class="text-muted">&#9989; = available. &#128683; = out. &#10134; = not on the roster that week.</p>
         <div class="availabilityTableWrap">
             <table class="table table-bordered" id="player_table">
                 <thead>
