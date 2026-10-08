@@ -652,6 +652,12 @@
         <h3>
             Player Availability{% if jobResult.type == "season" %} for {{ jobResult.season }}{% endif %}
         </h3>
+        {% if jobResult.type == "season" %}
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="hideNotInRoster">
+            <label class="form-check-label" for="hideNotInRoster">Hide X's (players not on the roster in the latest week)</label>
+        </div>
+        {% endif %}
         <div class="availabilityTableWrap">
             <table class="table table-bordered" id="player_table">
                 <thead>
@@ -682,7 +688,7 @@
                             {% if row.starPlayer %} checked {% endif %} /></td>
                         {% if jobResult.type == "season" %}
                         {% for s in row.statuses %}
-                        <td class="weekAvailTableCell" title="{{ s.label }}{% if s.date %} &mdash; {{ s.date }}{% endif %}">{% if s.token == "Bye" %}Bye{% elif s.token == "Not in Roster" %}&#10006;&#65039;{% elif s.token == "available" %}&#9989;{% else %}&#128683;{% endif %}</td>
+                        <td class="weekAvailTableCell" data-token="{{ s.token }}" title="{{ s.label }}{% if s.date %} &mdash; {{ s.date }}{% endif %}">{% if s.token == "Bye" %}Bye{% elif s.token == "Not in Roster" %}&#10006;&#65039;{% elif s.token == "available" %}&#9989;{% else %}&#128683;{% endif %}</td>
                         {% endfor %}
                         {% else %}
                         <td>
@@ -696,6 +702,23 @@
                 </tbody>
             </table>
         </div>
+        {% if jobResult.type == "season" %}
+        <script>
+            // Hides players whose most recent week shows an X (not on the
+            // roster). A bye says nothing about the roster, so the check looks
+            // at the latest week that wasn't one.
+            $("#hideNotInRoster").on("change", function () {
+                var hide = this.checked;
+                $("#player_table tbody tr").each(function () {
+                    var tokens = $(this).find("td[data-token]").map(function () {
+                        return $(this).data("token");
+                    }).get().filter(function (token) { return token !== "Bye"; });
+                    var latestNotInRoster = tokens[tokens.length - 1] === "Not in Roster";
+                    $(this).toggle(!(hide && latestNotInRoster));
+                });
+            });
+        </script>
+        {% endif %}
         {% endif %}
 
         {% if allPlayers %}
