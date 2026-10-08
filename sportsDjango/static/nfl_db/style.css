@@ -1012,11 +1012,12 @@ table thead tr th:first-child {
             grid-template-columns: 1fr;
         }
     }
-/* Players -> By Team weekly yards table */
+/* Players -> By Team weekly yards table (and the Player Availability table) */
 /* Sized to the table, not the page container, and centred on the page so a
    full season shows without scrolling. Only a window narrower than the table
    falls back to scrolling sideways. */
-.byTeamTableWrap {
+.byTeamTableWrap,
+.availabilityTableWrap {
   width: max-content;
   max-width: calc(100vw - 32px);
   margin-left: 50%;
@@ -1024,7 +1025,8 @@ table thead tr th:first-child {
   overflow-x: auto;
 }
 
-.byTeamTableWrap .byTeamTable {
+.byTeamTableWrap .byTeamTable,
+.availabilityTableWrap .table {
   width: auto;
 }
 
