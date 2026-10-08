@@ -157,7 +157,7 @@
                         <div class="mb-1 col-auto align-self-center">
                             <div class="form-check mt-4" title="Hide players not on the roster in the latest week (All weeks only)">
                                 <input class="form-check-input" type="checkbox" value="1" id="hideNotInRoster" name="hideX" {% if request.GET.hideX %}checked{% endif %}>
-                                <label class="form-check-label" for="hideNotInRoster">Hide <span class="notInRosterMark">&#10005;</span></label>
+                                <label class="form-check-label" for="hideNotInRoster">Hide &#10134;</label>
                             </div>
                         </div>
                     </div>
@@ -663,7 +663,7 @@
             Player Availability{% if jobResult.type == "season" %} for {{ jobResult.season }}{% endif %}
         </h3>
         {% if jobResult.type == "season" %}
-        <p class="text-muted">&#9989; = available. &#128683; = out. <span class="notInRosterMark">&#10005;</span> = not on the roster that week. Bye = bye week.</p>
+        <p class="text-muted">&#9989; = available. &#128683; = out. &#10134; = not on the roster that week. Bye = bye week.</p>
         {% endif %}
         <div class="availabilityTableWrap">
             <table class="table table-bordered" id="player_table">
@@ -695,7 +695,7 @@
                             {% if row.starPlayer %} checked {% endif %} /></td>
                         {% if jobResult.type == "season" %}
                         {% for s in row.statuses %}
-                        <td class="weekAvailTableCell" data-token="{{ s.token }}" title="{{ s.label }}{% if s.date %} &mdash; {{ s.date }}{% endif %}">{% if s.token == "Bye" %}Bye{% elif s.token == "Not in Roster" %}<span class="notInRosterMark">&#10005;</span>{% elif s.token == "available" %}&#9989;{% else %}&#128683;{% endif %}</td>
+                        <td class="weekAvailTableCell" data-token="{{ s.token }}" title="{{ s.label }}{% if s.date %} &mdash; {{ s.date }}{% endif %}">{% if s.token == "Bye" %}Bye{% elif s.token == "Not in Roster" %}&#10134;{% elif s.token == "available" %}&#9989;{% else %}&#128683;{% endif %}</td>
                         {% endfor %}
                         {% else %}
                         <td>

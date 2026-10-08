@@ -550,21 +550,6 @@ table thead tr th:first-child {
   width: 60px;
 }
 
-/* "Not in Roster" mark on the Player Availability table. The ✖️ emoji renders
-   as a small bare glyph next to the ✅ and 🚫 tiles, so this draws a grey tile
-   of the same size instead. */
-.notInRosterMark {
-  display: inline-block;
-  width: 1.32em;
-  height: 1.32em;
-  border-radius: 0.22em;
-  background: #6b7380;
-  color: #fff;
-  font: 700 0.8em/1.32em system-ui, sans-serif;
-  text-align: center;
-  vertical-align: -0.2em;
-}
-
 .injury_table tr td{
   text-align:left !important;
 }
