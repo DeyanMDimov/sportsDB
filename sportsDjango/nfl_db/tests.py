@@ -34,13 +34,13 @@ class YardsGainedOnPlayTests(SimpleTestCase):
         self.assertEqual(yardsGainedOnPlay(description), 87)
 
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest import mock
 
 from django.test import TestCase
 
 from nfl_db import crudLogic
-from nfl_db.models import nflTeam, player, playerTeamTenure, playerWeekStatus
+from nfl_db.models import nflTeam, nflMatch, player, playerTeamTenure, playerWeekStatus, playerInjuryReport
 
 
 def espnAthlete(espnId, name, positionAbbreviation = "WR", experienceYears = 4):
@@ -105,3 +105,69 @@ class TeamRosterRefreshTests(TestCase):
         playerWeekStatus.objects.create(player = self.mover, team = self.giants, yearOfSeason = 2026, weekOfSeason = 3)
         availability = crudLogic.buildAvailabilityFromDatabase("2026", "3", "NYG")
         self.assertEqual(availability['rows'][0]['team'], "NYG")
+
+
+def espnInjury(espnId, status, details = None, shortComment = ""):
+    injury = {
+        'id': "9" + str(espnId), 'status': status, 'date': "2026-10-09T22:16Z",
+        'shortComment': shortComment, 'longComment': "",
+        'athlete': {'links': [{'href': "https://www.espn.com/nfl/player/_/id/" + str(espnId) + "/someone"}]},
+    }
+    if details != None:
+        injury['details'] = details
+    return injury
+
+
+class InjuryReportTests(TestCase):
+    def setUp(self):
+        self.giants = nflTeam.objects.create(abbreviation = "NYG", teamName = "Giants", espnId = 19)
+        self.dallas = nflTeam.objects.create(abbreviation = "DAL", teamName = "Cowboys", espnId = 6)
+        # Week 4 played, week 5 next: reports pulled now are for week 5.
+        nflMatch.objects.create(espnId = 1, yearOfSeason = 2026, weekOfSeason = 4, homeTeamEspnId = 19, awayTeamEspnId = 6,
+                                datePlayed = datetime(2026, 10, 4, 17, tzinfo = timezone.utc), completed = True)
+        nflMatch.objects.create(espnId = 2, yearOfSeason = 2026, weekOfSeason = 5, homeTeamEspnId = 6, awayTeamEspnId = 19,
+                                datePlayed = datetime(2026, 10, 11, 17, tzinfo = timezone.utc), completed = False)
+        self.receiver = player.objects.create(espnId = 100, name = "Hurt Receiver", team = self.giants, playerPosition = 2, firstSeason = 2022)
+        self.healthy = player.objects.create(espnId = 200, name = "Healthy Back", team = self.giants, playerPosition = 4, firstSeason = 2022)
+
+    def pullWith(self, injuries):
+        response = mock.Mock()
+        response.json.return_value = {'injuries': [{'id': "19", 'displayName': "New York Giants", 'injuries': injuries}]}
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = response), \
+             mock.patch('nfl_db.crudLogic.currentSeasonYear', return_value = 2026):
+            return crudLogic.pullInjuryReports()
+
+    def test_stores_the_injury_details_for_the_upcoming_week(self):
+        self.pullWith([
+            espnInjury(100, "Questionable", {'type': "Ankle", 'location': "Leg", 'detail': "Sprain", 'side': "Left", 'returnDate': "2026-10-11"}, "Limited in practice."),
+            # Never on the report this week, so his "Active" entry isn't stored.
+            espnInjury(200, "Active"),
+        ])
+
+        injuryReport = playerInjuryReport.objects.get()
+        self.assertEqual((injuryReport.player, injuryReport.team, injuryReport.weekOfSeason), (self.receiver, self.giants, 5))
+        self.assertEqual((injuryReport.status, injuryReport.injuryType, injuryReport.injurySide), ("Questionable", "Ankle", "Left"))
+        self.assertEqual(injuryReport.returnDate, date(2026, 10, 11))
+        self.assertEqual(injuryReport.reportedAt, datetime(2026, 10, 9, 22, 16, tzinfo = timezone.utc))
+
+    def test_clearing_a_player_keeps_what_the_injury_was(self):
+        self.pullWith([espnInjury(100, "Questionable", {'type': "Ankle", 'detail': "Sprain"}, "Limited in practice.")])
+        self.pullWith([espnInjury(100, "Active")])
+
+        injuryReport = playerInjuryReport.objects.get()
+        self.assertEqual((injuryReport.status, injuryReport.injuryType, injuryReport.shortComment), ("Active", "Ankle", "Limited in practice."))
+
+    def test_injury_status_tab(self):
+        self.pullWith([
+            espnInjury(100, "Questionable", {'type': "Ankle", 'detail': "Sprain", 'side': "Not Specified"}),
+            espnInjury(200, "Out", {'type': "Hamstring"}),
+        ])
+
+        page = self.client.get('/players/', {'injuryTeam': "NYG", 'injurySeason': "2026", 'injuryWeek': "5"})
+        # Out sorts ahead of Questionable.
+        self.assertEqual([r.player.name for r in page.context['injuryReports']], ["Healthy Back", "Hurt Receiver"])
+        self.assertContains(page, "Ankle \u2013 Sprain")
+        self.assertNotContains(page, "Not Specified")
+
+        page = self.client.get('/players/', {'injuryTeam': "DAL", 'injurySeason': "2026", 'injuryWeek': "5"})
+        self.assertContains(page, "No injury report stored for DAL in week 5 of 2026.")

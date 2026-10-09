@@ -1,13 +1,14 @@
 {% extends 'nfl/base.html'%}
 {% load static %}
 {% load templateFilters%}
+{% load tz %}
 {% block players %}
     <div class = "container">
         
         {% comment %}Which tab opens on load: whichever one produced what is on the page.{% endcomment %}
         {% firstof athleteAvail jobResult availabilityPull responseMessage sel_Week as availabilityView %}
         {% comment %}With nothing on the page yet, open on Performances.{% endcomment %}
-        {% firstof viewRosterTeam allPlayers availabilityView byTeamActive playerRankingActive as otherTabView %}
+        {% firstof viewRosterTeam allPlayers availabilityView byTeamActive playerRankingActive injuryActive as otherTabView %}
         {% if not otherTabView %}{% firstof "1" as performanceDefault %}{% endif %}
         <ul class="nav nav-tabs" id="playersTabs" role="tablist">
             <li class="nav-item" role="presentation">
@@ -21,6 +22,9 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if not allPlayers and availabilityView %}active{% endif %}" id="availabilityTab" data-bs-toggle="tab" data-bs-target="#availabilityPane" type="button" role="tab" aria-controls="availabilityPane" aria-selected="{% if not allPlayers and availabilityView %}true{% else %}false{% endif %}">Player Availability</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if injuryActive %}active{% endif %}" id="injuryTab" data-bs-toggle="tab" data-bs-target="#injuryPane" type="button" role="tab" aria-controls="injuryPane" aria-selected="{% if injuryActive %}true{% else %}false{% endif %}">Injury Status</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if viewRosterTeam %}active{% endif %}" id="viewRosterTab" data-bs-toggle="tab" data-bs-target="#viewRosterPane" type="button" role="tab" aria-controls="viewRosterPane" aria-selected="{% if viewRosterTeam %}true{% else %}false{% endif %}">Team Roster</button>
@@ -161,6 +165,52 @@
                             </div>
                         </div>
                     </div>
+                    <button type="submit" class="btn btn-outline-primary">Load!</button>
+                </form>
+            </div>
+
+            <div class="tab-pane fade {% if injuryActive %}show active{% endif %}" id="injuryPane" role="tabpanel" aria-labelledby="injuryTab">
+                <form method="GET" class="p-3">
+                    A team's injury report going into a week
+                    <div class="row g-2">
+                        <div class="mb-1 col-2">
+                            Season: <select name="injurySeason" class="form-control">
+                                {% for yr in years %}
+                                <option value="{{yr}}"
+                                {% if injuryYear and yr|stringformat:"i" == injuryYear %}
+                                    selected
+                                {% elif not injuryYear and injuryCurrentWeek and yr == injuryCurrentWeek.0 %}
+                                    selected
+                                {% elif not injuryYear and not injuryCurrentWeek and forloop.first %}
+                                    selected
+                                {% endif %} >{{yr}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Week: <select name="injuryWeek" class="form-control">
+                                {% for wk in injuryWeekOptions %}
+                                <option value="{{ wk }}"
+                                {% if injuryWeek and wk|stringformat:"i" == injuryWeek %}
+                                    selected
+                                {% elif not injuryWeek and injuryCurrentWeek and wk == injuryCurrentWeek.1 %}
+                                    selected
+                                {% endif %} >{{ wk }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-1 col-2">
+                            Team: <select name="injuryTeam" class="form-control">
+                            {% for team in teams %}
+                                <option value="{{ team.abbreviation }}" {% if injuryTeam == team.abbreviation %}selected{% endif %}> {{ team.abbreviation }}</option>
+                            {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <p class="text-muted mb-2">
+                        Filled in by the injury pull (<code>injuryCommand</code>), which records each
+                        team's report for its upcoming game.
+                    </p>
                     <button type="submit" class="btn btn-outline-primary">Load!</button>
                 </form>
             </div>
@@ -398,6 +448,63 @@
         <p class="text-muted">No {{ byTeamStatLabel|lower }} recorded for {{ byTeamTeam }} in {{ byTeamYear }} &mdash; play-by-play may not be pulled for that season.</p>
         {% else %}
         <p class="text-muted">No matches stored for {{ byTeamTeam }} in {{ byTeamYear }}.</p>
+        {% endif %}
+        {% endif %}
+        {% if injuryActive %}
+        <h3>{{ injuryTeamName }} injury report &mdash; {{ injuryYear }}, week {{ injuryWeek }}</h3>
+        {% if injuryReports %}
+        <p class="text-muted">
+            Latest status for the week. Cleared = was on the report, then cleared to play.
+            Updated is when ESPN last changed the entry.
+        </p>
+        <div class="availabilityTableWrap">
+            <table class="table table-bordered table-sm injuryTable">
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Position</th>
+                        <th>Status</th>
+                        <th>Injury</th>
+                        <th>Est. Return</th>
+                        <th>Updated</th>
+                        <th>Report</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for injuryReport in injuryReports %}
+                    <tr>
+                        <td>{{ injuryReport.player.name }}</td>
+                        <td>{{ injuryReport.player.get_playerPosition_display }}</td>
+                        <td>
+                            {% if injuryReport.status == "Out" %}<span class="badge text-bg-danger">Out</span>
+                            {% elif injuryReport.status == "Injured Reserve" %}<span class="badge text-bg-dark">IR</span>
+                            {% elif injuryReport.status == "Doubtful" %}<span class="badge text-bg-warning">Doubtful</span>
+                            {% elif injuryReport.status == "Questionable" %}<span class="badge text-bg-info">Questionable</span>
+                            {% elif injuryReport.status == "Active" %}<span class="badge text-bg-success">Cleared</span>
+                            {% else %}<span class="badge text-bg-secondary">{{ injuryReport.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if injuryReport.injuryDescription %}{{ injuryReport.injuryDescription }}{% else %}<span class="text-muted">&ndash;</span>{% endif %}
+                        </td>
+                        <td>{% if injuryReport.returnDate %}{{ injuryReport.returnDate|date:"M j" }}{% else %}<span class="text-muted">&ndash;</span>{% endif %}</td>
+                        <td>{% if injuryReport.reportedAt %}{{ injuryReport.reportedAt|timezone:"America/Chicago"|date:"M j" }}{% endif %}</td>
+                        <td class="injuryComment">
+                            {{ injuryReport.shortComment }}
+                            {% if injuryReport.longComment %}
+                            <details>
+                                <summary class="text-muted">More</summary>
+                                {{ injuryReport.longComment }}
+                            </details>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No injury report stored for {{ injuryTeam }} in week {{ injuryWeek }} of {{ injuryYear }}.</p>
         {% endif %}
         {% endif %}
         {% if performanceActive %}

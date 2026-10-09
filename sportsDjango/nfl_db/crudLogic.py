@@ -1,5 +1,5 @@
 from nfl_db import models, players, businessLogic
-from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus, playerMatchUsage
+from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus, playerMatchUsage, playerInjuryReport
 from nfl_db.models import rusherStatSplit, receiverStatSplit, returnerStatSplit, passerStatSplit
 from django.db import IntegrityError
 from django.db.models import Q, Sum, Count
@@ -2955,7 +2955,8 @@ def scheduledScorePull():
         print("Today is " + thisDay.strftime('%A') + " " + str(thisDay.date()) + " and we did not check for games.")
         return
 
-def scheduledInjuryPull():
+def scheduledInjuryPull(force = False):
+    # force skips the time-of-day check (the season check still applies).
     thisDayUTC = datetime.now()
     
     if thisDayUTC.month >= 8 or thisDayUTC.month <= 2:
@@ -2966,15 +2967,52 @@ def scheduledInjuryPull():
 
         thisDay = thisDayUTC.astimezone(central_zone)
 
-        if (thisDay.weekday() == 6 and (thisDay.hour == 12 or thisDay.hour == 15 or thisDay.hour == 19)) or thisDayUTC.hour == 16:
+        if force or (thisDay.weekday() == 6 and (thisDay.hour == 12 or thisDay.hour == 15 or thisDay.hour == 19)) or thisDayUTC.hour == 16:
             activeTeams = nflTeam.objects.all()
+            # One team's bad roster shouldn't cost the other 31 their statuses,
+            # or the injury reports pulled after them.
             for team in activeTeams:
-                getCurrentWeekAthletesStatus(team.espnId)
+                try:
+                    getCurrentWeekAthletesStatus(team.espnId)
+                except Exception:
+                    print("Status pull failed for " + team.abbreviation + ":")
+                    traceback.print_exc()
+            pullInjuryReports()
         else:
             print("Ran at " + str(thisDay.hour) + ":" + str(thisDay.minute) + " and did not pull the injuries as it was not the right time.")
     else:
         pass 
     
+
+def currentSeasonYear(today = None):
+    # A season is named for the year it kicks off in, so games in January and
+    # February still belong to the year before.
+    if today == None:
+        today = date.today()
+    return today.year - 1 if today.month <= 2 else today.year
+
+
+def getCurrentWeekForTeam(teamId, seasonYear):
+    # The week of the team's next game, which is the week a report published
+    # today is for (a bye week's reports count toward the game after it). 0 once
+    # the team's regular season is over.
+    teamMatchesInSeason = nflMatch.objects.filter(yearOfSeason = seasonYear).filter(
+        Q(homeTeamEspnId = teamId) | Q(awayTeamEspnId = teamId)
+    )
+    sortedMatchesInSeason = sorted(teamMatchesInSeason, key = lambda x: x.datePlayed)
+
+    completedGames = list(filter(lambda x: x.completed == True, sortedMatchesInSeason))
+    if len(completedGames) == 0:
+        return 1
+
+    if completedGames[-1].weekOfSeason >= 18:
+        return 0
+
+    upcomingGames = list(filter(lambda x: x.completed == False, sortedMatchesInSeason))
+    if len(upcomingGames) == 0:
+        return 0
+    return upcomingGames[0].weekOfSeason
+
 
 def getCurrentWeekAthletesStatus(teamId):
     
@@ -2986,32 +3024,15 @@ def getCurrentWeekAthletesStatus(teamId):
     rosterData = responseData['athletes']
 
     currentDate = date.today()
-    currentYear = currentDate.year
-    currentWeekOfSeason = 0
-    
-    
+    currentYear = currentSeasonYear(currentDate)
+    currentWeekOfSeason = getCurrentWeekForTeam(teamId, currentYear)
+
+    if currentWeekOfSeason == 0:
+        print("No upcoming regular season game for team " + str(teamId) + ", so no statuses were stored.")
+        return
 
     countOfPlayers = 0
 
-    teamMatchesInSeason = nflMatch.objects.filter(yearOfSeason = currentYear, homeTeamEspnId = teamId) | nflMatch.objects.filter(yearOfSeason = currentYear, awayTeamEspnId = teamId)
-    
-    sortedMatchesInSeason = sorted(teamMatchesInSeason, key = lambda x: x.datePlayed)
-
-    completedGames = list(filter(lambda x: x.completed == True, sortedMatchesInSeason))
-    
-
-    if len(completedGames) > 0:
-        lastCompletedGame = completedGames[-1]
-
-        if lastCompletedGame.weekOfSeason != 18:
-            nextGame = list(filter(lambda x: x.completed == False, sortedMatchesInSeason))[0]
-
-            currentWeekOfSeason = nextGame.weekOfSeason
-            
-
-    else:
-        currentWeekOfSeason = 1    
-    
     thisPlayerWeekStatus = None
 
     for subsection in rosterData:
@@ -3085,7 +3106,18 @@ def getCurrentWeekAthletesStatus(teamId):
                                 # thisPlayerWeekStatus.playerStatus = 1
                                 thisPlayerWeekStatusDict['playerStatus'] = 1
 
-                    
+                # A status with no mapping (practice squad, suspended, ...) has
+                # nothing to store. A player already recorded today keeps that row,
+                # moved to the latest status if it has changed since. Both used to
+                # raise a KeyError below and end the whole pull.
+                if 'playerStatus' not in thisPlayerWeekStatusDict:
+                    continue
+                if thisPlayerWeekStatus != None:
+                    if thisPlayerWeekStatus.playerStatus != thisPlayerWeekStatusDict['playerStatus']:
+                        thisPlayerWeekStatus.playerStatus = thisPlayerWeekStatusDict['playerStatus']
+                        thisPlayerWeekStatus.save()
+                    continue
+
                 if alreadyCapturedPlayerWeekStatus != None:
                     if alreadyCapturedPlayerWeekStatus.playerStatus != thisPlayerWeekStatusDict['playerStatus']:
                         thisPlayerWeekStatus = playerWeekStatus.objects.create(
@@ -3117,6 +3149,142 @@ def getCurrentWeekAthletesStatus(teamId):
                 athleteJSON['links'] = ""
                 print(athleteJSON)
     
+# ---------------------------------------------------------------------------
+# Injury reports (Players -> Injury Status)
+#
+# The roster feed getCurrentWeekAthletesStatus reads only says whether a player
+# is Questionable/Out/etc. ESPN's league-wide injuries feed also says what the
+# injury is, when the player is expected back and what the beat reporters
+# wrote, all 32 teams in one request. pullInjuryReports stores that as
+# playerInjuryReport rows for each team's upcoming week.
+# ---------------------------------------------------------------------------
+
+ESPN_INJURIES_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries'
+
+# How the Injury Status tab orders a team's report: the players who won't play
+# this week first, long-term absences after them, cleared players last.
+INJURY_STATUS_ORDER = ["Out", "Doubtful", "Questionable", "Injured Reserve"]
+
+
+def _athleteEspnIdFromInjury(injury):
+    # The feed doesn't give the athlete's id as a field, only inside the links
+    # to their ESPN pages (".../player/_/id/3918331/andrew-wingard").
+    for link in injury.get('athlete', {}).get('links', []):
+        idMatch = re.search(r'/id/(\d+)', link.get('href', ''))
+        if idMatch:
+            return int(idMatch.group(1))
+    return None
+
+
+def _parseEspnDateTime(value):
+    # ESPN writes "2026-10-09T22:16Z", which fromisoformat only reads from 3.11.
+    if not value:
+        return None
+    for dateFormat in ("%Y-%m-%dT%H:%MZ", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            return datetime.strptime(value, dateFormat).replace(tzinfo = timezone.utc)
+        except ValueError:
+            pass
+    return None
+
+
+def _parseEspnDate(value):
+    try:
+        return date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
+def pullInjuryReports():
+    response = requests.get(ESPN_INJURIES_URL)
+    teamReports = response.json().get('injuries', [])
+
+    seasonYear = currentSeasonYear()
+    storedCount = 0
+    unknownPlayerCount = 0
+
+    for teamReport in teamReports:
+        team = nflTeam.objects.filter(espnId = teamReport.get('id')).first()
+        if team == None:
+            print("Injury report for an unknown team: " + str(teamReport.get('displayName')))
+            continue
+
+        weekOfSeason = getCurrentWeekForTeam(team.espnId, seasonYear)
+        if weekOfSeason == 0:
+            continue
+
+        for injury in teamReport.get('injuries', []):
+            athleteEspnId = _athleteEspnIdFromInjury(injury)
+            playerObj = player.objects.filter(espnId = athleteEspnId).first() if athleteEspnId else None
+            if playerObj == None:
+                unknownPlayerCount += 1
+                continue
+
+            injuryReport = playerInjuryReport.objects.filter(
+                player = playerObj, yearOfSeason = seasonYear, weekOfSeason = weekOfSeason,
+            ).first()
+
+            # The feed also lists hundreds of "Active" players whose injuries have
+            # cleared. That is only worth recording for someone who was on this
+            # week's report, as the news that they were cleared.
+            espnStatus = injury.get('status', '')
+            if espnStatus == "Active" and injuryReport == None:
+                continue
+
+            if injuryReport == None:
+                injuryReport = playerInjuryReport(player = playerObj, yearOfSeason = seasonYear, weekOfSeason = weekOfSeason)
+
+            injuryReport.team = team
+            injuryReport.status = espnStatus
+            injuryReport.espnInjuryId = str(injury.get('id', ''))
+            injuryReport.reportedAt = _parseEspnDateTime(injury.get('date'))
+
+            # A cleared player comes back without details or comments, so keep
+            # what the earlier report said the injury was.
+            if 'details' in injury:
+                details = injury['details']
+                injuryReport.injuryType = details.get('type', '')
+                injuryReport.injuryLocation = details.get('location', '')
+                injuryReport.injuryDetail = details.get('detail', '')
+                injuryReport.injurySide = details.get('side', '')
+                injuryReport.returnDate = _parseEspnDate(details.get('returnDate'))
+            if injury.get('shortComment'):
+                injuryReport.shortComment = injury['shortComment']
+            if injury.get('longComment'):
+                injuryReport.longComment = injury['longComment']
+
+            injuryReport.save()
+            storedCount += 1
+
+    print("Stored " + str(storedCount) + " injury reports. " + str(unknownPlayerCount) + " players on the report aren't in the database.")
+    return storedCount
+
+
+def getInjuryReport(team, seasonYear, weekOfSeason):
+    injuryReports = list(playerInjuryReport.objects.filter(
+        team = team, yearOfSeason = int(seasonYear), weekOfSeason = int(weekOfSeason),
+    ).select_related('player'))
+
+    def statusRank(injuryReport):
+        if injuryReport.status in INJURY_STATUS_ORDER:
+            return INJURY_STATUS_ORDER.index(injuryReport.status)
+        # Anything else ESPN uses (Suspension, PUP, ...) before the cleared players.
+        return len(INJURY_STATUS_ORDER) + (1 if injuryReport.status == "Active" else 0)
+
+    return sorted(injuryReports, key = lambda r: (statusRank(r), r.player.playerPosition, r.player.name))
+
+
+def currentInjuryReportWeek():
+    # [season, week] of the next game on the schedule, which is the week the
+    # injury pull is filling in for every team not on a bye, so the Injury Status
+    # tab opens on it. None outside the regular season.
+    seasonYear = currentSeasonYear()
+    nextMatch = nflMatch.objects.filter(yearOfSeason = seasonYear, completed = False).order_by('datePlayed').first()
+    if nextMatch == None or nextMatch.weekOfSeason > 18:
+        return None
+    return [seasonYear, nextMatch.weekOfSeason]
+
+
 def resetAllMatchAssociationsForClearing():
     for match in models.nflMatch.objects.all():
         match.homeTeam.clear()

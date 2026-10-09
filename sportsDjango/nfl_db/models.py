@@ -500,6 +500,47 @@ class playerWeekStatus(models.Model):
             models.Index(fields=['team'], name = 'team_index')
         ]
 
+class playerInjuryReport(models.Model):
+    # ESPN's injury report entry for a player going into a given week. The status
+    # is also in playerWeekStatus, but those rows don't say what the injury is or
+    # when the player is due back. The injury pull keeps one row per player per
+    # week, overwritten with the latest report, so it is the final word for the week.
+    player = models.ForeignKey(player, on_delete = models.CASCADE)
+    team = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+    weekOfSeason = models.SmallIntegerField(validators = [MinValueValidator(-4), MaxValueValidator(22)])
+    yearOfSeason = models.SmallIntegerField(validators = [MinValueValidator(2002)])
+    espnInjuryId = models.CharField(max_length = 20, default = "", blank = True)
+    # ESPN's wording: "Questionable", "Doubtful", "Out", "Injured Reserve", or
+    # "Active" once a player on the report has been cleared.
+    status = models.CharField(max_length = 40)
+    injuryType = models.CharField(max_length = 40, default = "", blank = True)       # "Knee"
+    injuryLocation = models.CharField(max_length = 40, default = "", blank = True)   # "Leg"
+    injuryDetail = models.CharField(max_length = 40, default = "", blank = True)     # "Sprain"
+    injurySide = models.CharField(max_length = 20, default = "", blank = True)       # "Left"
+    returnDate = models.DateField(null = True, blank = True)
+    shortComment = models.TextField(default = "", blank = True)
+    longComment = models.TextField(default = "", blank = True)
+    # When ESPN last changed the entry, as opposed to when we last pulled it.
+    reportedAt = models.DateTimeField(null = True, blank = True)
+    updatedAt = models.DateTimeField(auto_now = True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields = ['player', 'yearOfSeason', 'weekOfSeason'], name = 'unique_player_week_injury_report')
+        ]
+        indexes = [
+            models.Index(fields = ['team', 'yearOfSeason', 'weekOfSeason'], name = 'injury_report_team_week_idx'),
+        ]
+
+    @property
+    def injuryDescription(self):
+        # "Ankle - Sprain (Left)", minus whatever ESPN left as "Not Specified".
+        specified = lambda value: value if value != "Not Specified" else ""
+        description = " \u2013 ".join(part for part in [specified(self.injuryType), specified(self.injuryDetail)] if part)
+        if description and specified(self.injurySide):
+            description += " (" + self.injurySide + ")"
+        return description
+
 class playerPlayParticipant(models.Model):
     play = models.ForeignKey(playByPlay, on_delete = models.CASCADE)
     player = models.ForeignKey(player, on_delete = models.CASCADE)

@@ -396,6 +396,8 @@ def playersPageContext():
         'rankingStatsByPosition': rankingStatsByPosition,
         'rankingPositions': crudLogic.PERFORMANCE_POSITIONS,
         'playerRankingWeekOptions': list(range(1, 19)),
+        'injuryWeekOptions': list(range(1, 19)),
+        'injuryCurrentWeek': crudLogic.currentInjuryReportWeek(),
     }
 
 
@@ -538,6 +540,20 @@ def getPlayers(request):
             rosterPageDictionary.update({'viewRoster': viewRoster, 'viewRosterSource': viewRosterSource})
             return renderPlayersPage(request, rosterPageDictionary)
 
+        elif 'injuryTeam' in request.GET:
+            inputReq = request.GET
+            injuryYear = inputReq.get('injurySeason', str(yearsOnPage[0])).strip()
+            injuryWeek = str(clampWeek(inputReq.get('injuryWeek', '1').strip(), 18))
+            injuryTeamAbbreviation = inputReq['injuryTeam'].strip()
+
+            injuryTeam = nflTeam.objects.filter(abbreviation = injuryTeamAbbreviation).first()
+            injuryReports = crudLogic.getInjuryReport(injuryTeam, injuryYear, injuryWeek) if injuryTeam else []
+
+            return renderPlayersPage(request, {"teams": nflTeams, 'years': yearsOnPage, 'weeks': weeksOnPage,
+                'injuryActive': True, 'injuryYear': injuryYear, 'injuryWeek': injuryWeek, 'injuryTeam': injuryTeamAbbreviation,
+                'injuryTeamName': injuryTeam.teamName if injuryTeam else injuryTeamAbbreviation,
+                'injuryReports': injuryReports})
+
         elif 'position' in request.GET:
             inputReq = request.GET
             selectedPosition = inputReq['position'].strip()
@@ -644,6 +660,7 @@ def getInjuryStatus(request):
         activeTeams = nflTeam.objects.all()
         for team in activeTeams:
             crudLogic.getCurrentWeekAthletesStatus(team.espnId)
+        crudLogic.pullInjuryReports()
         
         return JsonResponse({}, status="200")
     
