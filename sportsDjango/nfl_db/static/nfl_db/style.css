@@ -1149,6 +1149,17 @@ table thead tr th:first-child {
   box-shadow: 0 0 0 1px #4b5563;
 }
 
+/* Tables mixing both teams (Red Zone, Downs): offense rows get a faint amber
+   tint and defense rows a faint violet one, header opponent rows included, so
+   the two sides read apart. Faint enough that the light text stays legible;
+   the result-column highlight (--bs-table-bg-state) still wins over it. */
+.matchupTable .matchupSide-offense > * {
+  --bs-table-bg-type: rgba(245, 158, 11, 0.14);
+}
+.matchupTable .matchupSide-defense > * {
+  --bs-table-bg-type: rgba(167, 139, 250, 0.16);
+}
+
 /* The previewed match's own numbers are on the page from the start but stay
    invisible until Show result is ticked. */
 .matchupResultsHidden .matchupResult {

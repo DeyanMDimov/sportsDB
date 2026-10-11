@@ -1804,10 +1804,11 @@ def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultW
     # match being previewed when its stats are stored - its cell carries the
     # result, which the page keeps hidden until Show result is ticked.
     # labelWithTeam prefixes the label with the team and underlines it in the
-    # team's colors, for tables mixing both teams.
+    # team's colors, for tables mixing both teams. A row spec can carry a third
+    # item, 'offense' or 'defense', so a mixed table can shade each side apart.
     teamGameStats, opponentByTeamWeek = seasonStats
     statRows = []
-    for team, metricKey in rowSpecs:
+    for team, metricKey, *rowSide in rowSpecs:
         teamTotal = crudLogic.rankMatchupMetric(metricKey, teamGameStats, opponentByTeamWeek, throughWeek).get(team.espnId)
         if teamTotal == None:
             continue
@@ -1831,6 +1832,7 @@ def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultW
         statRows.append({
             'label': f"{team.abbreviation} {metricLabel}" if labelWithTeam else metricLabel,
             'team': team if labelWithTeam else None,
+            'side': rowSide[0] if rowSide else None,
             'rank': teamTotal.get('rank'),
             'tied': teamTotal.get('tied', False),
             'teamCount': teamTotal['teamCount'],
@@ -2028,9 +2030,10 @@ def getMatchup(request):
         for matchupTeam in [selectedTeam, opponent]}
     seasonStats = crudLogic.getMatchupSeasonStats(yearOfSeason)
 
-    def opponentRow(team, labelled = False):
-        # labelled names the team, for tables mixing both teams.
-        return {'team': team if labelled else None, 'labels': opponentsByTeamId[team.id]}
+    def opponentRow(team, labelled = False, side = None):
+        # labelled names the team, for tables mixing both teams; side shades the
+        # row to match that team's stat rows.
+        return {'team': team if labelled else None, 'side': side, 'labels': opponentsByTeamId[team.id]}
 
     def sideSections(offenseTeam, defenseTeam):
         # One side of the matchup: offenseTeam's attack against defenseTeam's defense.
@@ -2045,9 +2048,10 @@ def getMatchup(request):
                         seasonStats, throughWeek, weekColumns, resultWeek)})
             elif sectionSetup['kind'] == 'paired':
                 side.append({'kind': 'team', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
-                    'opponentRows': [opponentRow(offenseTeam, labelled = True), opponentRow(defenseTeam, labelled = True)]
+                    'opponentRows': [opponentRow(offenseTeam, labelled = True, side = 'offense'),
+                        opponentRow(defenseTeam, labelled = True, side = 'defense')]
                         if sectionSetup.get('opponents', True) else [],
-                    'rows': matchupTeamStatRows([(sideTeams[rowSide], metricKey) for rowSide, metricKey in sectionSetup['rows']],
+                    'rows': matchupTeamStatRows([(sideTeams[rowSide], metricKey, rowSide) for rowSide, metricKey in sectionSetup['rows']],
                         seasonStats, throughWeek, weekColumns, resultWeek, labelWithTeam = True)})
             else:
                 side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
