@@ -1149,13 +1149,10 @@ table thead tr th:first-child {
   box-shadow: 0 0 0 1px #4b5563;
 }
 
-/* Tables mixing both teams (Red Zone, Downs): offense rows get a faint amber
-   tint and defense rows a faint violet one, header opponent rows included, so
-   the two sides read apart. Faint enough that the light text stays legible;
+/* Tables mixing both teams (Red Zone, Downs): defense rows get a faint violet
+   tint, header opponent row included, so they read apart from the offense rows
+   on the plain background. Faint enough that the light text stays legible;
    the result-column highlight (--bs-table-bg-state) still wins over it. */
-.matchupTable .matchupSide-offense > * {
-  --bs-table-bg-type: rgba(245, 158, 11, 0.14);
-}
 .matchupTable .matchupSide-defense > * {
   --bs-table-bg-type: rgba(167, 139, 250, 0.16);
 }
