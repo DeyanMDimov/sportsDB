@@ -7,10 +7,10 @@ popup when the week's cell is hovered.
 <template class="matchupHoverContent">
     <div class="matchupHoverTitle">{{ allowedPlayers.opponent }} {{ allowedPlayerSetup.title }}</div>
     <table class="matchupHoverTable">
-        <thead><tr><th>Player</th><th>Pos</th><th class="text-end">{{ allowedPlayerSetup.statLabel }}</th></tr></thead>
+        <thead><tr><th>Player</th><th>Pos</th>{% for statKey, columnLabel in allowedPlayerSetup.columns %}<th class="text-end">{{ columnLabel }}</th>{% endfor %}</tr></thead>
         <tbody>
             {% for playerEntry in allowedPlayers.players %}
-            <tr><td>{{ playerEntry.player.name }}</td><td>{{ playerEntry.player.get_playerPosition_display }}</td><td class="text-end">{{ playerEntry.value }}</td></tr>
+            <tr><td>{{ playerEntry.player.name }}</td><td>{{ playerEntry.player.get_playerPosition_display }}</td>{% for playerValue in playerEntry.statValues %}<td class="text-end">{{ playerValue }}</td>{% endfor %}</tr>
             {% endfor %}
         </tbody>
     </table>

@@ -2123,17 +2123,20 @@ def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
 
 
 # Matchup page -> defense tables: hovering a week of these shows the opposing
-# players behind the yards allowed, by their TEAM_WEEKLY_STATS key.
+# players behind the yards allowed. columns are (TEAM_WEEKLY_STATS key, header)
+# pairs off the same split model; players are listed most statKey first.
 MATCHUP_ALLOWED_PLAYER_STATS = {
-    "totalRushYardsAllowed": {"statKey": "rushingYards", "title": "Rushers", "statLabel": "Rush Yds"},
-    "totalPassYardsAllowed": {"statKey": "receivingYards", "title": "Receivers", "statLabel": "Rec Yds"},
+    "totalRushYardsAllowed": {"title": "Rushers", "statKey": "rushingYards", "columns": [("rushingYards", "Rush Yds")]},
+    "totalPassYardsAllowed": {"title": "Receivers", "statKey": "receivingYards",
+        "columns": [("receptions", "Recs"), ("receivingYards", "Rec Yds")]},
 }
 
 
-def getPlayerYardsAllowedByWeek(team, seasonYear, statKey, weekNumbers):
-    # {week: {'opponent': "@DAL", 'players': [{'player', 'value'}, ...]}} for each
-    # of the team's games in weekNumbers: the opponent's players' statKey against
-    # this defense, most first. Counted like getTeamStatByWeek (one play per
+def getPlayerYardsAllowedByWeek(team, seasonYear, statKeys, sortStatKey, weekNumbers):
+    # {week: {'opponent': "@DAL", 'players': [{'player', 'statValues'}, ...]}} for each
+    # of the team's games in weekNumbers: the opponent's players' statKeys against
+    # this defense (statValues in the same order), most sortStatKey first. statKeys
+    # must share a split model. Counted like getTeamStatByWeek (one play per
     # player, nothing on a nullified play); weeks without play-by-play are left out.
     seasonMatches = list(nflMatch.objects.filter(
         yearOfSeason = int(seasonYear),
@@ -2153,7 +2156,8 @@ def getPlayerYardsAllowedByWeek(team, seasonYear, statKey, weekNumbers):
             opponentByMatchId[seasonMatch.id] = abbreviationsByEspnId.get(seasonMatch.awayTeamEspnId, "?")
     weekByMatchId = {seasonMatch.id: seasonMatch.weekOfSeason for seasonMatch in seasonMatches}
 
-    splitModel, playValue = TEAM_WEEKLY_STATS[statKey]
+    splitModel = TEAM_WEEKLY_STATS[statKeys[0]][0]
+    playValues = [TEAM_WEEKLY_STATS[statKey][1] for statKey in statKeys]
     countedPlays = set()
     playersById = {}
     valuesByMatchPlayer = {}
@@ -2165,14 +2169,17 @@ def getPlayerYardsAllowedByWeek(team, seasonYear, statKey, weekNumbers):
         countedPlays.add((statSplit.player_id, statSplit.play_id))
         playersById[statSplit.player_id] = statSplit.player
         matchKey = (statSplit.play.nflMatch_id, statSplit.player_id)
-        valuesByMatchPlayer[matchKey] = valuesByMatchPlayer.get(matchKey, 0) + playValue(statSplit)
+        playerValues = valuesByMatchPlayer.setdefault(matchKey, [0] * len(statKeys))
+        for valueIndex, playValue in enumerate(playValues):
+            playerValues[valueIndex] += playValue(statSplit)
 
     playersByWeek = {}
-    for (matchId, playerId), playerValue in valuesByMatchPlayer.items():
+    sortIndex = statKeys.index(sortStatKey)
+    for (matchId, playerId), playerValues in valuesByMatchPlayer.items():
         weekEntry = playersByWeek.setdefault(weekByMatchId[matchId], {'opponent': opponentByMatchId[matchId], 'players': []})
-        weekEntry['players'].append({'player': playersById[playerId], 'value': playerValue})
+        weekEntry['players'].append({'player': playersById[playerId], 'statValues': playerValues})
     for weekEntry in playersByWeek.values():
-        weekEntry['players'].sort(key = lambda playerEntry: (-playerEntry['value'], playerEntry['player'].name))
+        weekEntry['players'].sort(key = lambda playerEntry: (-playerEntry['statValues'][sortIndex], playerEntry['player'].name))
     return playersByWeek
 
 

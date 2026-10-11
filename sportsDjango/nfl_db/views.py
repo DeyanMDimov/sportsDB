@@ -1818,7 +1818,8 @@ def matchupTeamStatRows(rowSpecs, seasonStats, seasonYear, throughWeek, weekColu
         allowedPlayerSetup = crudLogic.MATCHUP_ALLOWED_PLAYER_STATS.get(metricKey)
         allowedPlayersByWeek = {}
         if allowedPlayerSetup != None:
-            allowedPlayersByWeek = crudLogic.getPlayerYardsAllowedByWeek(team, seasonYear, allowedPlayerSetup['statKey'],
+            allowedPlayersByWeek = crudLogic.getPlayerYardsAllowedByWeek(team, seasonYear,
+                [statKey for statKey, columnLabel in allowedPlayerSetup['columns']], allowedPlayerSetup['statKey'],
                 list(range(1, throughWeek + 1)) + ([resultWeek] if resultWeek != None else []))
 
         weekCells = []
