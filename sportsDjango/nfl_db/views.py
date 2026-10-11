@@ -1798,7 +1798,7 @@ MATCHUP_CATEGORIES = {
 }
 
 
-def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultWeek, labelWithTeam = False):
+def matchupTeamStatRows(rowSpecs, seasonStats, seasonYear, throughWeek, weekColumns, resultWeek, labelWithTeam = False):
     # One Rankings-style row per (team, metric): the team's league rank, its total
     # over weeks 1..throughWeek and the week-by-week figures. resultWeek is the
     # match being previewed when its stats are stored - its cell carries the
@@ -1806,12 +1806,20 @@ def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultW
     # labelWithTeam prefixes the label with the team and underlines it in the
     # team's colors, for tables mixing both teams. A row spec can carry a third
     # item, 'offense' or 'defense', so a mixed table can shade each side apart.
+    # Yards-allowed rows (crudLogic.MATCHUP_ALLOWED_PLAYER_STATS) also carry the
+    # opposing players behind each week's figure, for the page's hover popup.
     teamGameStats, opponentByTeamWeek = seasonStats
     statRows = []
     for team, metricKey, *rowSide in rowSpecs:
         teamTotal = crudLogic.rankMatchupMetric(metricKey, teamGameStats, opponentByTeamWeek, throughWeek).get(team.espnId)
         if teamTotal == None:
             continue
+
+        allowedPlayerSetup = crudLogic.MATCHUP_ALLOWED_PLAYER_STATS.get(metricKey)
+        allowedPlayersByWeek = {}
+        if allowedPlayerSetup != None:
+            allowedPlayersByWeek = crudLogic.getPlayerYardsAllowedByWeek(team, seasonYear, allowedPlayerSetup['statKey'],
+                list(range(1, throughWeek + 1)) + ([resultWeek] if resultWeek != None else []))
 
         weekCells = []
         for weekColumn in weekColumns:
@@ -1826,6 +1834,7 @@ def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultW
                 'played': weekValue != None,
                 'display': crudLogic.formatMatchupMetric(metricKey, weekValue[0], weekValue[1], False) if weekValue != None else None,
                 'result': isResult,
+                'allowedPlayers': allowedPlayersByWeek.get(weekNumber) if weekValue != None else None,
             })
 
         metricLabel = crudLogic.MATCHUP_METRICS[metricKey]['label']
@@ -1838,6 +1847,7 @@ def matchupTeamStatRows(rowSpecs, seasonStats, throughWeek, weekColumns, resultW
             'teamCount': teamTotal['teamCount'],
             'seasonDisplay': crudLogic.formatMatchupMetric(metricKey, teamTotal['numerator'], teamTotal['denominator'], True),
             'weekCells': weekCells,
+            'allowedPlayerSetup': allowedPlayerSetup,
         })
     return statRows
 
@@ -2045,14 +2055,14 @@ def getMatchup(request):
                 side.append({'kind': 'team', 'title': f"{sectionTeam.abbreviation} {sectionSetup['title']}", 'team': sectionTeam,
                     'opponentRows': [opponentRow(sectionTeam)],
                     'rows': matchupTeamStatRows([(sectionTeam, metricKey) for metricKey in sectionSetup['metrics']],
-                        seasonStats, throughWeek, weekColumns, resultWeek)})
+                        seasonStats, yearOfSeason, throughWeek, weekColumns, resultWeek)})
             elif sectionSetup['kind'] == 'paired':
                 side.append({'kind': 'team', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
                     'opponentRows': [opponentRow(offenseTeam, labelled = True, side = 'offense'),
                         opponentRow(defenseTeam, labelled = True, side = 'defense')]
                         if sectionSetup.get('opponents', True) else [],
                     'rows': matchupTeamStatRows([(sideTeams[rowSide], metricKey, rowSide) for rowSide, metricKey in sectionSetup['rows']],
-                        seasonStats, throughWeek, weekColumns, resultWeek, labelWithTeam = True)})
+                        seasonStats, yearOfSeason, throughWeek, weekColumns, resultWeek, labelWithTeam = True)})
             else:
                 side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
                     'statLabel': sectionSetup['statLabel'], 'showPosition': sectionSetup.get('showPosition', False),

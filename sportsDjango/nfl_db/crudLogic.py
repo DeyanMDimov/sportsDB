@@ -2122,6 +2122,60 @@ def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
     return weekColumns, teamRows, teamTotalRow
 
 
+# Matchup page -> defense tables: hovering a week of these shows the opposing
+# players behind the yards allowed, by their TEAM_WEEKLY_STATS key.
+MATCHUP_ALLOWED_PLAYER_STATS = {
+    "totalRushYardsAllowed": {"statKey": "rushingYards", "title": "Rushers", "statLabel": "Rush Yds"},
+    "totalPassYardsAllowed": {"statKey": "receivingYards", "title": "Receivers", "statLabel": "Rec Yds"},
+}
+
+
+def getPlayerYardsAllowedByWeek(team, seasonYear, statKey, weekNumbers):
+    # {week: {'opponent': "@DAL", 'players': [{'player', 'value'}, ...]}} for each
+    # of the team's games in weekNumbers: the opponent's players' statKey against
+    # this defense, most first. Counted like getTeamStatByWeek (one play per
+    # player, nothing on a nullified play); weeks without play-by-play are left out.
+    seasonMatches = list(nflMatch.objects.filter(
+        yearOfSeason = int(seasonYear),
+        weekOfSeason__in = list(weekNumbers),
+    ).filter(
+        Q(homeTeamEspnId = team.espnId) | Q(awayTeamEspnId = team.espnId)
+    ))
+    if len(seasonMatches) == 0:
+        return {}
+
+    abbreviationsByEspnId = dict(nflTeam.objects.values_list('espnId', 'abbreviation'))
+    opponentByMatchId = {}
+    for seasonMatch in seasonMatches:
+        if seasonMatch.awayTeamEspnId == team.espnId:
+            opponentByMatchId[seasonMatch.id] = "@" + abbreviationsByEspnId.get(seasonMatch.homeTeamEspnId, "?")
+        else:
+            opponentByMatchId[seasonMatch.id] = abbreviationsByEspnId.get(seasonMatch.awayTeamEspnId, "?")
+    weekByMatchId = {seasonMatch.id: seasonMatch.weekOfSeason for seasonMatch in seasonMatches}
+
+    splitModel, playValue = TEAM_WEEKLY_STATS[statKey]
+    countedPlays = set()
+    playersById = {}
+    valuesByMatchPlayer = {}
+    for statSplit in splitModel.objects.filter(
+        play__nflMatch__in = seasonMatches,
+    ).exclude(play__teamOnOffense = team).select_related('play', 'player'):
+        if (statSplit.player_id, statSplit.play_id) in countedPlays or playWasNullified(statSplit.play.playDescription):
+            continue
+        countedPlays.add((statSplit.player_id, statSplit.play_id))
+        playersById[statSplit.player_id] = statSplit.player
+        matchKey = (statSplit.play.nflMatch_id, statSplit.player_id)
+        valuesByMatchPlayer[matchKey] = valuesByMatchPlayer.get(matchKey, 0) + playValue(statSplit)
+
+    playersByWeek = {}
+    for (matchId, playerId), playerValue in valuesByMatchPlayer.items():
+        weekEntry = playersByWeek.setdefault(weekByMatchId[matchId], {'opponent': opponentByMatchId[matchId], 'players': []})
+        weekEntry['players'].append({'player': playersById[playerId], 'value': playerValue})
+    for weekEntry in playersByWeek.values():
+        weekEntry['players'].sort(key = lambda playerEntry: (-playerEntry['value'], playerEntry['player'].name))
+    return playersByWeek
+
+
 def getPlayersForPerformanceFilters(seasonYear, team, playerPosition):
     # Feeds the Performances tab's player dropdown: who was on this team, at this
     # position, in this season. Deliberately never falls back to player.team -

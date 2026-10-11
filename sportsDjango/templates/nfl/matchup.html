@@ -98,6 +98,8 @@
         {% endif %}
         {% endif %}
         </div>
+        {# Outside the tables: their centring transform would anchor a fixed popup to them #}
+        <div id="matchupHoverPopup" class="matchupHoverPopup" hidden></div>
         {% endif %}
     </div>
 
@@ -135,6 +137,53 @@
                 }
             });
             updateShowResultAvailability();
+        })();
+
+        (function() {
+            // Hovering a week of Rush/Pass Yards Allowed shows the opposing players
+            // behind it, from the <template> the cell carries, just under the cell.
+            const results = document.getElementById('matchupResults');
+            const popup = document.getElementById('matchupHoverPopup');
+            if (!results || !popup) {
+                return;
+            }
+            let hoveredCell = null;
+
+            results.addEventListener('mouseover', function(e) {
+                const cell = e.target.closest('.matchupHoverCell');
+                if (cell === hoveredCell) {
+                    return;
+                }
+                hoveredCell = cell;
+                // The previewed match's players stay hidden along with its result.
+                if (!cell || (cell.classList.contains('matchupResultCell') && results.classList.contains('matchupResultsHidden'))) {
+                    popup.hidden = true;
+                    return;
+                }
+                popup.innerHTML = cell.querySelector('template.matchupHoverContent').innerHTML;
+                popup.hidden = false;
+
+                // Below the cell, flipping above it or back inside the window near the edges.
+                const cellBox = cell.getBoundingClientRect();
+                let left = cellBox.left;
+                let top = cellBox.bottom + 4;
+                if (left + popup.offsetWidth > window.innerWidth) {
+                    left = Math.max(0, window.innerWidth - popup.offsetWidth - 4);
+                }
+                if (top + popup.offsetHeight > window.innerHeight) {
+                    top = Math.max(0, cellBox.top - popup.offsetHeight - 4);
+                }
+                popup.style.left = left + 'px';
+                popup.style.top = top + 'px';
+            });
+            results.addEventListener('mouseleave', function() {
+                hoveredCell = null;
+                popup.hidden = true;
+            });
+            window.addEventListener('scroll', function() {
+                hoveredCell = null;
+                popup.hidden = true;
+            }, true);
         })();
 
         (function() {

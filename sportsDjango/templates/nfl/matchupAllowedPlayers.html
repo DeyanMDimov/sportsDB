@@ -1,0 +1,17 @@
+{% comment %}
+The opposing players behind one week of a defense's yards allowed on the Matchup
+page. Kept in a <template> so it stays out of the table; the page shows it in a
+popup when the week's cell is hovered.
+{% include 'nfl/matchupAllowedPlayers.html' with allowedPlayers=weekCell.allowedPlayers allowedPlayerSetup=statRow.allowedPlayerSetup %}
+{% endcomment %}
+<template class="matchupHoverContent">
+    <div class="matchupHoverTitle">{{ allowedPlayers.opponent }} {{ allowedPlayerSetup.title }}</div>
+    <table class="matchupHoverTable">
+        <thead><tr><th>Player</th><th>Pos</th><th class="text-end">{{ allowedPlayerSetup.statLabel }}</th></tr></thead>
+        <tbody>
+            {% for playerEntry in allowedPlayers.players %}
+            <tr><td>{{ playerEntry.player.name }}</td><td>{{ playerEntry.player.get_playerPosition_display }}</td><td class="text-end">{{ playerEntry.value }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</template>
