@@ -1149,6 +1149,14 @@ table thead tr th:first-child {
   box-shadow: 0 0 0 1px #4b5563;
 }
 
+/* Tables mixing both teams (Red Zone, Downs): defense rows get a faint violet
+   tint, header opponent row included, so they read apart from the offense rows
+   on the plain background. Faint enough that the light text stays legible;
+   the result-column highlight (--bs-table-bg-state) still wins over it. */
+.matchupTable .matchupSide-defense > * {
+  --bs-table-bg-type: rgba(167, 139, 250, 0.16);
+}
+
 /* The previewed match's own numbers are on the page from the start but stay
    invisible until Show result is ticked. */
 .matchupResultsHidden .matchupResult {
@@ -1156,6 +1164,38 @@ table thead tr th:first-child {
 }
 #matchupResults:not(.matchupResultsHidden) .matchupResultCell {
   --bs-table-bg-state: rgba(59, 130, 246, 0.18);
+}
+
+/* Rush/Pass Yards Allowed weeks: hovering one lists the opposing players
+   behind it (styled like .play-description-tooltip). */
+.matchupTable .matchupHoverCell {
+  cursor: help;
+  text-decoration: underline dotted #888;
+  text-underline-offset: 3px;
+}
+.matchupHoverPopup {
+  position: fixed;
+  z-index: 1080;
+  padding: 6px 10px;
+  background-color: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 10pt;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.matchupHoverTitle {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+.matchupHoverTable th,
+.matchupHoverTable td {
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.matchupHoverTable thead th {
+  border-bottom: 1px solid #555;
 }
 
 /* Collapsible sections (player tables on Scoring / Special Teams): the title
