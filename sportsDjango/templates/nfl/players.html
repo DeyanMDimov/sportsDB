@@ -417,7 +417,7 @@
             <tbody>
                 {% for byTeamRow in byTeamRows %}
                 <tr>
-                    <td class="byTeamPlayer">{{ byTeamRow.player.name }}</td>
+                    <td class="byTeamPlayer">{{ byTeamRow.player.name }}{% if byTeamShowPosition %} ({{ byTeamRow.player.get_playerPosition_display }}){% endif %}</td>
                     <td class="byTeamNum"><b>{{ byTeamRow.seasonTotal }}</b></td>
                     {% for weekCell in byTeamRow.weekCells %}
                     {% if weekCell.state == "value" %}

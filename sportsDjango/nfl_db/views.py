@@ -468,7 +468,8 @@ def getPlayers(request):
                 'byTeamActive': True, 'byTeamYear': byTeamYear, 'byTeamTeam': byTeamAbbreviation,
                 'byTeamTeamName': byTeamSelected.teamName if byTeamSelected else byTeamAbbreviation,
                 'byTeamStat': byTeamStat, 'byTeamStatLabel': crudLogic.PERFORMANCE_STAT_LABELS[byTeamStat],
-                'byTeamWeeks': byTeamWeeks, 'byTeamRows': byTeamRows, 'byTeamTotalRow': byTeamTotalRow})
+                'byTeamWeeks': byTeamWeeks, 'byTeamRows': byTeamRows, 'byTeamTotalRow': byTeamTotalRow,
+                'byTeamShowPosition': byTeamStat in ('receivingYards', 'receptions', 'receivingTds')})
 
         elif 'performancePlayer' in request.GET:
             inputReq = request.GET
