@@ -491,7 +491,14 @@ class playerWeekStatus(models.Model):
         (6, "IR")
     )
     playerStatus = models.SmallIntegerField(choices = playerStatuses, default = 1)
-    
+
+    # The statuses that mean the player sits out. Doubtful players almost never
+    # play, so they count. Questionable players usually do, so they don't.
+    outStatuses = (3, 4, 5, 6)
+
+    def isOut(self):
+        return self.playerStatus in self.outStatuses
+
     class Meta:
         indexes = [
             models.Index(fields=['yearOfSeason'], name = 'season_index'),

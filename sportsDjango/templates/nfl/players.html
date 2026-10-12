@@ -953,7 +953,7 @@
                             {% if player.0.starPlayer %} checked {% endif %} /></td>
                         {% comment %} <td><input type="checkbox" id="{{player.0.espnId}}-bigImpact" name="{{player.0.espnId}}-bigImpact" 
                             {% if player.0.currentlyHavingBigImpact %} checked {% endif %} /></td> {% endcomment %}
-                        <td>{% if player.1.playerStatus == 1 %}✅{% else %}🚫{% endif %}{% if player.1.reportDate %} <span class="statusDate">{{ player.1.reportDate|date:"M j" }}</span>{% endif %}</td>
+                        <td title="{{ player.1.get_playerStatus_display }}">{% if player.1.isOut %}🚫{% else %}✅{% endif %}{% if player.1.reportDate %} <span class="statusDate">{{ player.1.reportDate|date:"M j" }}</span>{% endif %}</td>
                     </tr>
                     
 
@@ -1011,7 +1011,7 @@
                         {% comment %} <td><input type="checkbox" id="{{player.0.espnId}}-bigImpact" name="{{player.0.espnId}}-bigImpact"
                             {% if player.0.currentlyHavingBigImpact %} checked {% endif %} /></td> {% endcomment %}
                         {% for playerStatus in player.1 %}
-                        <td{% if playerStatus == "Not in Roster" %} title="Not in Roster"{% endif %}>{% if playerStatus == "Bye" %}Bye{% elif playerStatus == "Not in Roster" %}✖️{% elif playerStatus.playerStatus == 1%}✅{% else %}🚫{% endif %}</td>
+                        <td{% if playerStatus == "Not in Roster" %} title="Not in Roster"{% endif %}>{% if playerStatus == "Bye" %}Bye{% elif playerStatus == "Not in Roster" %}✖️{% elif playerStatus.isOut %}🚫{% else %}✅{% endif %}</td>
                         {% comment %} <td>{% if playerStatus == "Bye" %}{{playerStatus}}{% else %}{{playerStatus.playerStatus}}{% endif %}</td> {% endcomment %}
 
                         {% endfor %}

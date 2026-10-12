@@ -222,3 +222,12 @@ class GameDayAvailabilityTests(TestCase):
 
         with mock.patch('django.utils.timezone.now', return_value = datetime(2026, 10, 11, 17, tzinfo = timezone.utc)):
             self.assertEqual(crudLogic.getCurrentWeekForTeam(33, 2026), 5)
+
+    def test_questionable_is_not_out_but_doubtful_is(self):
+        for reportDay, playerStatus in [(7, 2), (8, 3), (9, 4), (10, 6)]:
+            playerWeekStatus.objects.create(player = self.receiver, team = self.ravens, yearOfSeason = 2026, weekOfSeason = 5,
+                                            reportDate = date(2026, 10, reportDay), playerStatus = playerStatus)
+
+        stored = crudLogic.buildAvailabilityFromDatabase("2026", "5", "BAL")
+        self.assertEqual([(s['label'], s['token']) for s in stored['rows'][0]['statuses']],
+                         [("Questionable", "available"), ("Doubtful", "out"), ("Out", "out"), ("IR", "out")])

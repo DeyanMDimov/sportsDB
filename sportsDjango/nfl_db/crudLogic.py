@@ -1840,10 +1840,10 @@ def getAvailabilityByWeek(playerObj, team, seasonYear, seasonMatches):
             availabilityByWeek[weekNumber] = ("unknown", "")
         elif weekNumber in playerStatusByWeek:
             weekStatus = playerStatusByWeek[weekNumber]
-            if weekStatus.playerStatus == 1:
-                availabilityByWeek[weekNumber] = ("available", "Available")
-            else:
+            if weekStatus.isOut():
                 availabilityByWeek[weekNumber] = ("out", weekStatus.get_playerStatus_display())
+            else:
+                availabilityByWeek[weekNumber] = ("available", weekStatus.get_playerStatus_display())
         else:
             availabilityByWeek[weekNumber] = ("notInRoster", "Not in Roster")
 
@@ -2100,7 +2100,7 @@ def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
                 weekCells.append({'state': 'unknown'})
             elif (playerId, weekNumber) not in statusByPlayerWeek:
                 weekCells.append({'state': 'notInRoster', 'label': "Not in Roster"})
-            elif statusByPlayerWeek[(playerId, weekNumber)] != 1:
+            elif statusByPlayerWeek[(playerId, weekNumber)] in playerWeekStatus.outStatuses:
                 weekCells.append({'state': 'out', 'label': statusLabels.get(statusByPlayerWeek[(playerId, weekNumber)], "Out")})
             else:
                 weekCells.append({'state': 'value', 'value': 0})
@@ -2486,7 +2486,7 @@ def _availabilityStatusEntry(status):
         return {"token": status, "label": status, "date": ""}
 
     return {
-        "token": "available" if status.playerStatus == 1 else "out",
+        "token": "out" if status.isOut() else "available",
         "label": status.get_playerStatus_display(),
         "date": status.reportDate.strftime("%b %-d") if status.reportDate else "",
     }
