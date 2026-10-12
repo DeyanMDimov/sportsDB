@@ -3,6 +3,7 @@ from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, 
 from nfl_db.models import rusherStatSplit, receiverStatSplit, returnerStatSplit, passerStatSplit
 from django.db import IntegrityError
 from django.db.models import Q, Sum, Count
+from django.utils import timezone as djangoTimezone
 from datetime import datetime, date, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 
@@ -1823,12 +1824,14 @@ def getAvailabilityByWeek(playerObj, team, seasonYear, seasonMatches):
     ).values_list('weekOfSeason', flat = True))
 
     playerStatusByWeek = {}
+    # Later report dates overwrite earlier ones, leaving the status the week
+    # ended on: the game day row when the game roster has been pulled.
     for weekStatus in playerWeekStatus.objects.filter(
         player = playerObj,
         team = team,
         yearOfSeason = int(seasonYear),
         weekOfSeason__in = weekNumbers,
-    ):
+    ).order_by('reportDate', 'id'):
         playerStatusByWeek[weekStatus.weekOfSeason] = weekStatus
 
     availabilityByWeek = {}
@@ -2071,11 +2074,12 @@ def getTeamStatByWeek(team, seasonYear, statKey, throughWeek = None):
     weekNumbers = [weekColumn['week'] for weekColumn in weekColumns]
     weeksWithAvailabilityData = set()
     statusByPlayerWeek = {}
+    # Ordered so later report dates overwrite earlier ones, as above.
     for playerId, weekNumber, playerStatus in playerWeekStatus.objects.filter(
         team = team,
         yearOfSeason = int(seasonYear),
         weekOfSeason__in = weekNumbers,
-    ).values_list('player_id', 'weekOfSeason', 'playerStatus'):
+    ).order_by('reportDate', 'id').values_list('player_id', 'weekOfSeason', 'playerStatus'):
         weeksWithAvailabilityData.add(weekNumber)
         statusByPlayerWeek[(playerId, weekNumber)] = playerStatus
 
@@ -2376,30 +2380,42 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
                 pass
         if playerObj == None:
             playerObj = players.createPlayerAthletesFromGameRoster(athlete, team.espnId)
-        
-        # filter().first() rather than get(): once a week held two rows for a
-        # player, get() raised MultipleObjectsReturned and the except branch below
-        # added another one on every single pull.
-        playerWeekStatusObj = playerWeekStatus.objects.filter(
-            player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek,
-        ).order_by('id').first()
-        if playerWeekStatusObj == None:
-            playerWeekStatusObj = playerWeekStatus.objects.create(
-                player = playerObj,
-                team = team,
-                weekOfSeason = seasonWeek,
-                yearOfSeason = seasonYear,
-                reportDate = matchDate,
-            )
-            if athlete['didNotPlay'] == True or athlete['valid'] == False:
-                playerWeekStatusObj.playerStatus = 4
-                playerWeekStatusObj.save()
-        
+
+        gameDayStatus = 4 if athlete['didNotPlay'] == True or athlete['valid'] == False else 1
+        playerWeekStatusObj = setGameDayStatus(playerObj, team, seasonYear, seasonWeek, matchDate, gameDayStatus)
+
         athletesAndAvailability.append([playerObj, playerWeekStatusObj])
 
     athletesAndAvailability = addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear, seasonWeek)
     athletesAndAvailability = sorted(athletesAndAvailability, key = lambda x: x[0].playerPosition)
     return athletesAndAvailability
+
+
+def setGameDayStatus(playerObj, team, seasonYear, seasonWeek, matchDate, gameDayStatus):
+    # The game roster is the final word on whether a player was available for the
+    # game, so it owns the row dated on game day and overwrites it on every pull.
+    # The injury pull's rows from the days before are left alone as the history of
+    # the week. Reusing whatever row the week already held instead kept the injury
+    # pull's status: a receiver reported Out on Friday still showed Out after
+    # playing on Sunday, and no fresh pull could change it.
+    gameDayRows = playerWeekStatus.objects.filter(
+        player = playerObj, team = team, yearOfSeason = seasonYear, weekOfSeason = seasonWeek, reportDate = matchDate,
+    )
+    # Older pulls left some weeks with the same row several times over, so every
+    # one of them gets the status rather than just the first.
+    gameDayRows.exclude(playerStatus = gameDayStatus).update(playerStatus = gameDayStatus)
+
+    gameDayRow = gameDayRows.order_by('id').first()
+    if gameDayRow == None:
+        gameDayRow = playerWeekStatus.objects.create(
+            player = playerObj,
+            team = team,
+            weekOfSeason = seasonWeek,
+            yearOfSeason = seasonYear,
+            reportDate = matchDate,
+            playerStatus = gameDayStatus,
+        )
+    return gameDayRow
 
 
 def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear, seasonWeek):
@@ -2436,15 +2452,10 @@ def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear,
     if len(missingPlayerIds) == 0:
         return athletesAndAvailability
 
+    matchDate = getMatchDateForTeamWeek(team, seasonYear, seasonWeek)
     for playerObj in player.objects.filter(id__in = list(missingPlayerIds)):
-        playerWeekStatusObj, statusCreated = playerWeekStatus.objects.get_or_create(
-            player = playerObj,
-            team = team,
-            yearOfSeason = seasonYear,
-            weekOfSeason = seasonWeek,
-            defaults = {'reportDate': getMatchDateForTeamWeek(team, seasonYear, seasonWeek)},
-        )
         # They took a snap, so they were available whatever the feed left out.
+        playerWeekStatusObj = setGameDayStatus(playerObj, team, seasonYear, seasonWeek, matchDate, 1)
         print("Availability recovered from play data for " + playerObj.name + " (week " + str(seasonWeek) + ")")
         athletesAndAvailability.append([playerObj, playerWeekStatusObj])
 
@@ -3057,19 +3068,29 @@ def getCurrentWeekForTeam(teamId, seasonYear):
     # The week of the team's next game, which is the week a report published
     # today is for (a bye week's reports count toward the game after it). 0 once
     # the team's regular season is over.
+    #
+    # A game is behind the team once it kicks off, not once the scores pull marks
+    # it completed. Anything reported after kickoff is about the next game, and
+    # the morning after a Sunday night game (before the scores pull caught up)
+    # those reports were filed under the week just played, on top of how the
+    # players actually went into it.
     teamMatchesInSeason = nflMatch.objects.filter(yearOfSeason = seasonYear).filter(
         Q(homeTeamEspnId = teamId) | Q(awayTeamEspnId = teamId)
     )
     sortedMatchesInSeason = sorted(teamMatchesInSeason, key = lambda x: x.datePlayed)
 
-    completedGames = list(filter(lambda x: x.completed == True, sortedMatchesInSeason))
-    if len(completedGames) == 0:
+    now = djangoTimezone.now()
+    def kickedOff(seasonMatch):
+        return seasonMatch.completed == True or seasonMatch.datePlayed <= now
+
+    startedGames = list(filter(kickedOff, sortedMatchesInSeason))
+    if len(startedGames) == 0:
         return 1
 
-    if completedGames[-1].weekOfSeason >= 18:
+    if startedGames[-1].weekOfSeason >= 18:
         return 0
 
-    upcomingGames = list(filter(lambda x: x.completed == False, sortedMatchesInSeason))
+    upcomingGames = list(filter(lambda x: not kickedOff(x), sortedMatchesInSeason))
     if len(upcomingGames) == 0:
         return 0
     return upcomingGames[0].weekOfSeason

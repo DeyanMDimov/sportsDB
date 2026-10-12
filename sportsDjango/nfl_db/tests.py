@@ -133,8 +133,10 @@ class InjuryReportTests(TestCase):
     def pullWith(self, injuries):
         response = mock.Mock()
         response.json.return_value = {'injuries': [{'id': "19", 'displayName': "New York Giants", 'injuries': injuries}]}
+        # Friday before the week 5 game.
         with mock.patch('nfl_db.crudLogic.requests.get', return_value = response), \
-             mock.patch('nfl_db.crudLogic.currentSeasonYear', return_value = 2026):
+             mock.patch('nfl_db.crudLogic.currentSeasonYear', return_value = 2026), \
+             mock.patch('django.utils.timezone.now', return_value = datetime(2026, 10, 9, 18, tzinfo = timezone.utc)):
             return crudLogic.pullInjuryReports()
 
     def test_stores_the_injury_details_for_the_upcoming_week(self):
@@ -171,3 +173,52 @@ class InjuryReportTests(TestCase):
 
         page = self.client.get('/players/', {'injuryTeam': "DAL", 'injurySeason': "2026", 'injuryWeek': "5"})
         self.assertContains(page, "No injury report stored for DAL in week 5 of 2026.")
+
+
+def gameRosterEntry(espnId, didNotPlay = False):
+    return {'playerId': espnId, 'didNotPlay': didNotPlay, 'valid': True}
+
+
+class GameDayAvailabilityTests(TestCase):
+    def setUp(self):
+        self.ravens = nflTeam.objects.create(abbreviation = "BAL", teamName = "Ravens", espnId = 33)
+        self.bills = nflTeam.objects.create(abbreviation = "BUF", teamName = "Bills", espnId = 2)
+        nflMatch.objects.create(espnId = 1, yearOfSeason = 2026, weekOfSeason = 4, homeTeamEspnId = 33, awayTeamEspnId = 2,
+                                datePlayed = datetime(2026, 10, 4, 17, tzinfo = timezone.utc), completed = True)
+        # Sunday night, 7:20 Central, and not yet marked completed.
+        nflMatch.objects.create(espnId = 2, yearOfSeason = 2026, weekOfSeason = 5, homeTeamEspnId = 2, awayTeamEspnId = 33,
+                                datePlayed = datetime(2026, 10, 12, 0, 20, tzinfo = timezone.utc), completed = False)
+        nflMatch.objects.create(espnId = 3, yearOfSeason = 2026, weekOfSeason = 6, homeTeamEspnId = 33, awayTeamEspnId = 2,
+                                datePlayed = datetime(2026, 10, 18, 17, tzinfo = timezone.utc), completed = False)
+        self.receiver = player.objects.create(espnId = 100, name = "Ravens Receiver", team = self.ravens, playerPosition = 2, firstSeason = 2022)
+
+    def statuses(self):
+        return list(playerWeekStatus.objects.filter(player = self.receiver, weekOfSeason = 5).order_by('reportDate').values_list('reportDate', 'playerStatus'))
+
+    def test_game_roster_overrides_the_injury_pulls_status(self):
+        # The injury pull had him Out on Friday, but he played on Sunday.
+        playerWeekStatus.objects.create(player = self.receiver, team = self.ravens, yearOfSeason = 2026, weekOfSeason = 5,
+                                        reportDate = date(2026, 10, 9), playerStatus = 4)
+
+        availability = crudLogic.processGameRosterForAvailability({'entries': [gameRosterEntry(100)]}, self.ravens, 2026, 5)
+
+        self.assertEqual(availability[0][1].playerStatus, 1)
+        # Friday's report is kept as the week's history.
+        self.assertEqual(self.statuses(), [(date(2026, 10, 9), 4), (date(2026, 10, 11), 1)])
+        stored = crudLogic.buildAvailabilityFromDatabase("2026", "5", "BAL")
+        self.assertEqual([s['label'] for s in stored['rows'][0]['statuses']], ["Out", "Available"])
+
+    def test_pulling_again_updates_the_game_day_row(self):
+        crudLogic.processGameRosterForAvailability({'entries': [gameRosterEntry(100, didNotPlay = True)]}, self.ravens, 2026, 5)
+        crudLogic.processGameRosterForAvailability({'entries': [gameRosterEntry(100)]}, self.ravens, 2026, 5)
+
+        self.assertEqual(self.statuses(), [(date(2026, 10, 11), 1)])
+
+    def test_reports_after_kickoff_count_toward_the_next_game(self):
+        # Monday morning: week 5 has been played but the scores pull hasn't
+        # marked it completed yet.
+        with mock.patch('django.utils.timezone.now', return_value = datetime(2026, 10, 12, 16, tzinfo = timezone.utc)):
+            self.assertEqual(crudLogic.getCurrentWeekForTeam(33, 2026), 6)
+
+        with mock.patch('django.utils.timezone.now', return_value = datetime(2026, 10, 11, 17, tzinfo = timezone.utc)):
+            self.assertEqual(crudLogic.getCurrentWeekForTeam(33, 2026), 5)
