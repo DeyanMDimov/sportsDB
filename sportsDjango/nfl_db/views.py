@@ -1755,12 +1755,15 @@ MATCHUP_CATEGORIES = {
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "rushingYards"]},
         {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalRushYardsAllowed"]},
         {'kind': 'player', 'title': "Top Rushers", 'statKeys': ["rushingYards"], 'statLabel': "Rush Yds", 'count': 5},
+        {'kind': 'player', 'title': "Rush Attempts", 'statKeys': ["rushingAttempts"], 'statLabel': "Carries", 'count': None, 'showPosition': True},
     ],
     'receiving': [
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "totalPassingYards"]},
         {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalPassYardsAllowed"]},
         {'kind': 'player', 'title': "QBs", 'statKeys': ["passingYards"], 'statLabel': "Pass Yds", 'count': None},
         {'kind': 'player', 'title': "Receivers", 'statKeys': ["receivingYards"], 'statLabel': "Rec Yds", 'count': None, 'showPosition': True},
+        {'kind': 'player', 'title': "Receptions", 'statKeys': ["receptions"], 'statLabel': "Catches", 'count': None,
+         'showPosition': True, 'collapsible': True},
         {'kind': 'team', 'side': 'defense', 'title': "Receiving Allowed per Position", 'metrics': [
             "wrReceivingYardsAllowed", "teReceivingYardsAllowed", "rbReceivingYardsAllowed"]},
         {'kind': 'paired', 'title': "INTs", 'rows': [('offense', "intsThrown"), ('defense', "intsCaught")], 'opponents': False},

@@ -1977,6 +1977,8 @@ TEAM_WEEKLY_STATS = {
     # Passer rows also exist for incompletions and sacks; only completions gain yards.
     "passingYards": (passerStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone) if statSplit.play.playType == 2 else 0),
     "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
+    # Each rusher row is one carry.
+    "rushingAttempts": (rusherStatSplit, lambda statSplit: 1),
     "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     # Receiver rows are only written for catches, so each one is a reception.
     "receptions": (receiverStatSplit, lambda statSplit: 1),
