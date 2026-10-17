@@ -1755,7 +1755,8 @@ MATCHUP_CATEGORIES = {
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "rushingYards"]},
         {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalRushYardsAllowed"]},
         {'kind': 'player', 'title': "Top Rushers", 'statKeys': ["rushingYards"], 'statLabel': "Rush Yds", 'count': 5},
-        {'kind': 'player', 'title': "Rush Attempts", 'statKeys': ["rushingAttempts"], 'statLabel': "Carries", 'count': None, 'showPosition': True},
+        {'kind': 'player', 'title': "Rush Attempts", 'statKeys': ["rushingAttempts"], 'statLabel': "Carries", 'count': None,
+         'showPosition': True, 'collapsible': True},
     ],
     'receiving': [
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "totalPassingYards"]},
