@@ -231,3 +231,21 @@ class GameDayAvailabilityTests(TestCase):
         stored = crudLogic.buildAvailabilityFromDatabase("2026", "5", "BAL")
         self.assertEqual([(s['label'], s['token']) for s in stored['rows'][0]['statuses']],
                          [("Questionable", "available"), ("Doubtful", "out"), ("Out", "out"), ("IR", "out")])
+
+
+from nfl_db.views import sortInjuries
+
+
+class SortInjuriesTests(SimpleTestCase):
+    def injury(self, name, position, status):
+        return playerWeekStatus(player = player(name = name, playerPosition = position), playerStatus = status)
+
+    def test_out_quarterback_goes_first(self):
+        injuries = [self.injury("Tackle", 6, 2), self.injury("Guard", 6, 4), self.injury("Quarterback", 1, 4)]
+        self.assertEqual([i.player.name for i in sortInjuries(injuries)], ["Quarterback", "Tackle", "Guard"])
+
+    def test_questionable_quarterback_keeps_status_order(self):
+        injuries = [self.injury("Guard", 6, 4), self.injury("Quarterback", 1, 2), self.injury("Tackle", 6, 3)]
+        self.assertEqual([i.player.name for i in sortInjuries(injuries)], ["Quarterback", "Tackle", "Guard"])
+        injuries = [self.injury("Guard", 6, 2), self.injury("Quarterback", 1, 2)]
+        self.assertEqual([i.player.name for i in sortInjuries(injuries)], ["Guard", "Quarterback"])

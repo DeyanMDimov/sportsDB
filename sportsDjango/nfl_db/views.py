@@ -666,6 +666,11 @@ def getInjuryStatus(request):
         return JsonResponse({}, status="200")
     
 
+def sortInjuries(injuries):
+    # A quarterback who is out goes to the top of the list, since losing the
+    # starter matters more than anything else on it. Then sort by status.
+    return sorted(injuries, key= lambda x: (not (x.player.playerPosition == 1 and x.isOut()), x.playerStatus))
+
 def loadModel(request, target):
     weeksOnPage = weeksOnPage_Helper()
     
@@ -744,8 +749,8 @@ def loadModel(request, target):
                                 except:
                                     pass
 
-                individualModelResult.homeTeamInjuries = sorted(homeTeamInjuries, key= lambda x: x.playerStatus)
-                individualModelResult.awayTeamInjuries = sorted(awayTeamInjuries, key= lambda x: x.playerStatus)
+                individualModelResult.homeTeamInjuries = sortInjuries(homeTeamInjuries)
+                individualModelResult.awayTeamInjuries = sortInjuries(awayTeamInjuries)
 
 
             overUnderCorrect = len(list(filter(lambda x: x.overUnderBetIsCorrect == 'True', modelResults)))
