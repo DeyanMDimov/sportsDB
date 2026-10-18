@@ -4316,15 +4316,34 @@ def getTeamRankings(seasonYear, statField, startWeek, endWeek):
     weekNumbers = list(range(int(startWeek), int(endWeek) + 1))
 
     performanceValues = {}
-    for teamEspnId, weekOfSeason, statValue in teamMatchPerformance.objects.filter(
+    matchIdsByTeamWeek = {}
+    for teamEspnId, weekOfSeason, matchEspnId, statValue in teamMatchPerformance.objects.filter(
         yearOfSeason = int(seasonYear),
         weekOfSeason__in = weekNumbers,
-    ).values_list('teamEspnId', 'weekOfSeason', statField):
+    ).values_list('teamEspnId', 'weekOfSeason', 'matchEspnId', statField):
         if statValue == None:
             continue
         # A re-pull can leave more than one row for a team's week; they carry the
         # same figures, so the last one read stands rather than double counting.
         performanceValues[(teamEspnId, weekOfSeason)] = float(statValue)
+        matchIdsByTeamWeek[(teamEspnId, weekOfSeason)] = matchEspnId
+
+    # Each week's opponent for the cell's hover text: "LV" at home, "@KC" away.
+    abbreviationsByEspnId = dict(nflTeam.objects.values_list('espnId', 'abbreviation'))
+    homeAwayByMatchId = {
+        matchEspnId: (homeTeamEspnId, awayTeamEspnId)
+        for matchEspnId, homeTeamEspnId, awayTeamEspnId in nflMatch.objects.filter(
+            espnId__in = set(matchIdsByTeamWeek.values()),
+        ).values_list('espnId', 'homeTeamEspnId', 'awayTeamEspnId')
+    }
+
+    def opponentLabel(teamEspnId, weekNumber):
+        homeTeamEspnId, awayTeamEspnId = homeAwayByMatchId.get(matchIdsByTeamWeek[(teamEspnId, weekNumber)], (None, None))
+        if teamEspnId == homeTeamEspnId:
+            return abbreviationsByEspnId.get(awayTeamEspnId, "")
+        if teamEspnId == awayTeamEspnId:
+            return "@" + abbreviationsByEspnId.get(homeTeamEspnId, "")
+        return ""
 
     isAveraged = teamStatIsAveraged(statField)
     rankingRows = []
@@ -4339,7 +4358,7 @@ def getTeamRankings(seasonYear, statField, startWeek, endWeek):
                 weekCells.append({'played': False})
             else:
                 playedValues.append(statValue)
-                weekCells.append({'played': True, 'value': statValue})
+                weekCells.append({'played': True, 'value': statValue, 'opponent': opponentLabel(team.espnId, weekNumber)})
 
         if len(playedValues) == 0:
             continue

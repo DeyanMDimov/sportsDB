@@ -137,7 +137,7 @@
                     <td class="byTeamNum"><b>{{ rankingRow.seasonTotal|floatformat:"-1" }}</b></td>
                     {% for weekCell in rankingRow.weekCells %}
                     {% if weekCell.played %}
-                    <td class="byTeamNum">{{ weekCell.value|floatformat:"-1" }}</td>
+                    <td class="byTeamNum"{% if weekCell.opponent %} title="{{ weekCell.opponent }}"{% endif %}>{{ weekCell.value|floatformat:"-1" }}</td>
                     {% else %}
                     <td class="byTeamNum text-muted">&ndash;</td>
                     {% endif %}
