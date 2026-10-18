@@ -1167,8 +1167,10 @@ table thead tr th:first-child {
 }
 
 /* Rush/Pass Yards Allowed weeks: hovering one lists the opposing players
-   behind it (styled like .play-description-tooltip). */
-.matchupTable .matchupHoverCell {
+   behind it (styled like .play-description-tooltip). The Teams Rankings
+   table's weeks reuse the popup to show that week's opponent. */
+.matchupTable .matchupHoverCell,
+.rankingTable td[data-opponent] {
   cursor: help;
   text-decoration: underline dotted #888;
   text-underline-offset: 3px;

@@ -118,7 +118,7 @@
             or weeks not played yet.
         </p>
         <div class="byTeamTableWrap">
-        <table class="table table-bordered table-sm byTeamTable">
+        <table class="table table-bordered table-sm byTeamTable rankingTable" id="rankingTable">
             <thead>
                 <tr>
                     <th class="byTeamNum">#</th>
@@ -137,7 +137,7 @@
                     <td class="byTeamNum"><b>{{ rankingRow.seasonTotal|floatformat:"-1" }}</b></td>
                     {% for weekCell in rankingRow.weekCells %}
                     {% if weekCell.played %}
-                    <td class="byTeamNum"{% if weekCell.opponent %} title="{{ weekCell.opponent }}"{% endif %}>{{ weekCell.value|floatformat:"-1" }}</td>
+                    <td class="byTeamNum"{% if weekCell.opponent %} data-opponent="{{ weekCell.opponent }}"{% endif %}>{{ weekCell.value|floatformat:"-1" }}</td>
                     {% else %}
                     <td class="byTeamNum text-muted">&ndash;</td>
                     {% endif %}
@@ -147,6 +147,8 @@
             </tbody>
         </table>
         </div>
+        {# Outside the table wrapper so the fixed popup isn't clipped by its scrolling #}
+        <div id="rankingHoverPopup" class="matchupHoverPopup" hidden></div>
         {% else %}
         <p class="text-muted">Nothing stored for {{ rankingSeason }} yet.</p>
         {% endif %}
@@ -328,6 +330,48 @@
             $("#rankingSeason").on("change", trimWeekOptions);
             toggleWeekPickers();
             trimWeekOptions();
+
+            // Hovering a week's figure shows who it came against ("LV", "@KC"),
+            // just under the cell, the same popup as the Matchup page's.
+            var rankingTable = document.getElementById("rankingTable");
+            var popup = document.getElementById("rankingHoverPopup");
+            if (rankingTable && popup) {
+                var hoveredCell = null;
+                rankingTable.addEventListener("mouseover", function (e) {
+                    var cell = e.target.closest("td[data-opponent]");
+                    if (cell === hoveredCell) {
+                        return;
+                    }
+                    hoveredCell = cell;
+                    if (!cell) {
+                        popup.hidden = true;
+                        return;
+                    }
+                    popup.textContent = cell.getAttribute("data-opponent");
+                    popup.hidden = false;
+
+                    // Below the cell, flipping above it or back inside the window near the edges.
+                    var cellBox = cell.getBoundingClientRect();
+                    var left = cellBox.left;
+                    var top = cellBox.bottom + 4;
+                    if (left + popup.offsetWidth > window.innerWidth) {
+                        left = Math.max(0, window.innerWidth - popup.offsetWidth - 4);
+                    }
+                    if (top + popup.offsetHeight > window.innerHeight) {
+                        top = Math.max(0, cellBox.top - popup.offsetHeight - 4);
+                    }
+                    popup.style.left = left + "px";
+                    popup.style.top = top + "px";
+                });
+                rankingTable.addEventListener("mouseleave", function () {
+                    hoveredCell = null;
+                    popup.hidden = true;
+                });
+                window.addEventListener("scroll", function () {
+                    hoveredCell = null;
+                    popup.hidden = true;
+                }, true);
+            }
         });
     </script>
 {% endblock %}
