@@ -15,7 +15,7 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
             playerObj = player.objects.create(
                     espnId = athlete['id'],
                     name = athlete['displayName'],
-                    firstSeason = getFirstSeasonYear(athlete['experience']['years']),
+                    firstSeason = getFirstSeasonYear(athleteExperienceYears(athlete)),
                     team = nflTeam.objects.get(espnId = teamId),
                     playerHeightInches = athlete['height'],
                     playerWeightPounds = athlete['weight'],
@@ -31,7 +31,7 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
             #         playerObj.save()
             #     else:
             #         raise Exception("parent not in athlete[position]")
-            if athlete['experience']['years'] == 0:
+            if athleteExperienceYears(athlete) == 0:
                 playerTeamTenure.objects.create(
                     player = playerObj,
                     team = nflTeam.objects.get(espnId = teamId),
@@ -41,13 +41,14 @@ def createPlayerAthletesFromTeamRoster(rosterData, teamId):
             print("Successfully loaded player " + str(playerObj.espnId))
         else:
             print("Player " + str(playerObj.espnId) + " already in system.")
-            playerObj.firstSeason = getFirstSeasonYear(athlete['experience']['years'])
+            if athleteExperienceYears(athlete) != None:
+                playerObj.firstSeason = getFirstSeasonYear(athleteExperienceYears(athlete))
             playerObj.team = nflTeam.objects.get(espnId = teamId)
             playerObj.save()
             
             playerTenures = playerTeamTenure.objects.filter(player = playerObj)
             currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2025, playerTenures))
-            if athlete['experience']['years'] == 0:    
+            if athleteExperienceYears(athlete) == 0:    
                 if len(list(currentSeasonTenures)) == 0:
                     playerTeamTenure.objects.create(
                         player = playerObj,
@@ -70,7 +71,7 @@ def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
     playerObj = player.objects.create(
             espnId = athleteData['id'],
             name = athleteData['displayName'],
-            firstSeason = getFirstSeasonYear(athleteData['experience']['years']),
+            firstSeason = getFirstSeasonYear(athleteExperienceYears(athleteData)),
             team = nflTeam.objects.get(espnId = teamId),
             playerHeightInches = athleteData['height'],
             playerWeightPounds = athleteData['weight'],
@@ -78,7 +79,7 @@ def createPlayerAthletesFromGameRoster(athleteRosterData, teamId):
             sideOfBall = getAthleteSideOfBall(athleteData['position'])
         )
     
-    if athleteData['experience']['years'] == 0:
+    if athleteExperienceYears(athleteData) == 0:
         playerTeamTenure.objects.create(
             player = playerObj,
             team = nflTeam.objects.get(espnId = teamId),
@@ -106,7 +107,7 @@ def updatePlayerAthletesFromTeamRoster(rosterData, teamId):
             playerObj = player.objects.create(
                     espnId = athlete['id'],
                     name = athlete['displayName'],
-                    firstSeason = getFirstSeasonYear(athlete['experience']['years']),
+                    firstSeason = getFirstSeasonYear(athleteExperienceYears(athlete)),
                     team = nflTeam.objects.get(espnId = teamId),
                     playerHeightInches = athlete['height'],
                     playerWeightPounds = athlete['weight'],
@@ -115,7 +116,7 @@ def updatePlayerAthletesFromTeamRoster(rosterData, teamId):
                 )
             
 
-            if athlete['experience']['years'] == 0:
+            if athleteExperienceYears(athlete) == 0:
                 playerTeamTenure.objects.create(
                     player = playerObj,
                     team = nflTeam.objects.get(espnId = teamId),
@@ -126,7 +127,8 @@ def updatePlayerAthletesFromTeamRoster(rosterData, teamId):
 
         else:
             print("Player " + str(playerObj.espnId) + " already in system.")
-            playerObj.firstSeason = getFirstSeasonYear(athlete['experience']['years'])
+            if athleteExperienceYears(athlete) != None:
+                playerObj.firstSeason = getFirstSeasonYear(athleteExperienceYears(athlete))
             currentPlayerTeam = nflTeam.objects.get(espnId = teamId)
             
             if playerObj.team != currentPlayerTeam:
@@ -157,7 +159,7 @@ def updatePlayerAthletesFromTeamRoster(rosterData, teamId):
 
             playerTenures = playerTeamTenure.objects.filter(player = playerObj)
             currentSeasonTenures = list(filter(lambda x: x.startDate.year == 2025, playerTenures))
-            if athlete['experience']['years'] == 0:    
+            if athleteExperienceYears(athlete) == 0:    
                 if len(list(currentSeasonTenures)) == 0:
                     playerTeamTenure.objects.create(
                         player = playerObj,
@@ -374,9 +376,18 @@ def getAthleteSideOfBall(positionData):
                 #     (13, "Other")
                 # )
 
+def athleteExperienceYears(athlete):
+    # ESPN leaves experience off some roster entries (Jake Kubas on the 2026
+    # Patriots). None means we don't know - not the same as a rookie's 0.
+    return (athlete.get('experience') or {}).get('years')
+
+
 def getFirstSeasonYear(yearsOfExperience):
-    numYears = int(yearsOfExperience)
     currentYear = datetime.now().year
+    # Unknown experience: same as a player first seen on a play this season.
+    if yearsOfExperience == None:
+        return currentYear
+    numYears = int(yearsOfExperience)
 
     firstSeasonYear = 0
 

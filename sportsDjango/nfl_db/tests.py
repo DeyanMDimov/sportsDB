@@ -125,6 +125,20 @@ class TeamRosterRefreshTests(TestCase):
         # Only the player who changed teams counts as moved, not the new one.
         self.assertEqual(movedPlayers, [{'name': "Moved Receiver", 'position': "WR", 'fromTeam': "DAL", 'toTeam': "NYG"}])
 
+    def test_roster_entry_without_experience(self):
+        # ESPN leaves experience off some roster entries.
+        mover = espnAthlete(100, "Moved Receiver")
+        del mover['experience']
+        newcomer = espnAthlete(300, "New Lineman", positionAbbreviation = "G")
+        del newcomer['experience']
+        with self.mockRosterResponse([mover, newcomer]):
+            roster, movedPlayers = crudLogic.refreshTeamRosterFromApi(self.giants)
+
+        self.mover.refresh_from_db()
+        self.assertEqual(self.mover.team, self.giants)
+        self.assertEqual(self.mover.firstSeason, 2022)
+        self.assertEqual(sorted(p.espnId for p in roster), [100, 300])
+
     def test_failed_request_changes_nothing(self):
         with mock.patch('nfl_db.crudLogic.requests.get', side_effect = Exception("timed out")):
             self.assertEqual(crudLogic.refreshTeamRosterFromApi(self.giants), ([], []))
