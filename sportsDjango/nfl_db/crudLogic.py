@@ -1678,6 +1678,58 @@ PLAY_END_SPOT_REGEX = re.compile(r"\b(?:to|at) " + FIELD_SPOT_PATTERN + r" $")
 PENALTY_ENFORCED_SPOT_REGEX = re.compile(r"enforced at " + FIELD_SPOT_PATTERN)
 # The team an enforced (not declined) penalty went against.
 ENFORCED_PENALTY_TEAM_REGEX = re.compile(r"PENALTY on ([A-Z]{2,3})-[^,]+, [^,]+, \d+ yards?, enforced at", re.IGNORECASE)
+# A lateral straight after a gain, up to its own "for N yards": "for 4 yards.
+# Lateral to T.Henderson pushed ob at LV 45 for 12 yards".
+LATERAL_AFTER_GAIN_REGEX = re.compile(r"(?: \([^)]*\)| \[[^\]]*\])*\.\s*Lateral to (?:(?!FUMBLES).)*?(?=for (?:-?\d+ yards?|no gain))")
+
+# ESPN types a play that ends in a fumble by the recovery - "Fumble Recovery
+# (Opponent)", "Sack Opp Fumble Recovery" - whatever came before it.
+FUMBLE_PLAY_TYPES = [17, 18, 19, 20]
+SACKED_REGEX = re.compile(r"\bsacked\b")
+COMPLETED_PASS_REGEX = re.compile(r"\bpass (?!incomplete).*?\bto\b.*?for (?:-?\d+ yards?|no gain)|\d+ Yd pass from\b")
+INCOMPLETE_PASS_REGEX = re.compile(r"\bpass incomplete\b")
+
+
+def playTypeBeforeFumble(playType, playDescription):
+    # The catch, carry or sack before a fumble still counts for whoever made
+    # it, so read which one it was off the description. A fumbled snap the
+    # quarterback picks up and throws away is an incompletion; anything else
+    # that isn't a pass or a sack was a carry, aborted snaps included.
+    if playType not in FUMBLE_PLAY_TYPES:
+        return playType
+    description = playDescription or ""
+    if SACKED_REGEX.search(description):
+        return 4
+    if COMPLETED_PASS_REGEX.search(description):
+        return 2
+    if INCOMPLETE_PASS_REGEX.search(description):
+        return 3
+    return 1
+
+
+def passingYardsOnPlay(playType, playDescription, yardsFromEndzone = None):
+    # Passer rows also exist for incompletions and sacks; only completions gain
+    # yards. The receiver's yards stop where the ball is lateraled on, but the
+    # passer is credited with the whole play.
+    if playTypeBeforeFumble(playType, playDescription) != 2:
+        return 0
+    description = playDescription or ""
+    if "REVERSED" in description:
+        return yardsGainedOnPlay(description, yardsFromEndzone)
+
+    yardsMatches = []
+    yardsMatch = PLAY_YARDS_REGEX.search(description)
+    while yardsMatch != None:
+        yardsMatches.append(yardsMatch)
+        lateralMatch = LATERAL_AFTER_GAIN_REGEX.match(description, yardsMatch.end())
+        yardsMatch = PLAY_YARDS_REGEX.match(description, lateralMatch.end()) if lateralMatch != None else None
+    if len(yardsMatches) < 2:
+        return yardsGainedOnPlay(description, yardsFromEndzone)
+
+    # Measured from the snap to where the last lateral ended, so a penalty
+    # spot anywhere along the way still cuts it short.
+    gain = sum(int(match.group(1)) if match.group(1) else 0 for match in yardsMatches)
+    return yardsCreditedBeforePenaltySpot(description, yardsMatches[-1], gain, yardsFromEndzone)
 
 
 def yardsGainedOnPlay(playDescription, yardsFromEndzone = None):
@@ -1871,11 +1923,11 @@ def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
             continue
         countedPasserPlayIds.add(passerSplit.play_id)
         matchStats = statsByMatchId[passerSplit.play.nflMatch_id]
-        if passerSplit.play.playType in [2, 3]:
+        passerPlayType = playTypeBeforeFumble(passerSplit.play.playType, passerSplit.play.playDescription)
+        if passerPlayType in [2, 3]:
             matchStats['passingAttempts'] += 1
-        if passerSplit.play.playType == 2:
-            matchStats['passingYards'] += yardsGainedOnPlay(passerSplit.play.playDescription, passerSplit.play.yardsFromEndzone)
-        if passerSplit.play.playType == 4:
+        matchStats['passingYards'] += passingYardsOnPlay(passerSplit.play.playType, passerSplit.play.playDescription, passerSplit.play.yardsFromEndzone)
+        if passerPlayType == 4:
             matchStats['sacks'] += 1
         if passerSplit.passingTdScored:
             matchStats['passingTds'] += 1
@@ -1974,8 +2026,7 @@ def seasonHasStoredPlays(team, seasonYear):
 
 # Players page -> By Team tab: stat key -> (split model, what one play is worth).
 TEAM_WEEKLY_STATS = {
-    # Passer rows also exist for incompletions and sacks; only completions gain yards.
-    "passingYards": (passerStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone) if statSplit.play.playType == 2 else 0),
+    "passingYards": (passerStatSplit, lambda statSplit: passingYardsOnPlay(statSplit.play.playType, statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     # Each rusher row is one carry.
     "rushingAttempts": (rusherStatSplit, lambda statSplit: 1),
@@ -3911,8 +3962,9 @@ def processPlayParticipants(play, participants_data):
         try:
             participant_type = participant.get('type', '').lower()
             
-            # For defensive TDs, focus on the scorer/recoverer, not the offensive players
-            if is_defensive_score:
+            # For defensive TDs, the scorer/recoverer gets the return. The
+            # offensive players still get the catch or carry before the turnover.
+            if is_defensive_score and participant_type in ['scorer', 'recoverer', 'returner']:
                 # Only process the defensive player who scored
                 if participant_type in ['scorer', 'recoverer', 'returner']:
                     athlete_ref = participant.get('athlete', {}).get('$ref', '')
@@ -3952,7 +4004,7 @@ def processPlayParticipants(play, participants_data):
                     createReturnerStatSplit(play, player_obj, tenure, stats_dict)
                     
             else:
-                # Normal offensive play - process offensive players
+                # Offensive players, on any play
                 if participant_type in ['rusher', 'passer', 'receiver', 'returner']:
                     athlete_ref = participant.get('athlete', {}).get('$ref', '')
                     athlete_id = extractAthleteIdFromRef(athlete_ref)
@@ -4073,7 +4125,8 @@ def createPlayerFromAthleteRef(athlete_ref, team):
 def createPasserStatSplit(play, player_obj, tenure, stats_dict):
     """Create passer stat split record"""
     try:
-        if play.playType not in [2, 3, 4]:  # COMPLETED PASS, INCOMPLETE PASS, SACK
+        # COMPLETED PASS, INCOMPLETE PASS, SACK - including ones that ended in a fumble
+        if playTypeBeforeFumble(play.playType, play.playDescription) not in [2, 3, 4]:
             return None
             
         # get_or_create so re-pulling a match updates its splits instead of
@@ -4099,7 +4152,7 @@ def createPasserStatSplit(play, player_obj, tenure, stats_dict):
 def createRusherStatSplit(play, player_obj, tenure, stats_dict):
     """Create rusher stat split record"""
     try:
-        if play.playType != 1:  # Only for RUSH plays
+        if playTypeBeforeFumble(play.playType, play.playDescription) != 1:  # Only for RUSH plays, fumbled ones included
             return None
             
         # get_or_create so re-pulling a match updates its splits instead of
@@ -4124,7 +4177,7 @@ def createRusherStatSplit(play, player_obj, tenure, stats_dict):
 def createReceiverStatSplit(play, player_obj, tenure, stats_dict):
     """Create receiver stat split record"""
     try:
-        if play.playType != 2:  # Only for COMPLETED PASS plays
+        if playTypeBeforeFumble(play.playType, play.playDescription) != 2:  # Only for COMPLETED PASS plays, fumbled ones included
             return None
             
         # get_or_create so re-pulling a match updates its splits instead of
@@ -4416,11 +4469,11 @@ def playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdSco
     # What one play is worth for the chosen stat, matching how the Performances
     # tab counts the same thing.
     if statKey == "passingYards":
-        return yardsGainedOnPlay(playDescription, yardsFromEndzone) if playType == 2 else 0
+        return passingYardsOnPlay(playType, playDescription, yardsFromEndzone)
     if statKey == "passingAttempts":
-        return 1 if playType in [2, 3] else 0
+        return 1 if playTypeBeforeFumble(playType, playDescription) in [2, 3] else 0
     if statKey == "sacks":
-        return 1 if playType == 4 else 0
+        return 1 if playTypeBeforeFumble(playType, playDescription) == 4 else 0
     if statKey in ["passingTds", "rushingTds", "receivingTds"]:
         return 1 if tdScored else 0
     if statKey in ["rushingYards", "receivingYards"]:

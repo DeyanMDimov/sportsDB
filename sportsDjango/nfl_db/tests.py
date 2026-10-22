@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from nfl_db.crudLogic import yardsGainedOnPlay
+from nfl_db.crudLogic import yardsGainedOnPlay, passingYardsOnPlay, playTypeBeforeFumble
 
 
 class YardsGainedOnPlayTests(SimpleTestCase):
@@ -32,6 +32,55 @@ class YardsGainedOnPlayTests(SimpleTestCase):
     def test_without_line_of_scrimmage_reads_the_description(self):
         description = "J.Warren up the middle to CIN 5 for 87 yards (J.Battle).PENALTY on PIT-D.Metcalf, Offensive Holding, 7 yards, enforced at PIT 14."
         self.assertEqual(yardsGainedOnPlay(description), 87)
+
+
+class FumbledPlayTests(SimpleTestCase):
+    def test_fumbled_catch_is_a_completion(self):
+        description = "(Shotgun) D.Maye pass deep right to D.Douglas to NYJ 33 for 39 yards (J.Sherwood). FUMBLES (J.Sherwood), RECOVERED by NYJ-M.Fitzpatrick at NYJ 25."
+        self.assertEqual(playTypeBeforeFumble(19, description), 2)
+        self.assertEqual(passingYardsOnPlay(19, description, 72), 39)
+
+    def test_strip_sack_is_a_sack(self):
+        description = "(Shotgun) M.Penix sacked at ATL 14 for -8 yards (K.Gordon). FUMBLES (K.Gordon) [K.Gordon], RECOVERED by CHI-D.Bush at ATL 28. D.Bush to ATL 28 for no gain (M.Bergeron)."
+        self.assertEqual(playTypeBeforeFumble(19, description), 4)
+        self.assertEqual(passingYardsOnPlay(19, description, 78), 0)
+
+    def test_fumbled_run_and_aborted_snap_are_carries(self):
+        self.assertEqual(playTypeBeforeFumble(19, "M.Lloyd left tackle to GB 16 for 2 yards (K.Enagbare; D.Davis). FUMBLES (K.Enagbare), touched at GB 17, RECOVERED by NYJ-H.Phillips at GB 18."), 1)
+        self.assertEqual(playTypeBeforeFumble(17, "(No Huddle, Shotgun) B.Nix FUMBLES (Aborted) at DEN 22, and recovers at DEN 22."), 1)
+
+    def test_fumbled_snap_thrown_away_is_an_incompletion(self):
+        description = "(Shotgun) C.Humphrey to KC 46 for -1 yards. FUMBLES, recovered by KC-P.Mahomes at KC 43. P.Mahomes pass incomplete short right to K.Walker."
+        self.assertEqual(playTypeBeforeFumble(17, description), 3)
+
+    def test_other_play_types_are_left_alone(self):
+        self.assertEqual(playTypeBeforeFumble(3, "(Shotgun) D.Maye pass incomplete deep right to R.Doubs."), 3)
+        self.assertEqual(passingYardsOnPlay(3, "(Shotgun) D.Maye pass incomplete deep right to R.Doubs."), 0)
+
+
+class PassingYardsOnPlayTests(SimpleTestCase):
+    def test_plain_catch(self):
+        self.assertEqual(passingYardsOnPlay(2, "(Shotgun) D.Maye pass short left to E.Chism to LV 42 for 13 yards (E.Stokes).", 55), 13)
+
+    def test_passer_gets_the_yards_after_a_lateral(self):
+        description = "(Shotgun) D.Maye pass short middle to E.Chism to NE 43 for 4 yards. Lateral to T.Henderson pushed ob at LV 45 for 12 yards (N.Dean)."
+        self.assertEqual(passingYardsOnPlay(2, description, 61), 16)
+        # The catcher only gets the yards up to the lateral.
+        self.assertEqual(yardsGainedOnPlay(description, 61), 4)
+
+    def test_chain_of_laterals_after_a_tackled_catch(self):
+        description = "(Shotgun) J.Herbert pass short left to Q.Johnston to CLV 33 for 26 yards. Lateral to J.Palmer to CLV 24 for 9 yards. Lateral to L.McConkey to CLV 30 for -6 yards. Lateral to J.Dobbins to CLV 20 for 10 yards (M.Emerson)."
+        self.assertEqual(passingYardsOnPlay(2, description, 59), 39)
+        description = "(Shotgun) B.Nix pass deep right to J.Reynolds to DEN 32 for 13 yards [Ca.Heyward]. Lateral to M.Mims ran ob at DEN 34 for 2 yards (D.Kazee)."
+        self.assertEqual(passingYardsOnPlay(2, description, 81), 15)
+
+    def test_yards_after_a_fumble_are_not_the_passers(self):
+        description = "(Shotgun) S.Buechele pass short middle to T.Kelce to KC 37 for 2 yards (J.Adams). FUMBLES (J.Adams), recovered by KC-J.Smith-Schuster at KC 37. J.Smith-Schuster to KC 32 for -5 yards. Lateral to S.Buechele to KC 31 for -1 yards."
+        self.assertEqual(passingYardsOnPlay(2, description, 65), 2)
+
+    def test_lateral_overturned_on_review(self):
+        description = "(Shotgun) S.Rattler pass short middle to T.Hill to NO 32 for 5 yards. Lateral to A.Kamara to CHI 42 for 26 yards (J.Brisker).Chicago challenged the backward pass ruling, and the play was REVERSED.(Shotgun) S.Rattler pass short middle to T.Hill to NO 32 for 5 yards."
+        self.assertEqual(passingYardsOnPlay(2, description, 73), 5)
 
 
 from datetime import date, datetime, timezone
