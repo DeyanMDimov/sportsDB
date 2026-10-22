@@ -1,5 +1,6 @@
 from nfl_db.models import nflMatch, playByPlay, passerStatSplit, rusherStatSplit, receiverStatSplit
-from nfl_db.crudLogic import FUMBLE_PLAY_TYPES, processPlayParticipants, playTypeBeforeFumble
+from nfl_db.crudLogic import FUMBLE_PLAY_TYPES, LATERAL_RECEIVER_ROLE, processPlayParticipants, playTypeBeforeFumble
+from nfl_db.crudLogic import completedPassDescription, yardsMatchesThroughLaterals
 from django.core.management.base import BaseCommand
 
 import requests
@@ -52,10 +53,16 @@ def offensiveSplitCount(plays):
     return sum(splitModel.objects.filter(play__in = plays).count() for splitModel in OFFENSIVE_SPLIT_MODELS)
 
 
+def wasLateraledAfterTheCatch(play):
+    return (playTypeBeforeFumble(play.playType, play.playDescription) == 2
+            and len(yardsMatchesThroughLaterals(completedPassDescription(play.playDescription))) >= 2)
+
+
 class Command(BaseCommand):
     help = ('Writes the passer, rusher and receiver stat splits that plays ending in a fumble never got '
-            '(ESPN types them by the recovery, so the catch, carry or sack before it went uncounted), e.g. '
-            'manage.py backfillFumbleStatSplitsCommand --season 2026')
+            '(ESPN types them by the recovery, so the catch, carry or sack before it went uncounted), and '
+            'the receiver splits for players who took a lateral after a catch, e.g. '
+            'manage.py backfillPlayStatSplitsCommand --season 2026')
 
     def add_arguments(self, parser):
         parser.add_argument('--season', default = None, help = 'Only backfill this year of season')
@@ -63,15 +70,16 @@ class Command(BaseCommand):
         parser.add_argument('--dryRun', action = 'store_true', help = 'Report what would change without saving')
 
     def handle(self, *args, **options):
-        fumblePlays = playByPlay.objects.filter(playType__in = FUMBLE_PLAY_TYPES).exclude(espnId__isnull = True)
+        plays = playByPlay.objects.exclude(espnId__isnull = True)
 
         if options['season'] != None:
-            fumblePlays = fumblePlays.filter(nflMatch__yearOfSeason = int(options['season']))
+            plays = plays.filter(nflMatch__yearOfSeason = int(options['season']))
         if options['match'] != None:
-            fumblePlays = fumblePlays.filter(nflMatch__espnId = int(options['match']))
+            plays = plays.filter(nflMatch__espnId = int(options['match']))
+        fumblePlays = plays.filter(playType__in = FUMBLE_PLAY_TYPES)
 
-        # Plays missing a split their reading calls for. Splits are written with
-        # get_or_create, so going over a play that has some of them is harmless.
+        # Fumble plays missing a split their reading calls for. Splits are written
+        # with get_or_create, so going over a play that has some of them is harmless.
         playIdsBySplitModel = {}
         for splitModel in OFFENSIVE_SPLIT_MODELS:
             playIdsBySplitModel[splitModel] = set(splitModel.objects.filter(play__in = fumblePlays).values_list('play_id', flat = True))
@@ -80,12 +88,24 @@ class Command(BaseCommand):
             if any(play.id not in playIdsBySplitModel[splitModel]
                    for splitModel in SPLIT_MODELS_BY_PLAY_TYPE.get(playTypeBeforeFumble(play.playType, play.playDescription), []))
         ]
-        playsToFill = fumblePlays.filter(id__in = playIdsToFill)
+        fumblePlayCount = len(playIdsToFill)
 
+        # Catches lateraled on, where nobody has a lateral receiver split yet.
+        lateralPlays = plays.filter(playType__in = [2] + FUMBLE_PLAY_TYPES, playDescription__contains = "Lateral to")
+        playIdsWithLateralReceivers = set(receiverStatSplit.objects.filter(
+            play__in = lateralPlays, playerRole = LATERAL_RECEIVER_ROLE,
+        ).values_list('play_id', flat = True))
+        playIdsToFill += [
+            play.id for play in lateralPlays.only('id', 'playType', 'playDescription')
+            if play.id not in playIdsWithLateralReceivers and play.id not in playIdsToFill and wasLateraledAfterTheCatch(play)
+        ]
+
+        playsToFill = plays.filter(id__in = playIdsToFill)
         matchEspnIds = sorted(set(playsToFill.values_list('nflMatch__espnId', flat = True)))
 
-        print("Fumble plays missing a passer/rusher/receiver split: " + str(playsToFill.count())
-              + " across " + str(len(matchEspnIds)) + " matches")
+        print("Fumble plays missing a passer/rusher/receiver split: " + str(fumblePlayCount)
+              + ", lateraled catches missing a lateral receiver split: " + str(len(playIdsToFill) - fumblePlayCount)
+              + " - across " + str(len(matchEspnIds)) + " matches")
 
         totalPlaysFilled = 0
         totalSplitsWritten = 0

@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from nfl_db.crudLogic import yardsGainedOnPlay, passingYardsOnPlay, receivingYardsOnPlay, playTypeBeforeFumble
+from nfl_db.crudLogic import yardsGainedOnPlay, passingYardsOnPlay, receivingYardsOnPlay, playTypeBeforeFumble, descriptionNameRegex, LATERAL_RECEIVER_ROLE
 
 
 class YardsGainedOnPlayTests(SimpleTestCase):
@@ -125,6 +125,22 @@ class PassingYardsOnPlayTests(SimpleTestCase):
         self.assertEqual(passingYardsOnPlay(2, description, 59), 39)
         description = "(Shotgun) B.Nix pass deep right to J.Reynolds to DEN 32 for 13 yards [Ca.Heyward]. Lateral to M.Mims ran ob at DEN 34 for 2 yards (D.Kazee)."
         self.assertEqual(passingYardsOnPlay(2, description, 81), 15)
+
+    def test_lateral_takers_get_the_yards_they_carried_it(self):
+        description = "(Shotgun) J.Herbert pass short left to Q.Johnston to CLV 33 for 26 yards. Lateral to J.Palmer to CLV 24 for 9 yards. Lateral to L.McConkey to CLV 30 for -6 yards. Lateral to J.Dobbins to CLV 20 for 10 yards (M.Emerson)."
+        self.assertEqual(receivingYardsOnPlay(description, 59), 26)
+        self.assertEqual(receivingYardsOnPlay(description, 59, LATERAL_RECEIVER_ROLE, "Joshua Palmer"), 9)
+        self.assertEqual(receivingYardsOnPlay(description, 59, LATERAL_RECEIVER_ROLE, "Ladd McConkey"), -6)
+        self.assertEqual(receivingYardsOnPlay(description, 59, LATERAL_RECEIVER_ROLE, "J.K. Dobbins"), 10)
+        description = "(Shotgun) B.Purdy pass short left to M.Evans to SF 20 for 2 yards. Lateral to D.Samuel for 80 yards, TOUCHDOWN."
+        self.assertEqual(receivingYardsOnPlay(description, 82, LATERAL_RECEIVER_ROLE, "Deebo Samuel Sr."), 80)
+
+    def test_lateral_taker_is_matched_by_initial_too(self):
+        description = "(Shotgun) C.Williams pass short right to R.Odunze to ATL 40 for 2 yards. Lateral to R.Johnson pushed ob at ATL 28 for 12 yards (H.Perkins)."
+        self.assertEqual(receivingYardsOnPlay(description, 62, LATERAL_RECEIVER_ROLE, "Roschon Johnson"), 12)
+        self.assertEqual(receivingYardsOnPlay(description, 62, LATERAL_RECEIVER_ROLE, "Jaylon Johnson"), 0)
+        self.assertIsNotNone(descriptionNameRegex("Amon-Ra St. Brown").match("A.St. Brown to CAR 21"))
+        self.assertIsNotNone(descriptionNameRegex("Ty Johnson").match("Ty.Johnson pushed ob"))
 
     def test_yards_after_a_fumble_are_not_the_passers(self):
         description = "(Shotgun) S.Buechele pass short middle to T.Kelce to KC 37 for 2 yards (J.Adams). FUMBLES (J.Adams), recovered by KC-J.Smith-Schuster at KC 37. J.Smith-Schuster to KC 32 for -5 yards. Lateral to S.Buechele to KC 31 for -1 yards."

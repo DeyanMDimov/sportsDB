@@ -1528,7 +1528,8 @@ def retrievePlaysForMatch(s_match, teamId):
             # Attach existing stat splits to the play object for display
             play.passer_stats = passerStatSplit.objects.filter(play=play).first()
             play.rusher_stats = rusherStatSplit.objects.filter(play=play).first()
-            play.receiver_stats = receiverStatSplit.objects.filter(play=play).first()
+            # The catcher's row before anyone's who took a lateral after it.
+            play.receiver_stats = receiverStatSplit.objects.filter(play=play).order_by('playerRole').first()
             play.returner_stats = returnerStatSplit.objects.filter(play=play).first()
             
             result_plays_array.append(play)

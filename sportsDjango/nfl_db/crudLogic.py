@@ -1685,6 +1685,11 @@ ENFORCED_PENALTY_TEAM_REGEX = re.compile(r"PENALTY on ([A-Z]{2,3})-[^,]+, [^,]+,
 # A lateral straight after a gain, up to its own "for N yards": "for 4 yards.
 # Lateral to T.Henderson pushed ob at LV 45 for 12 yards".
 LATERAL_AFTER_GAIN_REGEX = re.compile(r"(?: \([^)]*\)| \[[^\]]*\])*\.\s*Lateral to (?:(?!FUMBLES).)*?(?=for (?:-?\d+ yards?|no gain))")
+# Receiver rows for a player who took a lateral after the catch rather than
+# making it, stored with playerPlayParticipant's "other" role.
+LATERAL_RECEIVER_ROLE = 20
+# Where the catcher is named: "pass short left to A.St. Brown ...".
+CATCHER_NAME_REGEX = re.compile(r"\bpass\b.*?\bto ")
 
 
 def namedFieldSpot(name):
@@ -1740,12 +1745,7 @@ def passingYardsOnPlay(playType, playDescription, yardsFromEndzone = None):
         return 0
     description = completedPassDescription(playDescription)
 
-    yardsMatches = []
-    yardsMatch = PLAY_YARDS_REGEX.search(description)
-    while yardsMatch != None:
-        yardsMatches.append(yardsMatch)
-        lateralMatch = LATERAL_AFTER_GAIN_REGEX.match(description, yardsMatch.end())
-        yardsMatch = PLAY_YARDS_REGEX.match(description, lateralMatch.end()) if lateralMatch != None else None
+    yardsMatches = yardsMatchesThroughLaterals(description)
     if len(yardsMatches) < 2:
         return yardsGainedOnPlay(description, yardsFromEndzone)
 
@@ -1755,8 +1755,49 @@ def passingYardsOnPlay(playType, playDescription, yardsFromEndzone = None):
     return yardsCreditedBeforePenaltySpot(description, yardsMatches[-1], gain, yardsFromEndzone)
 
 
-def receivingYardsOnPlay(playDescription, yardsFromEndzone = None):
-    return yardsGainedOnPlay(completedPassDescription(playDescription), yardsFromEndzone)
+def yardsMatchesThroughLaterals(description):
+    # The catch's "for N yards", then each lateral's after it.
+    yardsMatches = []
+    yardsMatch = PLAY_YARDS_REGEX.search(description)
+    while yardsMatch != None:
+        yardsMatches.append(yardsMatch)
+        lateralMatch = LATERAL_AFTER_GAIN_REGEX.match(description, yardsMatch.end())
+        yardsMatch = PLAY_YARDS_REGEX.match(description, lateralMatch.end()) if lateralMatch != None else None
+    return yardsMatches
+
+
+def lateralRecipientStarts(description, yardsMatches):
+    # Where each lateral's recipient is named, after "Lateral to ".
+    return [description.find("Lateral to ", previousMatch.end(), yardsMatch.start()) + len("Lateral to ")
+            for previousMatch, yardsMatch in zip(yardsMatches, yardsMatches[1:])]
+
+
+def receivingYardsOnPlay(playDescription, yardsFromEndzone = None, playerRole = 3, playerName = None):
+    # The catcher gets the yards up to the lateral; whoever takes a lateral
+    # (ESPN credits them receiving yards but no reception) gets the yards they
+    # carried it.
+    if playerRole != LATERAL_RECEIVER_ROLE:
+        return yardsGainedOnPlay(completedPassDescription(playDescription), yardsFromEndzone)
+    nameRegex = descriptionNameRegex(playerName or "")
+    if nameRegex == None:
+        return 0
+    description = completedPassDescription(playDescription)
+    yardsMatches = yardsMatchesThroughLaterals(description)
+    creditedYards = 0
+    for recipientStart, yardsMatch in zip(lateralRecipientStarts(description, yardsMatches), yardsMatches[1:]):
+        if nameRegex.match(description, recipientStart):
+            creditedYards += int(yardsMatch.group(1)) if yardsMatch.group(1) else 0
+    return creditedYards
+
+
+def descriptionNameRegex(playerName):
+    # How a play description names a player: first initial (sometimes two
+    # letters) and last name - "R.Johnson", "Ty.Johnson", "A.St. Brown". The
+    # initial matters here: Roschon and Jaylon Johnson can both be on a play.
+    nameParts = [part for part in playerName.split() if part.rstrip('.') not in ("Jr", "Sr", "II", "III", "IV", "V")]
+    if len(nameParts) < 2:
+        return None
+    return re.compile(re.escape(nameParts[0][0]) + r"[A-Za-z]*\." + re.escape(" ".join(nameParts[1:])) + r"\b")
 
 
 def completedPassDescription(playDescription):
@@ -2029,10 +2070,13 @@ def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
             continue
         countedReceiverPlayIds.add(receiverSplit.play_id)
         matchStats = statsByMatchId[receiverSplit.play.nflMatch_id]
-        matchStats['receptions'] += 1
-        # A catch is a target as well; incompletions are added from the descriptions.
-        matchStats['targets'] += 1
-        matchStats['receivingYards'] += receivingYardsOnPlay(receiverSplit.play.playDescription, receiverSplit.play.yardsFromEndzone)
+        # Taking a lateral isn't a catch, or a target.
+        if receiverSplit.playerRole != LATERAL_RECEIVER_ROLE:
+            matchStats['receptions'] += 1
+            # A catch is a target as well; incompletions are added from the descriptions.
+            matchStats['targets'] += 1
+        matchStats['receivingYards'] += receivingYardsOnPlay(receiverSplit.play.playDescription, receiverSplit.play.yardsFromEndzone,
+                                                             receiverSplit.playerRole, playerObj.name)
         if receiverSplit.receivingTdScored:
             matchStats['receivingTds'] += 1
 
@@ -2112,14 +2156,16 @@ TEAM_WEEKLY_STATS = {
     "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     # Each rusher row is one carry.
     "rushingAttempts": (rusherStatSplit, lambda statSplit: 1),
-    "receivingYards": (receiverStatSplit, lambda statSplit: receivingYardsOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
-    # Receiver rows are only written for catches, so each one is a reception.
-    "receptions": (receiverStatSplit, lambda statSplit: 1),
+    "receivingYards": (receiverStatSplit, lambda statSplit: receivingYardsOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone,
+                                                                                 statSplit.playerRole, statSplit.player.name)),
+    # Receiver rows are written for catches, so each one is a reception -
+    # except a lateral taken after someone else's catch.
+    "receptions": (receiverStatSplit, lambda statSplit: 0 if statSplit.playerRole == LATERAL_RECEIVER_ROLE else 1),
     "rushingTds": (rusherStatSplit, lambda statSplit: 1 if statSplit.rushingTdScored else 0),
     "receivingTds": (receiverStatSplit, lambda statSplit: 1 if statSplit.receivingTdScored else 0),
     # Matchup page -> Scoring: touches from the 20 or closer.
     "redZoneCarries": (rusherStatSplit, lambda statSplit: 1 if statSplit.play.yardsFromEndzone != None and statSplit.play.yardsFromEndzone <= 20 else 0),
-    "redZoneReceptions": (receiverStatSplit, lambda statSplit: 1 if statSplit.play.yardsFromEndzone != None and statSplit.play.yardsFromEndzone <= 20 else 0),
+    "redZoneReceptions": (receiverStatSplit, lambda statSplit: 1 if statSplit.playerRole != LATERAL_RECEIVER_ROLE and statSplit.play.yardsFromEndzone != None and statSplit.play.yardsFromEndzone <= 20 else 0),
     # Matchup page -> Special Teams: kickoff and punt return yards.
     "returnYards": (returnerStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription)),
     # Snap counts are stored per game, not per play: read from playerMatchUsage.
@@ -4126,6 +4172,79 @@ def processPlayParticipants(play, participants_data):
         except Exception as e:
             print(f"Error processing participant for play {play.id}: {e}")
 
+    try:
+        creditLateralReceivers(play, participants_data)
+    except Exception as e:
+        print(f"Error crediting lateral receivers for play {play.id}: {e}")
+
+def creditLateralReceivers(play, participants_data):
+    """
+    A catch that's lateraled on: the catcher keeps the reception and the yards
+    up to the lateral, each player who takes a lateral gets receiver credit for
+    the yards they carried it (no reception), and the touchdown, if any, goes
+    to whoever scored. ESPN lists the lateral takers as "other" participants,
+    as the receiver in place of the catcher now and then, or (in older games)
+    not at all - so go by the names in the description, looking past the
+    participants to the rest of the team when it has to.
+    """
+    if playTypeBeforeFumble(play.playType, play.playDescription) != 2:
+        return
+    description = completedPassDescription(play.playDescription)
+    yardsMatches = yardsMatchesThroughLaterals(description)
+    if len(yardsMatches) < 2:
+        return
+    catcherName = CATCHER_NAME_REGEX.search(description, 0, yardsMatches[0].start())
+    recipientStarts = lateralRecipientStarts(description, yardsMatches)
+
+    athleteIds = [extractAthleteIdFromRef(participant.get('athlete', {}).get('$ref', '')) for participant in participants_data]
+    # Only players already on file: an unknown "other" may well be a defender.
+    participantPlayers = list(player.objects.filter(espnId__in = [athleteId for athleteId in athleteIds if athleteId]))
+    teamPlayers = []
+
+    def playerNamedAt(nameStart):
+        named = [playerObj for playerObj in participantPlayers if nameMatchesAt(playerObj, description, nameStart)]
+        if len(named) == 0:
+            if len(teamPlayers) == 0:
+                teamPlayers.extend(playersOnTeamInSeason(play.teamOnOffense, play.nflMatch.yearOfSeason))
+            named = [playerObj for playerObj in teamPlayers if nameMatchesAt(playerObj, description, nameStart)]
+        # Two teammates who'd be written the same way: can't tell which.
+        return named[0] if len(named) == 1 else None
+
+    catcher = playerNamedAt(catcherName.end()) if catcherName != None else None
+    recipients = [playerNamedAt(recipientStart) for recipientStart in recipientStarts]
+    offenseScored = play.scoringPlay and play.offenseScored
+
+    for playerObj in set([catcher] + recipients) - {None}:
+        role = 3 if playerObj == catcher else LATERAL_RECEIVER_ROLE
+        tdScored = bool(offenseScored and recipients[-1] == playerObj)
+        # Re-pulled games can carry repeat rows for a play; keep them in step.
+        existingRows = receiverStatSplit.objects.filter(play = play, player = playerObj)
+        if existingRows.exists():
+            existingRows.update(playerRole = role, receivingTdScored = tdScored)
+        else:
+            receiverStatSplit.objects.create(
+                play = play,
+                player = playerObj,
+                currentTenure = playerTeamTenure.objects.filter(player = playerObj, team = play.teamOnOffense).first(),
+                playerRole = role,
+                playerPosition = 3,
+                receivingTdScored = tdScored,
+            )
+
+def nameMatchesAt(playerObj, description, nameStart):
+    nameRegex = descriptionNameRegex(playerObj.name)
+    return nameRegex != None and nameRegex.match(description, nameStart) != None
+
+def playersOnTeamInSeason(team, seasonYear):
+    # Whoever was on the team's weekly rosters that season, or has stat rows
+    # for it - player.team only says where someone was last pulled with.
+    playerIds = set(playerWeekStatus.objects.filter(team = team, yearOfSeason = seasonYear).values_list('player_id', flat = True))
+    for splitModel in [passerStatSplit, rusherStatSplit, receiverStatSplit]:
+        playerIds.update(splitModel.objects.filter(
+            play__teamOnOffense = team, play__nflMatch__yearOfSeason = seasonYear,
+        ).values_list('player_id', flat = True))
+    return list(player.objects.filter(id__in = playerIds))
+
 def extractAthleteIdFromRef(ref_url):
     """Extract athlete ID from ESPN API reference URL"""
     try:
@@ -4547,7 +4666,7 @@ PLAYER_RANKING_STATS_BY_POSITION = {
 }
 
 
-def playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdScored):
+def playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdScored, playerRole = 3, playerName = None):
     # What one play is worth for the chosen stat, matching how the Performances
     # tab counts the same thing.
     if statKey == "passingYards":
@@ -4561,8 +4680,10 @@ def playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdSco
     if statKey == "rushingYards":
         return yardsGainedOnPlay(playDescription, yardsFromEndzone)
     if statKey == "receivingYards":
-        return receivingYardsOnPlay(playDescription, yardsFromEndzone)
-    if statKey in ["rushingAttempts", "receptions"]:
+        return receivingYardsOnPlay(playDescription, yardsFromEndzone, playerRole, playerName)
+    if statKey == "receptions":
+        return 0 if playerRole == LATERAL_RECEIVER_ROLE else 1
+    if statKey == "rushingAttempts":
         return 1
     return 0
 
@@ -4579,13 +4700,13 @@ def getPlayerRankings(seasonYear, playerPosition, statKey, weekParam):
     countedPlays = set()
     valuesByPlayerId = {}
     teamPlayCountsByPlayerId = {}
-    for playerId, playId, weekOfSeason, teamOnOffenseId, playType, playDescription, yardsFromEndzone, tdScored in splitModel.objects.filter(
+    for playerId, playId, weekOfSeason, teamOnOffenseId, playType, playDescription, yardsFromEndzone, tdScored, playerRole, playerName in splitModel.objects.filter(
         player__playerPosition = int(playerPosition),
         play__nflMatch__yearOfSeason = int(seasonYear),
         play__nflMatch__weekOfSeason__in = weekNumbers,
     ).values_list(
         'player_id', 'play_id', 'play__nflMatch__weekOfSeason', 'play__teamOnOffense_id',
-        'play__playType', 'play__playDescription', 'play__yardsFromEndzone', tdFieldName,
+        'play__playType', 'play__playDescription', 'play__yardsFromEndzone', tdFieldName, 'playerRole', 'player__name',
     ):
         if playWasNullified(playDescription) or (playerId, playId) in countedPlays:
             continue
@@ -4597,7 +4718,7 @@ def getPlayerRankings(seasonYear, playerPosition, statKey, weekParam):
         teamCounts[teamOnOffenseId] = teamCounts.get(teamOnOffenseId, 0) + 1
 
         playerWeeks = valuesByPlayerId.setdefault(playerId, {})
-        playerWeeks[weekOfSeason] = playerWeeks.get(weekOfSeason, 0) + playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdScored)
+        playerWeeks[weekOfSeason] = playerWeeks.get(weekOfSeason, 0) + playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdScored, playerRole, playerName)
 
     if len(valuesByPlayerId) == 0:
         return weekNumbers, []
@@ -4854,10 +4975,10 @@ def getMatchupSeasonStats(seasonYear):
     # game with any catches stored start at 0 for every position.
     receivingStats = {}
     countedCatches = set()
-    for playerId, playId, matchId, offenseTeamId, playDescription, yardsFromEndzone, playerPosition in receiverStatSplit.objects.filter(
+    for playerId, playId, matchId, offenseTeamId, playDescription, yardsFromEndzone, playerPosition, playerRole, playerName in receiverStatSplit.objects.filter(
         play__nflMatch_id__in = list(seasonMatches),
     ).values_list('player_id', 'play_id', 'play__nflMatch_id', 'play__teamOnOffense_id',
-                  'play__playDescription', 'play__yardsFromEndzone', 'player__playerPosition'):
+                  'play__playDescription', 'play__yardsFromEndzone', 'player__playerPosition', 'playerRole', 'player__name'):
         for teamEspnId in seasonMatches[matchId][1:]:
             receivingStats.setdefault((matchId, teamEspnId), dict.fromkeys(MATCHUP_RECEIVING_KEYS, 0))
         positionKey = MATCHUP_RECEIVING_POSITION_KEYS.get(playerPosition)
@@ -4865,7 +4986,7 @@ def getMatchupSeasonStats(seasonYear):
         if positionKey == None or (matchId, receivingTeam) not in receivingStats or (playerId, playId) in countedCatches or playWasNullified(playDescription):
             continue
         countedCatches.add((playerId, playId))
-        receivingStats[(matchId, receivingTeam)][positionKey] += receivingYardsOnPlay(playDescription, yardsFromEndzone)
+        receivingStats[(matchId, receivingTeam)][positionKey] += receivingYardsOnPlay(playDescription, yardsFromEndzone, playerRole, playerName)
 
     for matchId, matchDrives in drivesByMatch.items():
         matchDrives.sort(key = lambda drive: drive['sequence'] or 0)
