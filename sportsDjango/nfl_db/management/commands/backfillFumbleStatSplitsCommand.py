@@ -1,5 +1,5 @@
 from nfl_db.models import nflMatch, playByPlay, passerStatSplit, rusherStatSplit, receiverStatSplit
-from nfl_db.crudLogic import FUMBLE_PLAY_TYPES, processPlayParticipants
+from nfl_db.crudLogic import FUMBLE_PLAY_TYPES, processPlayParticipants, playTypeBeforeFumble
 from django.core.management.base import BaseCommand
 
 import requests
@@ -7,6 +7,14 @@ import time as clock
 
 
 OFFENSIVE_SPLIT_MODELS = [passerStatSplit, rusherStatSplit, receiverStatSplit]
+# What happened before the fumble -> the splits that calls for: a catch has a
+# passer and a receiver, an incompletion or a sack a passer, a carry a rusher.
+SPLIT_MODELS_BY_PLAY_TYPE = {
+    2: [passerStatSplit, receiverStatSplit],
+    3: [passerStatSplit],
+    4: [passerStatSplit],
+    1: [rusherStatSplit],
+}
 
 
 def fetchPlayParticipantsForMatch(matchEspnId):
@@ -62,14 +70,21 @@ class Command(BaseCommand):
         if options['match'] != None:
             fumblePlays = fumblePlays.filter(nflMatch__espnId = int(options['match']))
 
-        playIdsWithSplits = set()
+        # Plays missing a split their reading calls for. Splits are written with
+        # get_or_create, so going over a play that has some of them is harmless.
+        playIdsBySplitModel = {}
         for splitModel in OFFENSIVE_SPLIT_MODELS:
-            playIdsWithSplits.update(splitModel.objects.filter(play__in = fumblePlays).values_list('play_id', flat = True))
-        playsToFill = fumblePlays.exclude(id__in = playIdsWithSplits)
+            playIdsBySplitModel[splitModel] = set(splitModel.objects.filter(play__in = fumblePlays).values_list('play_id', flat = True))
+        playIdsToFill = [
+            play.id for play in fumblePlays.only('id', 'playType', 'playDescription')
+            if any(play.id not in playIdsBySplitModel[splitModel]
+                   for splitModel in SPLIT_MODELS_BY_PLAY_TYPE.get(playTypeBeforeFumble(play.playType, play.playDescription), []))
+        ]
+        playsToFill = fumblePlays.filter(id__in = playIdsToFill)
 
         matchEspnIds = sorted(set(playsToFill.values_list('nflMatch__espnId', flat = True)))
 
-        print("Fumble plays without passer/rusher/receiver splits: " + str(playsToFill.count())
+        print("Fumble plays missing a passer/rusher/receiver split: " + str(playsToFill.count())
               + " across " + str(len(matchEspnIds)) + " matches")
 
         totalPlaysFilled = 0

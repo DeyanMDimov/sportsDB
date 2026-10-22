@@ -1667,9 +1667,13 @@ PERFORMANCE_STATS_BY_POSITION = {
 PERFORMANCE_POSITIONS = [(1, "QB"), (4, "RB"), (2, "WR"), (3, "TE")]
 
 PLAY_YARDS_REGEX = re.compile(r"for (-?\d+) yards?|for no gain")
-# Scoring plays sometimes carry ESPN's summary wording instead: "JuJu
-# Smith-Schuster 13 Yd pass from Patrick Mahomes".
-SCORING_PLAY_YARDS_REGEX = re.compile(r"(-?\d+) Yd\b")
+# Some plays carry ESPN's summary wording instead: "JuJu Smith-Schuster 13 Yd
+# pass from Patrick Mahomes", "Daniel Jones Pass Complete for 48 Yds to Laquon Treadwell".
+SCORING_PLAY_YARDS_REGEX = re.compile(r"(-?\d+) Yds?\b")
+# After a replay reversal ESPN repeats the play as it now stands: "...and the
+# play was REVERSED.(Shotgun) T.Lawrence pass short left to P.Washington ran ob
+# at CIN 41 for 7 yards".
+REPLAY_REVERSED_REGEX = re.compile(r"the play was REVERSED\.\s*")
 # Field spots read "CIN 27", or just "50" at midfield.
 FIELD_SPOT_PATTERN = r"(?:([A-Z]{2,3}) )?(\d{1,2})"
 # Where the ball ended up, right before the gain: "to CIN 5 for 87 yards",
@@ -1682,11 +1686,29 @@ ENFORCED_PENALTY_TEAM_REGEX = re.compile(r"PENALTY on ([A-Z]{2,3})-[^,]+, [^,]+,
 # Lateral to T.Henderson pushed ob at LV 45 for 12 yards".
 LATERAL_AFTER_GAIN_REGEX = re.compile(r"(?: \([^)]*\)| \[[^\]]*\])*\.\s*Lateral to (?:(?!FUMBLES).)*?(?=for (?:-?\d+ yards?|no gain))")
 
+
+def namedFieldSpot(name):
+    return r"(?:(?P<" + name + r"Team>[A-Z]{2,3}) )?(?P<" + name + r"Line>\d{1,2})"
+
+
+# A fumble straight after a gain, and who ended up with the ball where:
+# "for 17 yards (D.Ward). FUMBLES (D.Ward), recovered by JAX-B.Tuten at CLV 41",
+# "FUMBLES (N.Dean), touched at NO 40, RECOVERED by LV-E.Stokes at NO 35",
+# "FUMBLES (J.Sherwood), and recovers at GB 43". ESPN writes "recovered" in
+# lower case for a teammate and upper case for the other team.
+FUMBLE_RECOVERY_REGEX = re.compile(
+    r"(?: \([^)]*\)| \[[^\]]*\])*[.,]?\s*FUMBLES(?: \([^)]*\))?(?: \[[^\]]*\])*,"
+    r"(?: touched at " + namedFieldSpot("touched") + r",)?"
+    r" (?:(?P<fumblerRecovered>and recovers)|(?P<teammateRecovered>recovered by)|(?P<opponentRecovered>RECOVERED by)|(?P<outOfBounds>ball out of bounds))"
+    r"(?: [A-Z]{2,3}-.+?)? at " + namedFieldSpot("recovered") + r"\b")
+# The fumbler picking the ball back up and carrying on: ". T.Tremble to ATL 7 for 2 yards".
+ADVANCE_AFTER_OWN_RECOVERY_REGEX = re.compile(r"\.\s*[A-Z][A-Za-z]?\.[A-Za-z'-]+ (?:to|ran ob at|pushed ob at) " + FIELD_SPOT_PATTERN + r" (?:for (-?\d+) yards?|for no gain)")
+
 # ESPN types a play that ends in a fumble by the recovery - "Fumble Recovery
 # (Opponent)", "Sack Opp Fumble Recovery" - whatever came before it.
 FUMBLE_PLAY_TYPES = [17, 18, 19, 20]
 SACKED_REGEX = re.compile(r"\bsacked\b")
-COMPLETED_PASS_REGEX = re.compile(r"\bpass (?!incomplete).*?\bto\b.*?for (?:-?\d+ yards?|no gain)|\d+ Yd pass from\b")
+COMPLETED_PASS_REGEX = re.compile(r"\bpass (?!incomplete).*?\bto\b.*?for (?:-?\d+ yards?|no gain)|\d+ Yd pass from\b|\bPass Complete for\b")
 INCOMPLETE_PASS_REGEX = re.compile(r"\bpass incomplete\b")
 
 
@@ -1694,10 +1716,13 @@ def playTypeBeforeFumble(playType, playDescription):
     # The catch, carry or sack before a fumble still counts for whoever made
     # it, so read which one it was off the description. A fumbled snap the
     # quarterback picks up and throws away is an incompletion; anything else
-    # that isn't a pass or a sack was a carry, aborted snaps included.
+    # that isn't a pass or a sack was a carry, aborted snaps included. An
+    # interception the returner then fumbles is still just an interception.
     if playType not in FUMBLE_PLAY_TYPES:
         return playType
-    description = playDescription or ""
+    description = playAsRuled(playDescription)
+    if "INTERCEPTED" in description:
+        return 15
     if SACKED_REGEX.search(description):
         return 4
     if COMPLETED_PASS_REGEX.search(description):
@@ -1713,9 +1738,7 @@ def passingYardsOnPlay(playType, playDescription, yardsFromEndzone = None):
     # passer is credited with the whole play.
     if playTypeBeforeFumble(playType, playDescription) != 2:
         return 0
-    description = playDescription or ""
-    if "REVERSED" in description:
-        return yardsGainedOnPlay(description, yardsFromEndzone)
+    description = completedPassDescription(playDescription)
 
     yardsMatches = []
     yardsMatch = PLAY_YARDS_REGEX.search(description)
@@ -1732,19 +1755,90 @@ def passingYardsOnPlay(playType, playDescription, yardsFromEndzone = None):
     return yardsCreditedBeforePenaltySpot(description, yardsMatches[-1], gain, yardsFromEndzone)
 
 
+def receivingYardsOnPlay(playDescription, yardsFromEndzone = None):
+    return yardsGainedOnPlay(completedPassDescription(playDescription), yardsFromEndzone)
+
+
+def completedPassDescription(playDescription):
+    # The catch is the description from the pass on. That's the whole play
+    # unless the quarterback fumbled the snap first: "C.Humphrey to KC 16 for -4
+    # yards. FUMBLES, recovered by KC-P.Mahomes at KC 16. P.Mahomes pass short
+    # left to K.Walker pushed ob at KC 31 for 11 yards".
+    description = playAsRuled(playDescription)
+    passMatch = COMPLETED_PASS_REGEX.search(description)
+    return description[passMatch.start():] if passMatch != None else description
+
+
+def playAsRuled(playDescription):
+    # A reversed two-point try after a touchdown leaves the play itself as it was.
+    ruledParts = [part for part in REPLAY_REVERSED_REGEX.split(playDescription or "") if not part.startswith("TWO-POINT CONVERSION")]
+    return ruledParts[-1]
+
+
 def yardsGainedOnPlay(playDescription, yardsFromEndzone = None):
     # The first "for N yards" in a description is the gain on the play itself;
-    # anything after it belongs to a penalty or a return.
-    description = playDescription or ""
+    # anything after it belongs to a penalty, a fumble or a return.
+    description = playAsRuled(playDescription)
     yardsMatch = PLAY_YARDS_REGEX.search(description)
     if yardsMatch != None:
         gain = int(yardsMatch.group(1)) if yardsMatch.group(1) else 0
+        # An enforced penalty spot takes precedence over where a fumble went.
+        fumbleMatch = FUMBLE_RECOVERY_REGEX.match(description, yardsMatch.end())
+        if fumbleMatch != None and PENALTY_ENFORCED_SPOT_REGEX.search(description) == None:
+            return yardsCreditedBeforeFumble(description, yardsMatch, fumbleMatch, gain, yardsFromEndzone)
         return yardsCreditedBeforePenaltySpot(description, yardsMatch, gain, yardsFromEndzone)
 
     scoringMatch = SCORING_PLAY_YARDS_REGEX.search(description)
     if scoringMatch != None:
         return int(scoringMatch.group(1))
     return 0
+
+
+def fieldSideOfPlay(description, yardsMatch, gain, yardsFromEndzone):
+    # Spots are written from either team's side, so pin down one team's
+    # abbreviation and whether it's the defense, off the end-of-play spot placed
+    # by where the play started and how far it went. (None, None) when the end
+    # spot names no team (midfield, or no spot at all); None when it doesn't fit.
+    endSpot = PLAY_END_SPOT_REGEX.search(description[:yardsMatch.start()])
+    if endSpot == None or not endSpot.group(1):
+        return (None, None)
+    knownTeam, endSpotYardLine = endSpot.group(1), int(endSpot.group(2))
+    endYardsFromEndzone = yardsFromEndzone - gain
+    if endSpotYardLine == endYardsFromEndzone:
+        return (knownTeam, True)
+    if 100 - endSpotYardLine == endYardsFromEndzone:
+        return (knownTeam, False)
+    return None
+
+
+def spotYardsFromEndzone(spotTeam, spotYardLine, knownTeam, knownTeamIsDefense):
+    if not spotTeam or spotYardLine == 50:
+        return spotYardLine
+    return spotYardLine if (spotTeam == knownTeam) == knownTeamIsDefense else 100 - spotYardLine
+
+
+def yardsCreditedBeforeFumble(description, yardsMatch, fumbleMatch, gain, yardsFromEndzone):
+    # The ball carrier is credited up to where the fumble was first touched or
+    # recovered, so a ball knocked backwards costs the yards it went back.
+    # Someone else ending up with it further on doesn't add any; the fumbler
+    # picking it back up does, along with any yards carried on from there.
+    if yardsFromEndzone == None:
+        return gain
+    fieldSide = fieldSideOfPlay(description, yardsMatch, gain, yardsFromEndzone)
+    if fieldSide == None:
+        return gain
+    knownTeam, knownTeamIsDefense = fieldSide
+
+    spotName = "touched" if fumbleMatch.group("touchedLine") and not fumbleMatch.group("fumblerRecovered") else "recovered"
+    spotTeam, spotYardLine = fumbleMatch.group(spotName + "Team"), int(fumbleMatch.group(spotName + "Line"))
+    if spotTeam and knownTeam == None and spotYardLine != 50:
+        return gain
+    yardsToSpot = yardsFromEndzone - spotYardsFromEndzone(spotTeam, spotYardLine, knownTeam, knownTeamIsDefense)
+
+    if fumbleMatch.group("fumblerRecovered"):
+        advance = ADVANCE_AFTER_OWN_RECOVERY_REGEX.match(description, fumbleMatch.end())
+        return yardsToSpot + (int(advance.group(3)) if advance != None and advance.group(3) else 0)
+    return min(gain, yardsToSpot)
 
 
 def yardsCreditedBeforePenaltySpot(description, yardsMatch, gain, yardsFromEndzone):
@@ -1758,21 +1852,11 @@ def yardsCreditedBeforePenaltySpot(description, yardsMatch, gain, yardsFromEndzo
     if len(enforcedSpots) == 0 or yardsFromEndzone == None:
         return gain
 
-    # Spots are written from either team's side, so pin down one team's
-    # abbreviation and which side it is. Normally that's the end-of-play spot,
-    # placed by where the play started and how far it went.
-    endSpot = PLAY_END_SPOT_REGEX.search(description[:yardsMatch.start()])
-    endYardsFromEndzone = yardsFromEndzone - gain
-    knownTeam = None
-    if endSpot != None and endSpot.group(1):
-        knownTeam, endSpotYardLine = endSpot.group(1), int(endSpot.group(2))
-        if endSpotYardLine == endYardsFromEndzone:
-            knownTeamIsDefense = True
-        elif 100 - endSpotYardLine == endYardsFromEndzone:
-            knownTeamIsDefense = False
-        else:
-            return gain
-    elif "TOUCHDOWN NULLIFIED" in description and ENFORCED_PENALTY_TEAM_REGEX.search(description) != None:
+    fieldSide = fieldSideOfPlay(description, yardsMatch, gain, yardsFromEndzone)
+    if fieldSide == None:
+        return gain
+    knownTeam, knownTeamIsDefense = fieldSide
+    if knownTeam == None and "TOUCHDOWN NULLIFIED" in description and ENFORCED_PENALTY_TEAM_REGEX.search(description) != None:
         # "for 53 yards, TOUCHDOWN NULLIFIED by Penalty" has no end spot, but
         # only an offensive foul takes a touchdown away.
         knownTeam = ENFORCED_PENALTY_TEAM_REGEX.search(description).group(1)
@@ -1781,10 +1865,8 @@ def yardsCreditedBeforePenaltySpot(description, yardsMatch, gain, yardsFromEndzo
     creditedYards = gain
     for spotTeam, spotYardLine in enforcedSpots:
         spotYardLine = int(spotYardLine)
-        if spotTeam == "" or spotYardLine == 50:
-            spotYardsFromEndzone = spotYardLine
-        elif knownTeam != None:
-            spotYardsFromEndzone = spotYardLine if (spotTeam == knownTeam) == knownTeamIsDefense else 100 - spotYardLine
+        if spotTeam == "" or spotYardLine == 50 or knownTeam != None:
+            enforcedYardsFromEndzone = spotYardsFromEndzone(spotTeam, spotYardLine, knownTeam, knownTeamIsDefense)
         else:
             # No side to go on (the play ended at midfield): take whichever
             # reading of the spot lands between the snap and the end of the play.
@@ -1792,11 +1874,11 @@ def yardsCreditedBeforePenaltySpot(description, yardsMatch, gain, yardsFromEndzo
                              if min(0, gain) <= yardsFromEndzone - yardLine <= max(0, gain)]
             if len(possibleSpots) != 1:
                 return gain
-            spotYardsFromEndzone = possibleSpots[0]
+            enforcedYardsFromEndzone = possibleSpots[0]
 
         # A spot behind the line of scrimmage credits nothing, and a spot past
         # the end of the play (a dead-ball foul after it) doesn't add any.
-        yardsToSpot = yardsFromEndzone - spotYardsFromEndzone
+        yardsToSpot = yardsFromEndzone - enforcedYardsFromEndzone
         yardsToSpot = max(min(0, gain), min(max(0, gain), yardsToSpot))
         if abs(yardsToSpot) < abs(creditedYards):
             creditedYards = yardsToSpot
@@ -1950,7 +2032,7 @@ def addSplitPerformanceStats(statsByMatchId, seasonMatches, playerObj):
         matchStats['receptions'] += 1
         # A catch is a target as well; incompletions are added from the descriptions.
         matchStats['targets'] += 1
-        matchStats['receivingYards'] += yardsGainedOnPlay(receiverSplit.play.playDescription, receiverSplit.play.yardsFromEndzone)
+        matchStats['receivingYards'] += receivingYardsOnPlay(receiverSplit.play.playDescription, receiverSplit.play.yardsFromEndzone)
         if receiverSplit.receivingTdScored:
             matchStats['receivingTds'] += 1
 
@@ -2030,7 +2112,7 @@ TEAM_WEEKLY_STATS = {
     "rushingYards": (rusherStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     # Each rusher row is one carry.
     "rushingAttempts": (rusherStatSplit, lambda statSplit: 1),
-    "receivingYards": (receiverStatSplit, lambda statSplit: yardsGainedOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
+    "receivingYards": (receiverStatSplit, lambda statSplit: receivingYardsOnPlay(statSplit.play.playDescription, statSplit.play.yardsFromEndzone)),
     # Receiver rows are only written for catches, so each one is a reception.
     "receptions": (receiverStatSplit, lambda statSplit: 1),
     "rushingTds": (rusherStatSplit, lambda statSplit: 1 if statSplit.rushingTdScored else 0),
@@ -4476,8 +4558,10 @@ def playRankingValue(statKey, playType, playDescription, yardsFromEndzone, tdSco
         return 1 if playTypeBeforeFumble(playType, playDescription) == 4 else 0
     if statKey in ["passingTds", "rushingTds", "receivingTds"]:
         return 1 if tdScored else 0
-    if statKey in ["rushingYards", "receivingYards"]:
+    if statKey == "rushingYards":
         return yardsGainedOnPlay(playDescription, yardsFromEndzone)
+    if statKey == "receivingYards":
+        return receivingYardsOnPlay(playDescription, yardsFromEndzone)
     if statKey in ["rushingAttempts", "receptions"]:
         return 1
     return 0
@@ -4781,7 +4865,7 @@ def getMatchupSeasonStats(seasonYear):
         if positionKey == None or (matchId, receivingTeam) not in receivingStats or (playerId, playId) in countedCatches or playWasNullified(playDescription):
             continue
         countedCatches.add((playerId, playId))
-        receivingStats[(matchId, receivingTeam)][positionKey] += yardsGainedOnPlay(playDescription, yardsFromEndzone)
+        receivingStats[(matchId, receivingTeam)][positionKey] += receivingYardsOnPlay(playDescription, yardsFromEndzone)
 
     for matchId, matchDrives in drivesByMatch.items():
         matchDrives.sort(key = lambda drive: drive['sequence'] or 0)

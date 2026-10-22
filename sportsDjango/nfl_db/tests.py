@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from nfl_db.crudLogic import yardsGainedOnPlay, passingYardsOnPlay, playTypeBeforeFumble
+from nfl_db.crudLogic import yardsGainedOnPlay, passingYardsOnPlay, receivingYardsOnPlay, playTypeBeforeFumble
 
 
 class YardsGainedOnPlayTests(SimpleTestCase):
@@ -33,6 +33,38 @@ class YardsGainedOnPlayTests(SimpleTestCase):
         description = "J.Warren up the middle to CIN 5 for 87 yards (J.Battle).PENALTY on PIT-D.Metcalf, Offensive Holding, 7 yards, enforced at PIT 14."
         self.assertEqual(yardsGainedOnPlay(description), 87)
 
+    def test_replay_reversal_reads_the_play_as_it_now_stands(self):
+        description = "(Shotgun) T.Lawrence pass short left to P.Washington to CIN 16 for 39 yards (D.Hill).The Replay Official reviewed the runner was inbounds ruling, and the play was REVERSED.(Shotgun) T.Lawrence pass short left to P.Washington ran ob at CIN 48 for 7 yards."
+        self.assertEqual(yardsGainedOnPlay(description, 55), 7)
+
+    def test_reversed_two_point_try_leaves_the_touchdown_alone(self):
+        description = "(Shotgun) B.Hall right end for 27 yards, TOUCHDOWN. TWO-POINT CONVERSION ATTEMPT. J.Fields pass to I.Davis is complete. ATTEMPT FAILS.The Replay Official reviewed the short of the goal line ruling, and the play was REVERSED.TWO-POINT CONVERSION ATTEMPT. J.Fields pass to I.Davis is complete. ATTEMPT SUCCEEDS."
+        self.assertEqual(yardsGainedOnPlay(description, 27), 27)
+
+    def test_espn_summary_wording(self):
+        self.assertEqual(yardsGainedOnPlay("Daniel Jones Pass Complete for 48 Yds to Laquon Treadwell"), 48)
+        self.assertEqual(yardsGainedOnPlay("JuJu Smith-Schuster 13 Yd pass from Patrick Mahomes"), 13)
+
+    def test_fumble_recovered_by_the_other_team_behind_the_fumble(self):
+        description = "(No Huddle, Shotgun) M.Stafford pass short middle to T.Higbee to LA 44 for 5 yards (F.Warner; D.Greenlaw). FUMBLES (F.Warner), RECOVERED by SF-K.White at LA 43."
+        self.assertEqual(yardsGainedOnPlay(description, 61), 4)
+
+    def test_fumble_credited_to_where_it_was_first_touched(self):
+        description = "(Shotgun) C.Keenum pass short right to R.Odunze to GB 31 for 9 yards (Z.Franklin). FUMBLES (Z.Franklin), touched at GB 37, RECOVERED by GB-E.Williams at GB 43."
+        self.assertEqual(yardsGainedOnPlay(description, 40), 3)
+        description = "(Shotgun) C.Ward scrambles right end to TEN 15 for 1 yard. FUMBLES, touched at TEN 14, ball out of bounds at TEN 14."
+        self.assertEqual(yardsGainedOnPlay(description, 86), 0)
+
+    def test_teammate_recovery_behind_the_fumble(self):
+        description = "(Shotgun) T.Lawrence pass deep right to Bri.Thomas to CLV 36 for 17 yards (D.Ward; C.Schwesinger). FUMBLES (D.Ward), recovered by JAX-B.Tuten at CLV 41."
+        self.assertEqual(yardsGainedOnPlay(description, 53), 12)
+
+    def test_fumbler_recovering_and_carrying_on(self):
+        description = "(No Huddle, Shotgun) B.Young pass short left to T.Tremble to ATL 11 for no gain (X.Watts). FUMBLES (X.Watts), and recovers at ATL 9. T.Tremble to ATL 7 for 2 yards (X.Watts)."
+        self.assertEqual(yardsGainedOnPlay(description, 11), 4)
+        description = "(Shotgun) K.Cousins pass short left to J.Bech to LAC 7 for 16 yards (D.Jackson). FUMBLES (D.Jackson), and recovers at LAC 3. J.Bech ran ob at LAC 3 for no gain."
+        self.assertEqual(yardsGainedOnPlay(description, 23), 20)
+
 
 class FumbledPlayTests(SimpleTestCase):
     def test_fumbled_catch_is_a_completion(self):
@@ -52,6 +84,26 @@ class FumbledPlayTests(SimpleTestCase):
     def test_fumbled_snap_thrown_away_is_an_incompletion(self):
         description = "(Shotgun) C.Humphrey to KC 46 for -1 yards. FUMBLES, recovered by KC-P.Mahomes at KC 43. P.Mahomes pass incomplete short right to K.Walker."
         self.assertEqual(playTypeBeforeFumble(17, description), 3)
+
+    def test_fumbled_interception_is_an_interception(self):
+        description = "(Shotgun) T.Shough pass short left intended for B.Lance INTERCEPTED by H.Masses [M.Koonce] at NO 43. H.Masses to NO 8 for 35 yards (J.Johnson). FUMBLES (J.Johnson), touched at NO 7, recovered by LV-A.Butler at NO 4."
+        self.assertEqual(playTypeBeforeFumble(17, description), 15)
+        self.assertEqual(passingYardsOnPlay(17, description, 57), 0)
+
+    def test_fumbled_catch_in_summary_wording(self):
+        description = "Bryce Young Pass Complete for 21 Yds to Tetairoa McMillan Tetairoa McMillan Fumble Devin Bush 0 Yd Fumble Recovery"
+        self.assertEqual(playTypeBeforeFumble(19, description), 2)
+        self.assertEqual(passingYardsOnPlay(19, description), 21)
+
+    def test_catch_reversed_to_an_incompletion(self):
+        description = "(Shotgun) S.Rhyan to GB 33 for -5 yards. FUMBLES, recovered by GB-J.Love at GB 33. J.Love pass short right to L.Musgrave to GB 40 for 2 yards (D.Flannigan-Fowles). FUMBLES (D.Flannigan-Fowles), RECOVERED by NYG-D.Flannigan-Fowles at GB 41.The Replay Official reviewed the pass completion ruling, and the play was REVERSED.(Shotgun) S.Rhyan to GB 33 for -5 yards. FUMBLES, recovered by GB-J.Love at GB 33. J.Love pass incomplete short right to L.Musgrave (D.Flannigan-Fowles)."
+        self.assertEqual(playTypeBeforeFumble(17, description), 3)
+
+    def test_fumbled_snap_then_a_catch(self):
+        description = "(Shotgun) C.Humphrey to KC 16 for -4 yards. FUMBLES, recovered by KC-P.Mahomes at KC 16. P.Mahomes pass short left to K.Walker pushed ob at KC 31 for 11 yards (J.Barron)."
+        self.assertEqual(playTypeBeforeFumble(17, description), 2)
+        self.assertEqual(passingYardsOnPlay(17, description, 80), 11)
+        self.assertEqual(receivingYardsOnPlay(description, 80), 11)
 
     def test_other_play_types_are_left_alone(self):
         self.assertEqual(playTypeBeforeFumble(3, "(Shotgun) D.Maye pass incomplete deep right to R.Doubs."), 3)
