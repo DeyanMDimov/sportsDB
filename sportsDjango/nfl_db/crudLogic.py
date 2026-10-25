@@ -2552,6 +2552,12 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
     athletesAndAvailability = []
     print(seasonWeek)
     matchDate = getMatchDateForTeamWeek(team, seasonYear, seasonWeek)
+    # ESPN publishes the game roster before kickoff with every player at valid:
+    # false - it only marks who got on the field once the game is played - and
+    # the inactives flagged with didNotPlay. Until anyone on the roster is valid,
+    # valid says nothing, so only didNotPlay counts; reading it as Out showed the
+    # whole team Out minutes before kickoff.
+    participationPublished = any(athlete.get('valid') == True for athlete in rosterData['entries'])
     for athlete in rosterData['entries']:
 
         playerObj = None
@@ -2562,7 +2568,7 @@ def processGameRosterForAvailability(rosterData, team, seasonYear, seasonWeek):
         if playerObj == None:
             playerObj = players.createPlayerAthletesFromGameRoster(athlete, team.espnId)
 
-        gameDayStatus = 4 if athlete['didNotPlay'] == True or athlete['valid'] == False else 1
+        gameDayStatus = 4 if athlete['didNotPlay'] == True or (participationPublished and athlete['valid'] == False) else 1
         playerWeekStatusObj = setGameDayStatus(playerObj, team, seasonYear, seasonWeek, matchDate, gameDayStatus)
 
         athletesAndAvailability.append([playerObj, playerWeekStatusObj])

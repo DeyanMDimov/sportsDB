@@ -306,8 +306,8 @@ class InjuryReportTests(TestCase):
         self.assertContains(page, "No injury report stored for DAL in week 5 of 2026.")
 
 
-def gameRosterEntry(espnId, didNotPlay = False):
-    return {'playerId': espnId, 'didNotPlay': didNotPlay, 'valid': True}
+def gameRosterEntry(espnId, didNotPlay = False, valid = True):
+    return {'playerId': espnId, 'didNotPlay': didNotPlay, 'valid': valid}
 
 
 class GameDayAvailabilityTests(TestCase):
@@ -344,6 +344,23 @@ class GameDayAvailabilityTests(TestCase):
         crudLogic.processGameRosterForAvailability({'entries': [gameRosterEntry(100)]}, self.ravens, 2026, 5)
 
         self.assertEqual(self.statuses(), [(date(2026, 10, 11), 1)])
+
+    def test_roster_before_kickoff_only_marks_inactives_out(self):
+        # Before kickoff ESPN has every player at valid: false.
+        inactive = player.objects.create(espnId = 101, name = "Ravens Inactive", team = self.ravens, playerPosition = 2, firstSeason = 2022)
+        availability = crudLogic.processGameRosterForAvailability({'entries': [
+            gameRosterEntry(100, valid = False), gameRosterEntry(101, didNotPlay = True, valid = False),
+        ]}, self.ravens, 2026, 5)
+
+        self.assertEqual({row[0].name: row[1].playerStatus for row in availability}, {"Ravens Receiver": 1, "Ravens Inactive": 4})
+
+    def test_after_the_game_a_player_who_never_got_on_the_field_is_out(self):
+        backup = player.objects.create(espnId = 101, name = "Ravens Backup", team = self.ravens, playerPosition = 2, firstSeason = 2022)
+        availability = crudLogic.processGameRosterForAvailability({'entries': [
+            gameRosterEntry(100), gameRosterEntry(101, valid = False),
+        ]}, self.ravens, 2026, 5)
+
+        self.assertEqual({row[0].name: row[1].playerStatus for row in availability}, {"Ravens Receiver": 1, "Ravens Backup": 4})
 
     def test_reports_after_kickoff_count_toward_the_next_game(self):
         # Monday morning: week 5 has been played but the scores pull hasn't
