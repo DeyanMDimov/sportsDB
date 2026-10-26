@@ -194,63 +194,34 @@ def getData(request):
             startWeek = int(inputReq['startWeek'].strip())
             endWeek = int(inputReq['endWeek'].strip())
 
-            if endWeek < startWeek: 
+            if endWeek < startWeek:
                 endWeek = startWeek
-
-            i = startWeek
 
             pageDictionary['sel_year'] = yearOfSeason
             pageDictionary['start_week'] = startWeek
             pageDictionary['end_week'] = endWeek
 
-            exceptionCollection = []
-            exceptionStrings = []
+            # The page comes back here with "pulled" once a pull it drove has
+            # finished, so reloading the results doesn't start the pull again.
+            if 'pulled' in inputReq:
+                if startWeek >= endWeek:
+                    message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
+                else:
+                    message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
+                pageDictionary['message'] = message
+                return render (request, 'nfl/pullData.html', pageDictionary)
 
-            while i <= endWeek:
-                #time.sleep(1)
-                weekOfSeason = i
-                print(f'Procesing Week {i}')
-                url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/2/weeks/'+str(weekOfSeason)+'/events')
-
-                if(weekOfSeason >= 19):
-                    playoffWeekOfSeason = weekOfSeason - 18
-                    url = ('https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/'+str(yearOfSeason)+'/types/3/weeks/'+str(playoffWeekOfSeason)+'/events')
-                
-                response = requests.get(url)
-                data = response.json()
-                gameLinks = data['items']
-
-                for link in gameLinks:
-                    
-                    gameDataResponse = requests.get(link['$ref'])
-                    gameData = gameDataResponse.json()
-                    
-                    try:
-                        crudLogic.processGameData(gameData, weekOfSeason, yearOfSeason)
-                    except Exception as e:
-                        print(e)
-                        for exceptionObj in e.args[0]:
-                            if type(exceptionObj) == str:
-                                exceptionStrings.append(exceptionObj)
-                            else:
-                                exceptionCollection.append(exceptionObj)
-
-                            
-                print()
-                print("Week ", str(i), " loaded.")
-                print()
-                i += 1
-            if startWeek >= endWeek:
-                message = "Games loaded for Week " + str(startWeek) + " of " + str(yearOfSeason) + " season."
-            else:
-                message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
-            pageDictionary['message'] = message
-           
-            if len(exceptionCollection) > 0:
-                pageDictionary['exceptionStrings'] = exceptionStrings
-                pageDictionary['exceptionArrays'] = exceptionCollection
-                print("There were exceptions.")
-            
+            # Every game is ten-odd ESPN requests, so even one week can run past
+            # the host's web-worker time limit. The page drives the pull instead:
+            # it asks gamePullWeek for each week's games, then calls gamePullStep
+            # for each game in turn.
+            pageDictionary['gamePull'] = {
+                'season': yearOfSeason,
+                'startWeek': startWeek,
+                'endWeek': endWeek,
+                'weeks': list(range(startWeek, endWeek + 1)),
+                'delaySeconds': crudLogic.GAME_PULL_DELAY_SECONDS,
+            }
             return render (request, 'nfl/pullData.html', pageDictionary)
 
         elif 'season' in request.GET and 'full' in request.GET:
@@ -651,6 +622,30 @@ def availabilityPullStep(request):
 
     try:
         return JsonResponse(crudLogic.pullTeamWeekAvailability(seasonYear, weekOfSeason, team))
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"status": "error", "error": str(e)})
+
+def gamePullWeek(request):
+    # The games in one week of a game data pull the Pull Data page is driving.
+    try:
+        seasonYear = int(request.GET.get('season', '0'))
+        weekOfSeason = int(request.GET.get('week', '0'))
+        return JsonResponse({"status": "ok", "games": crudLogic.gameIdsForWeek(seasonYear, weekOfSeason)})
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"status": "error", "error": str(e)})
+
+def gamePullStep(request):
+    # One game of a game data pull the Pull Data page is driving (see getData).
+    gameEspnId = request.GET.get('game', '').strip()
+    if not gameEspnId.isdigit():
+        return JsonResponse({"status": "error", "error": "Unknown game"})
+
+    try:
+        seasonYear = int(request.GET.get('season', '0'))
+        weekOfSeason = int(request.GET.get('week', '0'))
+        return JsonResponse(crudLogic.pullGameData(seasonYear, weekOfSeason, gameEspnId))
     except Exception as e:
         traceback.print_exc()
         return JsonResponse({"status": "error", "error": str(e)})

@@ -38,8 +38,8 @@
                         <div class="form-floating">
                             <select class="form-select" name="season" id="select_season" aria-label="Floating label">
                                 {% for yr in years %}
-                                <option value="{{yr}}" 
-                                    {%if yr|stringformat:"i" == season %}
+                                <option value="{{yr}}"
+                                    {%if yr == sel_year %}
                                         selected
                                     {% endif %} >{{yr}}</option>
                                 {% endfor %}
@@ -51,7 +51,7 @@
                         <div class="form-floating">
                             <select class="form-select" name="startWeek" id="select_s_week" aria-label="Floating label">
                                 {% for wk in weeks %}
-                                    <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                                    <option value="{{wk.0}}" {% if wk.0 == start_week %}selected{% endif %}> {{ wk.1 }}</option>
                                 {% endfor %}
                             </select>
                             <label for="select_s_week">Start Week</label>
@@ -61,7 +61,7 @@
                         <div class="form-floating">
                             <select class="form-select" name="endWeek" id="select_e_week" aria-label="Floating label">
                                 {% for wk in weeks %}
-                                    <option value="{{wk.0}}"> {{ wk.1 }}</option>
+                                    <option value="{{wk.0}}" {% if wk.0 == end_week %}selected{% endif %}> {{ wk.1 }}</option>
                                 {% endfor %}
                             </select>
                             <label for="select_e_week">End Week</label>
@@ -69,8 +69,123 @@
                     </div>
                 </div>
                 <button type="submit" class="btn btn-success" id="save-btn">Load!</button>
-                
+
             </form>
+            {% if gamePull %}
+            <div id="gamePullProcessing" class="mt-3">
+                <h4>Loading games&hellip;</h4>
+                <p class="text-muted">
+                    This page loads one game at a time, so a whole season takes a
+                    while. Keep this tab open; it reloads when it's done.
+                </p>
+                <p><strong id="gamePullProgress">Starting&hellip;</strong></p>
+                <div class="spinner-border" role="status" aria-label="Loading"></div>
+                <div id="gamePullProblems" class="mt-3"></div>
+            </div>
+            {{ gamePull|json_script:"gamePullData" }}
+            <script>
+                (function () {
+                    var pull = JSON.parse(document.getElementById("gamePullData").textContent);
+                    var resultsUrl = "?" + $.param({ season: pull.season, startWeek: pull.startWeek, endWeek: pull.endWeek, pulled: 1 });
+                    var weekIndex = 0;
+                    var games = [];
+                    var gameIndex = 0;
+                    var gameCount = 0;
+                    var problemCount = 0;
+
+                    function noteProblem(where, problem) {
+                        problemCount++;
+                        var item = $("<div>").addClass("alert alert-danger").append($("<strong>").text(where + ": " + problem.heading));
+                        if (problem.detail) {
+                            item.append($("<div>").text(problem.detail));
+                        }
+                        if (problem.data) {
+                            item.append($("<details>").append($("<summary>").text("Data"), $("<pre>").text(problem.data)));
+                        }
+                        item.appendTo("#gamePullProblems");
+                    }
+
+                    function finish() {
+                        if (problemCount === 0) {
+                            window.location = resultsUrl;
+                            return;
+                        }
+                        // Reloading the page from here shouldn't start the pull over.
+                        history.replaceState(null, "", resultsUrl);
+                        $("#gamePullProcessing h4").text("Finished loading games");
+                        $("#gamePullProcessing .text-muted, #gamePullProcessing .spinner-border").hide();
+                        $("#gamePullProgress").text("Loaded " + gameCount + " game" + (gameCount === 1 ? "" : "s") + ", with the problems below.");
+                    }
+
+                    function nextWeek() {
+                        weekIndex++;
+                        if (weekIndex >= pull.weeks.length) {
+                            finish();
+                            return;
+                        }
+                        setTimeout(loadWeek, pull.delaySeconds * 1000);
+                    }
+
+                    function nextGame() {
+                        gameIndex++;
+                        if (gameIndex >= games.length) {
+                            nextWeek();
+                            return;
+                        }
+                        setTimeout(runGame, pull.delaySeconds * 1000);
+                    }
+
+                    function runGame() {
+                        var week = pull.weeks[weekIndex];
+                        var gameId = games[gameIndex];
+                        $("#gamePullProgress").text("Week " + week + ": game " + (gameIndex + 1) + " / " + games.length +
+                            " (" + gameCount + " loaded so far)");
+                        $.getJSON("../ajax/gamePullStep/", { season: pull.season, week: week, game: gameId })
+                            .done(function (data) {
+                                if (data.status === "pulled") {
+                                    gameCount++;
+                                } else {
+                                    var where = "Week " + week + ", " + (data.label || "game " + gameId);
+                                    (data.problems || [{ heading: data.error || "something went wrong." }]).forEach(function (problem) {
+                                        noteProblem(where, problem);
+                                    });
+                                }
+                                nextGame();
+                            })
+                            .fail(function (xhr) {
+                                noteProblem("Week " + week + ", game " + gameId, { heading: "request failed (" + xhr.status + ")." });
+                                nextGame();
+                            });
+                    }
+
+                    function loadWeek() {
+                        var week = pull.weeks[weekIndex];
+                        $("#gamePullProgress").text("Week " + week + ": finding games (" + gameCount + " loaded so far)");
+                        $.getJSON("../ajax/gamePullWeek/", { season: pull.season, week: week })
+                            .done(function (data) {
+                                if (data.status !== "ok") {
+                                    noteProblem("Week " + week, { heading: data.error || "something went wrong." });
+                                    nextWeek();
+                                    return;
+                                }
+                                games = data.games;
+                                gameIndex = 0;
+                                if (games.length === 0) {
+                                    nextWeek();
+                                    return;
+                                }
+                                runGame();
+                            })
+                            .fail(function (xhr) {
+                                noteProblem("Week " + week, { heading: "request failed (" + xhr.status + ")." });
+                                nextWeek();
+                            });
+                    }
+
+                    loadWeek();
+                })();
+            </script>
+            {% endif %}
             <br>
             <div class="mt-4">
                 {% if specificMatchMessage %}
@@ -260,30 +375,6 @@
 
         <div>
             <h4>{{ message }}</h4>
-            {% if exceptionStrings %}
-                {% for ex in exceptionArrays%}
-                    <div class="pull_data_exception">
-                        <h5>{{ex}}</h5>
-                    </div>
-                {%endfor%}
-            {%endif%}
-            {% if exceptionArrays %}
-                {% for ex in exceptionArrays%}
-                    <div class="pull_data_exception accordion" id="accordion{{ex.3}}">
-                        <button class="collapsed btn btn-block" type="button" data-toggle="collapse" data-target="#collapse{{ex.3}}" aria-expanded="true" aria-controls="collapse{{ex.3}}" style="margin-left:0px">
-                                       
-                        
-                            <h5>
-                                {{ex.0}}
-                            </h5>
-                        </button>
-                        <p>{{ex.1}}</p>
-                        <div id="collapse{{ex.3}}" class="collapse" aria-labelledby="accordion{{ex.3}}" data-parent="#accordion{{ex.3}}">
-                            <pre>{{ex.2 | pprint}}</pre>
-                        </div>
-                    </div>
-                {%endfor%}
-            {%endif%}
         </div>
         <br>
         <br>

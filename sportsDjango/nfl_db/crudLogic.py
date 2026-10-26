@@ -2650,6 +2650,66 @@ def addGameParticipantsToAvailability(athletesAndAvailability, team, seasonYear,
 
 
 # ---------------------------------------------------------------------------
+# Game data pulls (Pull Data -> Game Data)
+#
+# Each game is ten-odd ESPN requests (status, odds, scores, stats, drives and
+# every page of plays), so even one week runs past what one web request can
+# take. Like the availability pull below, the Pull Data page drives it: for each
+# week in the range it asks gameIdsForWeek for the week's games, then calls
+# pullGameData for each game through a short ajax request.
+# ---------------------------------------------------------------------------
+
+# The page waits this long between games.
+GAME_PULL_DELAY_SECONDS = 1
+
+# Weeks 19-22 on the page are the playoffs, which ESPN files as season type 3
+# with its own week numbers. Its week 4 is the Pro Bowl, so the Super Bowl is 5.
+PLAYOFF_ESPN_WEEKS = {19: 1, 20: 2, 21: 3, 22: 5}
+
+
+def gameIdsForWeek(seasonYear, weekOfSeason):
+    seasonType, espnWeek = (3, PLAYOFF_ESPN_WEEKS[weekOfSeason]) if weekOfSeason in PLAYOFF_ESPN_WEEKS else (2, weekOfSeason)
+    weekUrl = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/' + str(seasonYear) + '/types/' + str(seasonType) + '/weeks/' + str(espnWeek) + '/events'
+    weekData = requests.get(weekUrl, timeout = 30).json()
+    return [re.search(r'/events/(\d+)', link['$ref']).group(1) for link in weekData['items']]
+
+
+def _gameDataProblems(exception):
+    # processGameData raises Exception([[heading, detail, data, id], ...]) for
+    # the parts of a game it couldn't store. Anything else is a plain crash.
+    if not exception.args or not isinstance(exception.args[0], list):
+        return [{"heading": str(exception), "detail": "", "data": ""}]
+
+    problems = []
+    for problem in exception.args[0]:
+        if isinstance(problem, str):
+            problems.append({"heading": problem, "detail": "", "data": ""})
+            continue
+        data = problem[2] if len(problem) > 2 else ""
+        problems.append({
+            "heading": str(problem[0]),
+            "detail": str(problem[1]) if len(problem) > 1 else "",
+            "data": data if isinstance(data, str) else json.dumps(data, indent = 1, default = str),
+        })
+    return problems
+
+
+def pullGameData(seasonYear, weekOfSeason, gameEspnId):
+    # One step of a pull: the game's match, both team performances and its plays.
+    gameUrl = 'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/' + str(gameEspnId) + '?lang=en&region=us'
+    gameData = requests.get(gameUrl, timeout = 30).json()
+    competitors = gameData['competitions'][0]['competitors']
+    label = nflTeam.objects.get(espnId = competitors[0]['id']).abbreviation + " vs. " + nflTeam.objects.get(espnId = competitors[1]['id']).abbreviation
+
+    try:
+        processGameData(gameData, weekOfSeason, seasonYear)
+    except Exception as e:
+        traceback.print_exc()
+        return {"status": "error", "label": label, "problems": _gameDataProblems(e)}
+    return {"status": "pulled", "label": label}
+
+
+# ---------------------------------------------------------------------------
 # Player-availability pulls across every team and/or the whole season
 #
 # These are one ESPN roster request per team-week - minutes of work, far past

@@ -397,3 +397,60 @@ class SortInjuriesTests(SimpleTestCase):
         self.assertEqual([i.player.name for i in sortInjuries(injuries)], ["Quarterback", "Tackle", "Guard"])
         injuries = [self.injury("Guard", 6, 2), self.injury("Quarterback", 1, 2)]
         self.assertEqual([i.player.name for i in sortInjuries(injuries)], ["Guard", "Quarterback"])
+
+
+class GameDataPullTests(TestCase):
+    def setUp(self):
+        nflTeam.objects.create(abbreviation = "BUF", teamName = "Bills", espnId = 2)
+        nflTeam.objects.create(abbreviation = "NYJ", teamName = "Jets", espnId = 20)
+
+    def gameResponse(self):
+        response = mock.Mock()
+        response.json.return_value = {'competitions': [{'competitors': [{'id': "2"}, {'id': "20"}]}]}
+        return response
+
+    def test_load_hands_the_page_the_weeks_to_pull(self):
+        page = self.client.get('/getGames/', {'season': "2023", 'startWeek': "3", 'endWeek': "5"})
+        self.assertEqual(page.context['gamePull']['weeks'], [3, 4, 5])
+        self.assertNotIn('message', page.context)
+
+    def test_finished_pull_keeps_the_dropdowns_and_pulls_nothing(self):
+        page = self.client.get('/getGames/', {'season': "2023", 'startWeek': "3", 'endWeek': "5", 'pulled': "1"})
+        self.assertNotIn('gamePull', page.context)
+        self.assertEqual(page.context['message'], "Games loaded for Week 3 through Week 5 of 2023 season.")
+        self.assertRegex(page.content.decode(), r'<option value="2023"\s+selected')
+        self.assertContains(page, '<option value="3" selected> 3</option>', count = 1)
+        self.assertContains(page, '<option value="5" selected> 5</option>', count = 1)
+
+    def test_super_bowl_is_espn_playoff_week_five(self):
+        # ESPN's playoff week 4 is the Pro Bowl.
+        response = mock.Mock()
+        response.json.return_value = {'items': [{'$ref': "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/401547378?lang=en&region=us"}]}
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = response) as get:
+            self.assertEqual(crudLogic.gameIdsForWeek(2023, 22), ["401547378"])
+        self.assertIn('/seasons/2023/types/3/weeks/5/events', get.call_args[0][0])
+
+    def test_game_pull_step(self):
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = self.gameResponse()), \
+             mock.patch('nfl_db.crudLogic.processGameData') as processGameData:
+            data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
+
+        self.assertEqual(data, {'status': "pulled", 'label': "BUF vs. NYJ"})
+        processGameData.assert_called_once_with(mock.ANY, 3, 2023)
+
+    def test_game_pull_step_reports_what_could_not_be_stored(self):
+        problem = ["There was an exception when pulling game 401547353 from week 3 of year 2023.", "Line 12: x = y", {'drives': 1}, "4015473532"]
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = self.gameResponse()), \
+             mock.patch('nfl_db.crudLogic.processGameData', side_effect = Exception([problem])):
+            data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
+
+        self.assertEqual(data['status'], "error")
+        self.assertEqual(data['label'], "BUF vs. NYJ")
+        self.assertEqual(data['problems'][0]['heading'], problem[0])
+        self.assertEqual(data['problems'][0]['detail'], "Line 12: x = y")
+        self.assertIn('"drives": 1', data['problems'][0]['data'])
+
+    def test_game_pull_step_reports_a_crash(self):
+        with mock.patch('nfl_db.crudLogic.requests.get', side_effect = Exception("timed out")):
+            data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
+        self.assertEqual(data, {'status': "error", 'error': "timed out"})
