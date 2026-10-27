@@ -268,25 +268,33 @@ def createOrUpdateFinishedNflMatch(nflMatchObject, gameData, gameCompleted, game
                 
 
     
-    try:
-        for drivesPage in drivesData.drivesPages:
-            for individualDrive in drivesPage['items']: 
-                createDriveOfPlay(individualDrive, matchData)
-    except Exception as e:
-        tback = traceback.extract_tb(e.__traceback__)
-        problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
-        print("Drives problem ")
-        print(problem_text)
-        exceptions.append([problem_text, drivesPage])
-        exceptionThrown = True
+    exceptions.extend(storeDrives(drivesData, matchData))
 
-    
-    # if exceptionThrown:
-    #     raise Exception(exceptions)
+    matchData.save()
 
-    matchData.save()    
+    # Raised after the save so the match is stored either way; processGameData
+    # reports it and carries on with the team performances.
+    if len(exceptions) > 0:
+        raise Exception(exceptions)
 
     return matchData
+
+def storeDrives(drivesData, matchData):
+    # Each drive is stored on its own: one ESPN sends something unexpected for
+    # used to stop every drive after it being stored, without a word on the page.
+    # Returns [[problem, drive JSON], ...] for the drives that couldn't be.
+    problems = []
+    for drivesPage in drivesData.drivesPages:
+        for individualDrive in drivesPage['items']:
+            try:
+                createDriveOfPlay(individualDrive, matchData)
+            except Exception as e:
+                tback = traceback.extract_tb(e.__traceback__)
+                problem_text = "Line " + str(tback[-1].lineno) + ":" + tback[-1].line
+                print("Drives problem ")
+                print(problem_text)
+                problems.append([problem_text, individualDrive])
+    return problems
 
 def teamStatsJsonMap(teamStats):
     teamStatsCategories = teamStats['splits']['categories']
@@ -738,14 +746,25 @@ def createOrUpdateTeamMatchPerformance(existingTeamPerformance, teamScore, teamS
             exceptions.append([problem_text, jsonObject])
             raise Exception(exceptions)
 
+def fillMissingPlayText(playsPage):
+    # ESPN sometimes drops a play's full description - an edit after the game can
+    # leave only shortText - and everything downstream reads play['text'], so one
+    # such play used to stop the rest of the game being stored. The short form is
+    # worded differently ("35 Yd Rush", not "for 35 yards"), so what's parsed out
+    # of the description can miss on that play, but the play itself is kept.
+    for play in playsPage.get('items', []):
+        if not play.get('text'):
+            play['text'] = play.get('shortText') or play.get('shortAlternativeText') or ""
+
 class playByPlayData:
     playByPlayPages = []
 
     def __init__(self, playByPlayJSON):
         self.playByPlayPages = []
-        self.playByPlayPages.append(playByPlayJSON)
-    
+        self.addJSON(playByPlayJSON)
+
     def addJSON(self, playByPlayJSON):
+        fillMissingPlayText(playByPlayJSON)
         self.playByPlayPages.append(playByPlayJSON)
 
 class drivesDataObj:
@@ -756,7 +775,7 @@ class drivesDataObj:
         drivesDataResponse = requests.get(drivesUrl)
         drivesJSON = drivesDataResponse.json()
 
-        self.drivesPages.append(drivesJSON)
+        self.addPage(drivesJSON)
         pagesOfDrivesData = drivesJSON['pageCount']
 
         if pagesOfDrivesData > 1:
@@ -764,7 +783,12 @@ class drivesDataObj:
                 multiPageDrivesDataUrl = drivesUrl+"&page="+str(page)
                 pageDrivesDataResponse = requests.get(multiPageDrivesDataUrl)
                 pageDrivesData = pageDrivesDataResponse.json()
-                self.drivesPages.append(pageDrivesData)
+                self.addPage(pageDrivesData)
+
+    def addPage(self, drivesJSON):
+        for individualDrive in drivesJSON.get('items', []):
+            fillMissingPlayText(individualDrive.get('plays', {}))
+        self.drivesPages.append(drivesJSON)
 
     
 

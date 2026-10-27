@@ -454,3 +454,40 @@ class GameDataPullTests(TestCase):
         with mock.patch('nfl_db.crudLogic.requests.get', side_effect = Exception("timed out")):
             data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
         self.assertEqual(data, {'status': "error", 'error': "timed out"})
+
+
+class MissingPlayTextTests(SimpleTestCase):
+    # ESPN's HOU vs. MIA (2024 week 15) feed has a fake punt with only shortText.
+    def playsPage(self):
+        return {'pageCount': 1, 'items': [
+            {'id': "1", 'text': "C.Stroud pass incomplete deep right to J.Metchie.", 'shortText': "Stroud pass incomplete"},
+            {'id': "2", 'shortText': "Dare Ogunbowale 35 Yd Rush Elijah Campbell 5 Yd Pnlty"},
+        ]}
+
+    def test_play_pages_fall_back_to_the_short_text(self):
+        plays = crudLogic.playByPlayData(self.playsPage())
+        plays.addJSON(self.playsPage())
+        for page in plays.playByPlayPages:
+            self.assertEqual([play['text'] for play in page['items']],
+                ["C.Stroud pass incomplete deep right to J.Metchie.", "Dare Ogunbowale 35 Yd Rush Elijah Campbell 5 Yd Pnlty"])
+
+    def test_drive_pages_fall_back_to_the_short_text(self):
+        response = mock.Mock()
+        response.json.return_value = {'pageCount': 1, 'items': [{'id': "10", 'plays': self.playsPage()}, {'id': "11"}]}
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = response):
+            drives = crudLogic.drivesDataObj("http://drives?lang=en")
+        self.assertEqual(drives.drivesPages[0]['items'][0]['plays']['items'][1]['text'], "Dare Ogunbowale 35 Yd Rush Elijah Campbell 5 Yd Pnlty")
+
+    def test_one_bad_drive_does_not_stop_the_rest(self):
+        drives = mock.Mock(drivesPages = [{'items': [{'id': "1"}, {'id': "2"}]}, {'items': [{'id': "3"}]}])
+
+        def createDrive(individualDrive, matchData):
+            if individualDrive['id'] == "1":
+                raise KeyError('text')
+
+        with mock.patch('nfl_db.crudLogic.createDriveOfPlay', side_effect = createDrive) as createDriveOfPlay:
+            problems = crudLogic.storeDrives(drives, None)
+
+        self.assertEqual([call.args[0]['id'] for call in createDriveOfPlay.call_args_list], ["1", "2", "3"])
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(problems[0][1], {'id': "1"})
