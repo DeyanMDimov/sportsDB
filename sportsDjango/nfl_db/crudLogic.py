@@ -10,13 +10,14 @@ from zoneinfo import ZoneInfo
 import json, re, requests, traceback
 import time as clock
 
-# ESPN, or the host's proxy in front of it, now and then answers a request with
-# an empty or HTML page instead of JSON. That used to fail the whole game with
-# only "Expecting value: line 1 column 1 (char 0)" to show for it. A moment
-# later the same request is fine, so getEspnJson asks again a couple of times,
-# waiting a little longer each time, before giving up.
+# ESPN's cache (Varnish) in front of the core API now and then can't reach the
+# server behind it and answers "503 Backend fetch failed" as an HTML page with
+# retry-after: 5 - about 1 request in 100-250 when loading 2023 games. That
+# used to fail the whole game with only "Expecting value: line 1 column 1
+# (char 0)" to show for it. Asked again after those 5 seconds, the same page
+# comes back fine, so getEspnJson waits and asks again before giving up.
 ESPN_REQUEST_ATTEMPTS = 3
-ESPN_RETRY_DELAY_SECONDS = 3
+ESPN_RETRY_DELAY_SECONDS = 5
 
 
 class EspnRequestError(Exception):

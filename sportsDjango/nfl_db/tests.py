@@ -481,13 +481,13 @@ class GameDataPullTests(TestCase):
         self.assertEqual([call.args[0] for call in requestsGet.call_args_list].count("http://status"), crudLogic.ESPN_REQUEST_ATTEMPTS)
 
     def test_game_pull_step_reports_a_game_summary_espn_never_sent(self):
-        with mock.patch('nfl_db.crudLogic.requests.get', return_value = EspnRequestRetryTests.notJson(503, "<html>Service Unavailable</html>")), \
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = EspnRequestRetryTests.notJson(503, EspnRequestRetryTests.BACKEND_FETCH_FAILED)), \
              mock.patch('nfl_db.crudLogic.clock.sleep'):
             data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
 
         self.assertEqual(data['status'], "error")
         self.assertEqual(data['problems'][0]['heading'], "ESPN didn't send the game summary (tried 3 times)")
-        self.assertIn("HTTP 503: <html>Service Unavailable</html>", data['problems'][0]['detail'])
+        self.assertIn("HTTP 503: <!DOCTYPE html> <html> <head> <title>503 Backend fetch failed</title>", data['problems'][0]['detail'])
 
 
 class EspnRequestRetryTests(SimpleTestCase):
@@ -502,8 +502,24 @@ class EspnRequestRetryTests(SimpleTestCase):
         response.json.return_value = payload
         return response
 
+    # What ESPN's cache sent for page 8 of PIT vs. TEN's plays (2023 week 9).
+    BACKEND_FETCH_FAILED = """<!DOCTYPE html>
+<html>
+  <head>
+    <title>503 Backend fetch failed</title>
+  </head>
+  <body>
+    <h1>Error 503 Backend fetch failed</h1>
+    <p>Backend fetch failed</p>
+    <h3>Guru Meditation:</h3>
+    <p>XID: 18096632873</p>
+    <hr>
+    <p>Varnish cache server</p>
+  </body>
+</html>"""
+
     def test_a_page_that_is_not_json_is_asked_for_again(self):
-        answers = [self.notJson(502, "<html>Bad Gateway</html>"), self.json({'pageCount': 1})]
+        answers = [self.notJson(503, self.BACKEND_FETCH_FAILED), self.json({'pageCount': 1})]
         with mock.patch('nfl_db.crudLogic.requests.get', side_effect = answers) as get, \
              mock.patch('nfl_db.crudLogic.clock.sleep') as sleep:
             self.assertEqual(crudLogic.getEspnJson("http://plays?lang=en", "plays"), {'pageCount': 1})
