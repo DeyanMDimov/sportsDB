@@ -10,6 +10,43 @@ from zoneinfo import ZoneInfo
 import json, re, requests, traceback
 import time as clock
 
+# ESPN, or the host's proxy in front of it, now and then answers a request with
+# an empty or HTML page instead of JSON. That used to fail the whole game with
+# only "Expecting value: line 1 column 1 (char 0)" to show for it. A moment
+# later the same request is fine, so getEspnJson asks again a couple of times,
+# waiting a little longer each time, before giving up.
+ESPN_REQUEST_ATTEMPTS = 3
+ESPN_RETRY_DELAY_SECONDS = 3
+
+
+class EspnRequestError(Exception):
+    # ESPN never sent JSON for a request, even after the retries. The message
+    # says what was being fetched; detail has ESPN's last answer and the URL.
+    def __init__(self, what, url, lastAnswer):
+        super().__init__("ESPN didn't send the " + what + " (tried " + str(ESPN_REQUEST_ATTEMPTS) + " times)")
+        self.detail = "Last try: " + lastAnswer + ". " + url
+
+
+def getEspnJson(url, what):
+    lastAnswer = ""
+    for attempt in range(ESPN_REQUEST_ATTEMPTS):
+        if attempt > 0:
+            clock.sleep(ESPN_RETRY_DELAY_SECONDS * attempt)
+        try:
+            response = requests.get(url, timeout = 30)
+        except requests.RequestException as e:
+            lastAnswer = "no answer (" + type(e).__name__ + ")"
+            print("ESPN request for the " + what + " failed: " + str(e))
+            continue
+        try:
+            return response.json()
+        except ValueError:
+            body = " ".join(response.text.split())
+            lastAnswer = "HTTP " + str(response.status_code) + (" with an empty page" if body == "" else ": " + body[:200])
+            print("ESPN sent no JSON for the " + what + ": " + lastAnswer)
+    raise EspnRequestError(what, url, lastAnswer)
+
+
 def processGameData(gameData, weekOfSeason, yearOfSeason):
     exceptionCollection = []
 
@@ -26,16 +63,14 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
     print("Processing " + homeTeamAbbr + " vs. " + awayTeamAbbr)
 
     gameStatusUrl = gameData['competitions'][0]['status']['$ref']
-    gameStatusResponse = requests.get(gameStatusUrl)
-    gameStatus = gameStatusResponse.json()
+    gameStatus = getEspnJson(gameStatusUrl, "game status")
 
     gameCompleted = (gameStatus['type']['completed'] == True)
     gameOvertime = ("OT" in gameStatus['type']['detail']) 
 
     try:
         oddsUrl = gameData['competitions'][0]['odds']['$ref']
-        oddsResponse = requests.get(oddsUrl)
-        oddsData = oddsResponse.json()
+        oddsData = getEspnJson(oddsUrl, "odds")
     except:
         oddsData = None
         print("No odds available yet.")
@@ -73,28 +108,23 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
 
     else:
         homeTeamStatsUrl = gameData['competitions'][0]['competitors'][0]['statistics']['$ref']
-        homeTeamStatsResponse = requests.get(homeTeamStatsUrl)
-        homeTeamStats = homeTeamStatsResponse.json()
+        homeTeamStats = getEspnJson(homeTeamStatsUrl, homeTeamAbbr + " team stats")
 
         homeTeamScoreUrl = gameData['competitions'][0]['competitors'][0]['score']['$ref']
-        homeTeamScoreResponse = requests.get(homeTeamScoreUrl)
-        homeTeamScore = homeTeamScoreResponse.json()
+        homeTeamScore = getEspnJson(homeTeamScoreUrl, homeTeamAbbr + " score")
 
         awayTeamStatsUrl = gameData['competitions'][0]['competitors'][1]['statistics']['$ref']
-        awayTeamStatsResponse = requests.get(awayTeamStatsUrl)
-        awayTeamStats = awayTeamStatsResponse.json()
+        awayTeamStats = getEspnJson(awayTeamStatsUrl, awayTeamAbbr + " team stats")
         
         awayTeamScoreUrl = gameData['competitions'][0]['competitors'][1]['score']['$ref']
-        awayTeamScoreResponse = requests.get(awayTeamScoreUrl)
-        awayTeamScore = awayTeamScoreResponse.json()
+        awayTeamScore = getEspnJson(awayTeamScoreUrl, awayTeamAbbr + " score")
 
         drivesDataUrl = gameData['competitions'][0]['drives']['$ref']
         drivesData = drivesDataObj(drivesDataUrl)
         #print(f'Drives URL: {drivesDataUrl}')
         playsDataUrl = gameData['competitions'][0]['details']['$ref']
-        playsDataResponse = requests.get(playsDataUrl)
         #print(f'Plays URL: {playsDataUrl}')
-        playsData = playsDataResponse.json()
+        playsData = getEspnJson(playsDataUrl, "plays")
 
         playByPlayOfGame = playByPlayData(playsData)
         
@@ -102,8 +132,7 @@ def processGameData(gameData, weekOfSeason, yearOfSeason):
         if pagesOfPlaysData > 1:
             for page in range(2, pagesOfPlaysData+1):
                 multiPagePlaysDataUrl = playsDataUrl+"&page="+str(page)
-                pagePlaysDataResponse = requests.get(multiPagePlaysDataUrl)
-                pagePlaysData = pagePlaysDataResponse.json()
+                pagePlaysData = getEspnJson(multiPagePlaysDataUrl, "plays (page " + str(page) + " of " + str(pagesOfPlaysData) + ")")
                 playByPlayOfGame.addJSON(pagePlaysData)
         
         try:
@@ -772,8 +801,7 @@ class drivesDataObj:
 
     def __init__(self, drivesUrl):
         self.drivesPages = []
-        drivesDataResponse = requests.get(drivesUrl)
-        drivesJSON = drivesDataResponse.json()
+        drivesJSON = getEspnJson(drivesUrl, "drives")
 
         self.addPage(drivesJSON)
         pagesOfDrivesData = drivesJSON['pageCount']
@@ -781,8 +809,7 @@ class drivesDataObj:
         if pagesOfDrivesData > 1:
             for page in range(2, pagesOfDrivesData+1):
                 multiPageDrivesDataUrl = drivesUrl+"&page="+str(page)
-                pageDrivesDataResponse = requests.get(multiPageDrivesDataUrl)
-                pageDrivesData = pageDrivesDataResponse.json()
+                pageDrivesData = getEspnJson(multiPageDrivesDataUrl, "drives (page " + str(page) + " of " + str(pagesOfDrivesData) + ")")
                 self.addPage(pageDrivesData)
 
     def addPage(self, drivesJSON):
@@ -2694,13 +2721,16 @@ PLAYOFF_ESPN_WEEKS = {19: 1, 20: 2, 21: 3, 22: 5}
 def gameIdsForWeek(seasonYear, weekOfSeason):
     seasonType, espnWeek = (3, PLAYOFF_ESPN_WEEKS[weekOfSeason]) if weekOfSeason in PLAYOFF_ESPN_WEEKS else (2, weekOfSeason)
     weekUrl = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/' + str(seasonYear) + '/types/' + str(seasonType) + '/weeks/' + str(espnWeek) + '/events'
-    weekData = requests.get(weekUrl, timeout = 30).json()
+    weekData = getEspnJson(weekUrl, "list of week " + str(weekOfSeason) + " games")
     return [re.search(r'/events/(\d+)', link['$ref']).group(1) for link in weekData['items']]
 
 
 def _gameDataProblems(exception):
     # processGameData raises Exception([[heading, detail, data, id], ...]) for
-    # the parts of a game it couldn't store. Anything else is a plain crash.
+    # the parts of a game it couldn't store, and EspnRequestError when ESPN
+    # wouldn't send part of it. Anything else is a plain crash.
+    if isinstance(exception, EspnRequestError):
+        return [{"heading": str(exception), "detail": exception.detail, "data": ""}]
     if not exception.args or not isinstance(exception.args[0], list):
         return [{"heading": str(exception), "detail": "", "data": ""}]
 
@@ -2721,7 +2751,10 @@ def _gameDataProblems(exception):
 def pullGameData(seasonYear, weekOfSeason, gameEspnId):
     # One step of a pull: the game's match, both team performances and its plays.
     gameUrl = 'http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/' + str(gameEspnId) + '?lang=en&region=us'
-    gameData = requests.get(gameUrl, timeout = 30).json()
+    try:
+        gameData = getEspnJson(gameUrl, "game summary")
+    except EspnRequestError as e:
+        return {"status": "error", "problems": _gameDataProblems(e)}
     competitors = gameData['competitions'][0]['competitors']
     label = nflTeam.objects.get(espnId = competitors[0]['id']).abbreviation + " vs. " + nflTeam.objects.get(espnId = competitors[1]['id']).abbreviation
 

@@ -154,6 +154,8 @@ class PassingYardsOnPlayTests(SimpleTestCase):
 from datetime import date, datetime, timezone
 from unittest import mock
 
+import requests
+
 from django.test import TestCase
 
 from nfl_db import crudLogic
@@ -454,6 +456,86 @@ class GameDataPullTests(TestCase):
         with mock.patch('nfl_db.crudLogic.requests.get', side_effect = Exception("timed out")):
             data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
         self.assertEqual(data, {'status': "error", 'error': "timed out"})
+
+    def test_game_pull_step_names_the_espn_request_that_never_sent_json(self):
+        # 2023 weeks 8-11 lost 7 games this way, with only "Expecting value:
+        # line 1 column 1 (char 0)" on the page to say what had happened.
+        game = mock.Mock(status_code = 200)
+        game.json.return_value = {'id': "401547353", 'date': "2023-09-24T17:00Z", 'competitions': [{
+            'competitors': [{'id': "2"}, {'id': "20"}], 'status': {'$ref': "http://status"}}]}
+
+        def get(url, **kwargs):
+            return EspnRequestRetryTests.notJson(200, "") if url == "http://status" else game
+
+        with mock.patch('nfl_db.crudLogic.requests.get', side_effect = get) as requestsGet, \
+             mock.patch('nfl_db.crudLogic.clock.sleep'):
+            data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
+
+        self.assertEqual(data['status'], "error")
+        self.assertEqual(data['label'], "BUF vs. NYJ")
+        self.assertEqual(data['problems'], [{
+            'heading': "ESPN didn't send the game status (tried 3 times)",
+            'detail': "Last try: HTTP 200 with an empty page. http://status",
+            'data': "",
+        }])
+        self.assertEqual([call.args[0] for call in requestsGet.call_args_list].count("http://status"), crudLogic.ESPN_REQUEST_ATTEMPTS)
+
+    def test_game_pull_step_reports_a_game_summary_espn_never_sent(self):
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = EspnRequestRetryTests.notJson(503, "<html>Service Unavailable</html>")), \
+             mock.patch('nfl_db.crudLogic.clock.sleep'):
+            data = self.client.get('/ajax/gamePullStep/', {'season': "2023", 'week': "3", 'game': "401547353"}).json()
+
+        self.assertEqual(data['status'], "error")
+        self.assertEqual(data['problems'][0]['heading'], "ESPN didn't send the game summary (tried 3 times)")
+        self.assertIn("HTTP 503: <html>Service Unavailable</html>", data['problems'][0]['detail'])
+
+
+class EspnRequestRetryTests(SimpleTestCase):
+    @staticmethod
+    def notJson(status, text):
+        response = mock.Mock(status_code = status, text = text)
+        response.json.side_effect = ValueError("Expecting value: line 1 column 1 (char 0)")
+        return response
+
+    def json(self, payload):
+        response = mock.Mock(status_code = 200)
+        response.json.return_value = payload
+        return response
+
+    def test_a_page_that_is_not_json_is_asked_for_again(self):
+        answers = [self.notJson(502, "<html>Bad Gateway</html>"), self.json({'pageCount': 1})]
+        with mock.patch('nfl_db.crudLogic.requests.get', side_effect = answers) as get, \
+             mock.patch('nfl_db.crudLogic.clock.sleep') as sleep:
+            self.assertEqual(crudLogic.getEspnJson("http://plays?lang=en", "plays"), {'pageCount': 1})
+        self.assertEqual(get.call_count, 2)
+        sleep.assert_called_once_with(crudLogic.ESPN_RETRY_DELAY_SECONDS)
+
+    def test_a_dropped_connection_is_asked_for_again(self):
+        answers = [requests.ConnectionError("Connection reset by peer"), self.json({'pageCount': 1})]
+        with mock.patch('nfl_db.crudLogic.requests.get', side_effect = answers), \
+             mock.patch('nfl_db.crudLogic.clock.sleep'):
+            self.assertEqual(crudLogic.getEspnJson("http://plays?lang=en", "plays"), {'pageCount': 1})
+
+    def test_gives_up_and_says_what_espn_last_sent(self):
+        answers = [requests.ReadTimeout("read timed out"), self.notJson(503, ""), self.notJson(200, "\n  <html>\n Rate  limited </html>")]
+        with mock.patch('nfl_db.crudLogic.requests.get', side_effect = answers) as get, \
+             mock.patch('nfl_db.crudLogic.clock.sleep') as sleep:
+            with self.assertRaises(crudLogic.EspnRequestError) as raised:
+                crudLogic.getEspnJson("http://plays?lang=en&page=3", "plays (page 3 of 8)")
+
+        self.assertEqual(get.call_count, crudLogic.ESPN_REQUEST_ATTEMPTS)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [crudLogic.ESPN_RETRY_DELAY_SECONDS, crudLogic.ESPN_RETRY_DELAY_SECONDS * 2])
+        self.assertEqual(str(raised.exception), "ESPN didn't send the plays (page 3 of 8) (tried 3 times)")
+        self.assertEqual(raised.exception.detail, "Last try: HTTP 200: <html> Rate limited </html>. http://plays?lang=en&page=3")
+
+    def test_an_error_page_in_json_is_handed_back_as_before(self):
+        # ESPN answers 404 with a JSON error for odds it doesn't have yet; the
+        # callers already deal with that, so it isn't retried.
+        answer = mock.Mock(status_code = 404)
+        answer.json.return_value = {'error': {'code': 404}}
+        with mock.patch('nfl_db.crudLogic.requests.get', return_value = answer) as get:
+            self.assertEqual(crudLogic.getEspnJson("http://odds", "odds"), {'error': {'code': 404}})
+        self.assertEqual(get.call_count, 1)
 
 
 class MissingPlayTextTests(SimpleTestCase):
