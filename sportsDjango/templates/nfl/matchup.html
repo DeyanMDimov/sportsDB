@@ -36,7 +36,8 @@
                         <div class="mb-1 col-auto">
                             {% include 'nfl/teamDropdown.html' %}
                         </div>
-                        <div class="mb-1 col-2">
+                        {% comment %} Fixed width like Season/Week: a col-2 squeezed it to "C…" on phones {% endcomment %}
+                        <div class="mb-1 col-auto" style="width: 170px">
                             <div class="form-floating">
                                 <select name="category" id="category" class="form-select">
                                     {% for value, label in categories %}
