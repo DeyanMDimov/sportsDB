@@ -60,7 +60,7 @@
         </div>
 
         {% if matchupActive %}
-        <div id="matchupResults" class="{% if not showResult %}matchupResultsHidden{% endif %}">
+        <div id="matchupResults" class="{% if not showResult %}matchupResultsHidden{% endif %}" style="--matchup-week-count: {{ matchupWeeks|length }}">
         {% if not selectedTeam %}
         <p class="text-muted">That team isn't stored.</p>
         {% elif not selectedMatch %}
@@ -81,18 +81,18 @@
 
         {% for section in sections %}
         {% if section.kind == "split" %}
-        <div class="matchupColumn" style="width: {{ matchupTableWidth }}px"><hr class="matchupSplit"></div>
+        <div class="matchupColumn"><hr class="matchupSplit"></div>
         {% else %}
-        <div class="matchupColumn" style="width: {{ matchupTableWidth }}px">
-            <h4 class="matchupSectionTitle team-{{ section.team.abbreviation }}"{% if section.collapsible %} role="button" tabindex="0" data-bs-toggle="collapse" data-bs-target="#matchupSection{{ forloop.counter }}" aria-expanded="true" aria-controls="matchupSection{{ forloop.counter }}"{% endif %}>{% if section.collapsible %}<span class="matchupToggleArrow bi-chevron-down"></span>{% endif %}{{ section.title }}{% if section.statLabel %} <small class="text-muted">{{ section.statLabel }}</small>{% endif %}</h4>
+        <div class="matchupColumn">
+            <h4 class="matchupSectionTitle team-{{ section.team.abbreviation }}" role="button" tabindex="0" data-bs-toggle="collapse" data-bs-target="#matchupSection{{ forloop.counter }}" aria-expanded="true" aria-controls="matchupSection{{ forloop.counter }}"><span class="matchupToggleArrow bi-chevron-down"></span>{{ section.title }}{% if section.statLabel %} <small class="text-muted">{{ section.statLabel }}</small>{% endif %}</h4>
         </div>
-        {% if section.collapsible %}<div class="collapse show" id="matchupSection{{ forloop.counter }}">{% endif %}
+        <div class="collapse show" id="matchupSection{{ forloop.counter }}">
         {% if section.kind == "team" %}
         {% include 'nfl/matchupStatTable.html' with statRows=section.rows opponentRows=section.opponentRows %}
         {% else %}
         {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows %}
         {% endif %}
-        {% if section.collapsible %}</div>{% endif %}
+        </div>
         {% endif %}
         {% endfor %}
         {% endif %}
@@ -184,6 +184,19 @@
                 hoveredCell = null;
                 popup.hidden = true;
             }, true);
+        })();
+
+        (function() {
+            // Section headings are toggles but not <button>s, so Bootstrap only
+            // handles their clicks; let Enter and Space work from the keyboard too.
+            document.querySelectorAll('.matchupSectionTitle[data-bs-toggle="collapse"]').forEach(function(title) {
+                title.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        title.click();
+                    }
+                });
+            });
         })();
 
         (function() {

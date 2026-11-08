@@ -1076,8 +1076,16 @@ table thead tr th:first-child {
    Matchup page
    ========================== */
 
-/* Fixed column widths so the stacked tables line up; the table's own width is
-   set inline from the week count. */
+/* Fixed column widths so the stacked tables line up: rank 72 + label + total
+   72 + 50 per week. #matchupResults carries --matchup-week-count. */
+#matchupResults {
+  --matchup-label-width: 240px;
+}
+/* (Wrap included to outrank .byTeamTableWrap .byTeamTable's auto width.) */
+.byTeamTableWrap .matchupTable,
+.matchupColumn {
+  width: calc(144px + var(--matchup-label-width) + 50px * var(--matchup-week-count));
+}
 .matchupTable {
   table-layout: fixed;
 }
@@ -1086,7 +1094,7 @@ table thead tr th:first-child {
   width: 72px;
 }
 .matchupTable .matchupLabelCol {
-  width: 240px;
+  width: var(--matchup-label-width);
 }
 .matchupTable .matchupWeekCol {
   width: 50px;
@@ -1200,10 +1208,11 @@ table thead tr th:first-child {
   border-bottom: 1px solid #555;
 }
 
-/* Collapsible sections (player tables on Scoring / Special Teams): the title
-   toggles the table, and its chevron turns to point right while collapsed. */
+/* Every section's title toggles its table, and its chevron turns to point
+   right while collapsed. */
 .matchupSectionTitle[data-bs-toggle="collapse"] {
   cursor: pointer;
+  user-select: none;
 }
 .matchupToggleArrow {
   display: inline-block;
@@ -1221,4 +1230,19 @@ table thead tr th:first-child {
   border-top: 3px solid #9ca3af;
   opacity: 1;
   margin: 2rem 0 1rem;
+}
+
+/* Phones: the stat / player column stays frozen while the weeks scroll, so it
+   narrows to leave room for them, and wraps long labels (there's no hover to
+   read a cut-off one) instead of cutting them off. */
+@media (max-width: 576px) {
+  #matchupResults {
+    --matchup-label-width: 130px;
+    --matchup-underline-width: 6rem;
+  }
+  .matchupTable .byTeamPlayer {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
 }

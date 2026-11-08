@@ -5,7 +5,7 @@ but with a row per stat instead of a row per team.
 {% endcomment %}
 {% if statRows %}
 <div class="byTeamTableWrap">
-<table class="table table-bordered table-sm byTeamTable matchupTable" style="width: {{ matchupTableWidth }}px">
+<table class="table table-bordered table-sm byTeamTable matchupTable">
     <colgroup>
         <col class="matchupRankCol"><col class="matchupLabelCol"><col class="matchupTotalCol">
         {% for wk in matchupWeeks %}<col class="matchupWeekCol">{% endfor %}

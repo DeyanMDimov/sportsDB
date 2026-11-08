@@ -1747,17 +1747,18 @@ def predictTouchdowns(request):
 #           its team's colors;
 #   player: the attacking team's players for one or more summed stat keys from
 #           crudLogic.TEAM_WEEKLY_STATS, top `count` (None for everyone who
-#           has any), optionally with positions, optionally collapsible.
+#           has any), optionally with positions.
 # Every table has its team's opponents under the week headers (both teams', each
 # labelled, on a paired table) so nobody has to scroll back up to see them -
 # except a paired table with 'opponents': False, where two rows are too busy.
+# Every table's heading collapses it.
 MATCHUP_CATEGORIES = {
     'rushing': [
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "rushingYards"]},
         {'kind': 'team', 'side': 'defense', 'title': "Defense", 'metrics': ["totalYardsAllowedByDefense", "totalRushYardsAllowed"]},
         {'kind': 'player', 'title': "Top Rushers", 'statKeys': ["rushingYards"], 'statLabel': "Rush Yds", 'count': 5},
         {'kind': 'player', 'title': "Rush Attempts", 'statKeys': ["rushingAttempts"], 'statLabel': "Carries", 'count': None,
-         'showPosition': True, 'collapsible': True},
+         'showPosition': True},
     ],
     'receiving': [
         {'kind': 'team', 'side': 'offense', 'title': "Offense", 'metrics': ["totalYardsGained", "totalPassingYards"]},
@@ -1765,7 +1766,7 @@ MATCHUP_CATEGORIES = {
         {'kind': 'player', 'title': "QBs", 'statKeys': ["passingYards"], 'statLabel': "Pass Yds", 'count': None},
         {'kind': 'player', 'title': "Receivers", 'statKeys': ["receivingYards"], 'statLabel': "Rec Yds", 'count': None, 'showPosition': True},
         {'kind': 'player', 'title': "Receptions", 'statKeys': ["receptions"], 'statLabel': "Catches", 'count': None,
-         'showPosition': True, 'collapsible': True},
+         'showPosition': True},
         {'kind': 'team', 'side': 'defense', 'title': "Receiving Allowed per Position", 'metrics': [
             "wrReceivingYardsAllowed", "teReceivingYardsAllowed", "rbReceivingYardsAllowed"]},
         {'kind': 'paired', 'title': "INTs", 'rows': [('offense', "intsThrown"), ('defense', "intsCaught")], 'opponents': False},
@@ -1787,9 +1788,9 @@ MATCHUP_CATEGORIES = {
             ('offense', "thirdDownPct"), ('defense', "thirdDownPctAllowed"),
             ('offense', "fourthDownPct"), ('defense', "fourthDownPctAllowed")]},
         {'kind': 'player', 'title': "TD Scorers", 'statKeys': ["rushingTds", "receivingTds"], 'statLabel': "Rush + Rec TDs",
-         'count': None, 'showPosition': True, 'collapsible': True},
+         'count': None, 'showPosition': True},
         {'kind': 'player', 'title': "Red Zone Touches", 'statKeys': ["redZoneCarries", "redZoneReceptions"], 'statLabel': "Carries + Catches",
-         'count': 6, 'showPosition': True, 'collapsible': True},
+         'count': 6, 'showPosition': True},
     ],
     'specialTeams': [
         {'kind': 'team', 'side': 'offense', 'title': "Kicking", 'metrics': [
@@ -1799,7 +1800,7 @@ MATCHUP_CATEGORIES = {
             ('offense', "kicksBlocked"), ('defense', "kicksBlockedAllowed"),
             ('offense', "averageDriveStart"), ('defense', "averageDriveStartAllowed")]},
         {'kind': 'player', 'title': "Returners", 'statKeys': ["returnYards"], 'statLabel': "Ret Yds",
-         'count': 4, 'showPosition': True, 'collapsible': True},
+         'count': 4, 'showPosition': True},
     ],
 }
 
@@ -2039,9 +2040,6 @@ def getMatchup(request):
     for weekColumn in weekColumns:
         weekColumn['isResult'] = weekColumn['week'] == resultWeek
     pageDictionary['matchupWeeks'] = weekColumns
-    # Every table gets the same fixed column widths (see .matchupTable in style.css)
-    # so their columns line up: rank 72 + label 240 + total 72 + 50 per week.
-    pageDictionary['matchupTableWidth'] = 72 + 240 + 72 + 50 * len(weekColumns)
 
     opponentsByTeamId = {matchupTeam.id: matchupOpponentsByWeek(matchupTeam, yearOfSeason, weekColumns)
         for matchupTeam in [selectedTeam, opponent]}
@@ -2073,7 +2071,6 @@ def getMatchup(request):
             else:
                 side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
                     'statLabel': sectionSetup['statLabel'], 'showPosition': sectionSetup.get('showPosition', False),
-                    'collapsible': sectionSetup.get('collapsible', False),
                     'opponentRows': [opponentRow(offenseTeam)],
                     'rows': matchupPlayerRows(offenseTeam, yearOfSeason, sectionSetup['statKeys'], throughWeek, weekColumns, resultWeek, sectionSetup['count'])})
         return side
