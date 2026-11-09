@@ -521,10 +521,11 @@
             all zero. The team totals in parentheses come from the team match stats.
         </p>
         {% endif %}
-        <table class="table table-bordered">
+        <div class="performanceTableWrap">
+        <table class="table table-bordered performanceTable">
             <thead>
                 <tr>
-                    <td>Week</td>
+                    <td class="performanceWeek">Week</td>
                     {% for performanceColumn in performanceColumns %}
                     <td>{{ performanceColumn.label }}</td>
                     {% endfor %}
@@ -533,7 +534,7 @@
             <tbody>
                 {% for performanceRow in performanceRows %}
                 <tr>
-                    <td>Week {{ performanceRow.week }} {% if performanceRow.awayGame %}@{% else %}vs{% endif %} {{ performanceRow.opponentAbbreviation }}</td>
+                    <td class="performanceWeek">{# "W1" on phones, where the column stays frozen and room is short #}<span class="d-sm-none">W</span><span class="d-none d-sm-inline">Week </span>{{ performanceRow.week }} {% if performanceRow.awayGame %}@{% else %}vs{% endif %} {{ performanceRow.opponentAbbreviation }}</td>
                     {% if performanceRow.showAvailabilityInsteadOfStats %}
                     <td class="text-muted" colspan="{{ performanceColumns|length }}">{{ performanceRow.availabilityLabel }}</td>
                     {% else %}
@@ -545,6 +546,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <p class="text-muted">No matches stored for {{ performanceTeam }} in {{ performanceYear }}.</p>
         {% endif %}

@@ -1030,6 +1030,21 @@ table thead tr th:first-child {
   width: auto;
 }
 
+/* Players -> Performances: scrolls sideways inside its own box on a narrow
+   screen (rather than widening the whole page), with the Week column frozen. */
+.performanceTableWrap {
+  overflow-x: auto;
+}
+.performanceTable td {
+  white-space: nowrap;
+}
+.performanceTable .performanceWeek {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: inset -1px 0 0 var(--bs-border-color);
+}
+
 /* Players -> Injury Status: the reporter's note wraps rather than stretching
    the table across the page. */
 .injuryTable td {
@@ -1070,6 +1085,36 @@ table thead tr th:first-child {
 .byTeamTable .byTeamTotalRow th,
 .byTeamTable .byTeamTotalRow td {
   border-top: 2px solid var(--bs-border-color);
+}
+
+/* Teams -> Rankings: the rank stays frozen along with the team, so a scrolled
+   row still shows where the team stands. A fixed width gives the team column
+   a known left offset. */
+.rankingTable .rankingRankCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 44px;
+  min-width: 44px;
+}
+.rankingTable .byTeamPlayer {
+  left: 44px;
+}
+
+/* Performances and Rankings: separate borders, since Chrome leaves collapsed
+   borders (and content showing through them) behind as frozen cells scroll.
+   Each cell draws its own right and bottom line, and the table its top and
+   left, so the grid looks the same as a collapsed one. */
+.performanceTable,
+.rankingTable {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-top: 1px solid #2f3440;
+  border-left: 1px solid #2f3440;
+}
+.performanceTable > :not(caption) > * > *,
+.rankingTable > :not(caption) > * > * {
+  border-width: 0 1px 1px 0;
 }
 
 /* ==========================

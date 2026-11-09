@@ -121,7 +121,7 @@
         <table class="table table-bordered table-sm byTeamTable rankingTable" id="rankingTable">
             <thead>
                 <tr>
-                    <th class="byTeamNum">#</th>
+                    <th class="byTeamNum rankingRankCell">#</th>
                     <th class="byTeamPlayer">Team</th>
                     <th class="byTeamNum">{% if rankingAveraged %}Avg{% else %}Total{% endif %}</th>
                     {% for wk in rankingWeeks %}
@@ -132,7 +132,7 @@
             <tbody>
                 {% for rankingRow in rankingRows %}
                 <tr>
-                    <td class="byTeamNum">{{ rankingRow.rank }}</td>
+                    <td class="byTeamNum rankingRankCell">{{ rankingRow.rank }}</td>
                     <td class="byTeamPlayer team-border team-{{ rankingRow.team.abbreviation }}">{{ rankingRow.team.abbreviation }} {{ rankingRow.team.teamName }}</td>
                     <td class="byTeamNum"><b>{{ rankingRow.seasonTotal|floatformat:"-1" }}</b></td>
                     {% for weekCell in rankingRow.weekCells %}
