@@ -189,7 +189,7 @@ def currentWeek(seasonYear):
 
 def pullPropLines(seasonYear, weeks = None):
     summary = {'season': seasonYear, 'matches': 0, 'created': 0, 'updated': 0, 'unchanged': 0, 'ambiguous': 0,
-               'sportsbooks': set(), 'matchesWithoutProps': [], 'failedMatches': [], 'unmatchedPlayers': {}}
+               'sportsbooks': set(), 'matchesWithoutProps': [], 'upcomingWithoutProps': 0, 'failedMatches': [], 'unmatchedPlayers': {}}
 
     seasonMatches = nflMatch.objects.filter(yearOfSeason = seasonYear).prefetch_related('homeTeam', 'awayTeam')
     if weeks:
@@ -228,7 +228,11 @@ def storePropLines(weekMatches, fetched, summary):
             summary['failedMatches'].append(matchLabel(match) + ": " + result['error'])
             continue
         if result['provider'] == None or not result['lines']:
-            summary['matchesWithoutProps'].append(matchLabel(match))
+            # Sportsbooks post props a few days before kickoff, so later weeks have none yet.
+            if match.datePlayed != None and match.datePlayed > djangoTimezone.now():
+                summary['upcomingWithoutProps'] += 1
+            else:
+                summary['matchesWithoutProps'].append(matchLabel(match))
             continue
         providerId, sportsbook = result['provider']
         summary['sportsbooks'].add(sportsbook)
@@ -272,10 +276,15 @@ def printPropLineSummary(summary):
           + str(summary['created']) + " lines created, " + str(summary['updated']) + " updated, "
           + str(summary['unchanged']) + " already stored and unchanged.")
     if summary['ambiguous'] > 0:
-        print("   " + str(summary['ambiguous']) + " player props skipped because ESPN's lines for them didn't agree on a main line.")
+        # Mostly players offered only as a milestone ladder (15+, 20+, 25+ yards), which
+        # ESPN BET filed under the same prop type as the over/unders.
+        print("   " + str(summary['ambiguous']) + " player props skipped for having no single main line"
+              + " (usually milestone ladders like 15+/20+/25+ yards).")
     if summary['matchesWithoutProps']:
         print("   " + str(len(summary['matchesWithoutProps'])) + " games with no player props on ESPN: "
               + ", ".join(summary['matchesWithoutProps']))
+    if summary['upcomingWithoutProps'] > 0:
+        print("   " + str(summary['upcomingWithoutProps']) + " upcoming games have no props posted yet.")
     if summary['failedMatches']:
         print("   " + str(len(summary['failedMatches'])) + " games failed to load:")
         for failure in summary['failedMatches']:
