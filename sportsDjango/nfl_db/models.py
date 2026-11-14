@@ -654,6 +654,40 @@ class nflMatchOdds(models.Model):
     homeTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
     awayTeamMoneyLine                   = models.SmallIntegerField(null = True, blank = True)
 
+class playerPropLine(models.Model):
+    # A sportsbook's main over/under line on one player stat for one match, from the
+    # prop bets in ESPN's odds feed (see propLines.py). One row per player, match,
+    # sportsbook and prop type, overwritten by each pull, so for a finished match it
+    # holds the closing line. Only full-game over/unders are kept; milestone ladders,
+    # touchdown scorer props and 1st half/quarter lines are left out.
+    nflMatch        = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
+    player          = models.ForeignKey(player, on_delete = models.CASCADE)
+    # ESPN's provider id and name: 100 is DraftKings (2026 on), 58 is ESPN BET (2024-25).
+    espnProviderId  = models.SmallIntegerField()
+    sportsbook      = models.CharField(max_length = 40)
+    # ESPN's prop type id and name, e.g. 13, "Receiving Yards". The ids are the same
+    # across sportsbooks and seasons.
+    propTypeId      = models.SmallIntegerField()
+    propType        = models.CharField(max_length = 60)
+    # Two decimal places because sacks are offered at lines like 0.25.
+    line            = models.DecimalField(max_digits = 6, decimal_places = 2)
+    openLine        = models.DecimalField(max_digits = 6, decimal_places = 2, null = True, blank = True)
+    # American odds. ESPN's DraftKings props carry the line but no odds, so these are
+    # null from 2026 on; treat the line as -110 both ways.
+    overOdds        = models.SmallIntegerField(null = True, blank = True)
+    underOdds       = models.SmallIntegerField(null = True, blank = True)
+    # When the sportsbook last moved the prop, as opposed to when we last pulled it.
+    lastUpdated     = models.DateTimeField(null = True, blank = True)
+    updatedAt       = models.DateTimeField(auto_now = True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields = ['nflMatch', 'player', 'espnProviderId', 'propTypeId'], name = 'unique_player_prop_line')
+        ]
+        indexes = [
+            models.Index(fields = ['player', 'propTypeId'], name = 'prop_line_player_type_idx'),
+        ]
+
 #-------Betting Model Results-------#
 
 class bettingModelResult(models.Model):

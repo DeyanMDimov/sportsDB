@@ -491,3 +491,63 @@ class MissingPlayTextTests(SimpleTestCase):
         self.assertEqual([call.args[0]['id'] for call in createDriveOfPlay.call_args_list], ["1", "2", "3"])
         self.assertEqual(len(problems), 1)
         self.assertEqual(problems[0][1], {'id': "1"})
+
+
+from decimal import Decimal
+from nfl_db import propLines
+
+
+def espnProp(line, updated = '2026-11-14T07:48Z', openLine = None, over = None, under = None):
+    current = {'target': {'value': line}}
+    if over != None:
+        current['over'] = {'american': over}
+    if under != None:
+        current['under'] = {'american': under}
+    prop = {'current': current, 'lastUpdated': updated}
+    if openLine != None:
+        prop['open'] = {'target': {'value': openLine}}
+    return prop
+
+
+class PropMainLineTests(SimpleTestCase):
+    def test_draftkings_line_listed_twice_without_odds(self):
+        line = propLines.mainLine([espnProp(269.5, openLine = 270.5), espnProp(269.5, openLine = 270.5)])
+        self.assertEqual(line['line'], Decimal('269.5'))
+        self.assertEqual(line['openLine'], Decimal('270.5'))
+        self.assertIsNone(line['overOdds'])
+        self.assertIsNone(line['underOdds'])
+
+    def test_espn_bet_main_line_is_the_one_with_odds(self):
+        props = [espnProp(149.5), espnProp(216.5, over = '-115'), espnProp(216.5, under = '-105'), espnProp(349.5)]
+        line = propLines.mainLine(props)
+        self.assertEqual(line['line'], Decimal('216.5'))
+        self.assertEqual((line['overOdds'], line['underOdds']), (-115, -105))
+
+    def test_plus_and_even_odds(self):
+        line = propLines.mainLine([espnProp(0.5, over = '+140'), espnProp(0.5, under = 'EVEN')])
+        self.assertEqual((line['overOdds'], line['underOdds']), (140, 100))
+
+    def test_stale_pair_gives_way_to_the_newest_line(self):
+        props = [espnProp(215.5, '2026-11-10T04:16Z'), espnProp(215.5, '2026-11-10T04:16Z'),
+                 espnProp(218.5, '2026-11-10T04:14Z'), espnProp(218.5, '2026-11-10T04:14Z')]
+        self.assertEqual(propLines.mainLine(props)['line'], Decimal('215.5'))
+
+    def test_lines_that_disagree_at_the_same_time_are_skipped(self):
+        self.assertIsNone(propLines.mainLine([espnProp(37.5), espnProp(36.5)]))
+
+    def test_alternate_lines_without_any_odds_are_skipped(self):
+        self.assertIsNone(propLines.mainLine([espnProp(149.5), espnProp(216.5), espnProp(349.5)]))
+
+
+class PropTypeTests(SimpleTestCase):
+    def test_full_game_over_unders_are_kept(self):
+        for name in ['Total Receiving Yards (incl. overtime)', 'Longest Reception (incl. overtime)', 'Total Defensive Interceptions']:
+            self.assertTrue(propLines.isFullGameOverUnder(name), name)
+
+    def test_ladders_scorers_and_partial_game_lines_are_left_out(self):
+        for name in ['Receiving Yards Milestones', 'Anytime Touchdown Scorer', '1st Half Total Receiving Yards', 'Football Player Prop']:
+            self.assertFalse(propLines.isFullGameOverUnder(name), name)
+
+    def test_labels(self):
+        self.assertEqual(propLines.propTypeLabel('Total Receiving Yards (incl. overtime)'), 'Receiving Yards')
+        self.assertEqual(propLines.propTypeLabel('Longest Rush (incl. overtime)'), 'Longest Rush')
