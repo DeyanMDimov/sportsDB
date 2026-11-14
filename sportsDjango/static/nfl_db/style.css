@@ -1291,3 +1291,108 @@ table thead tr th:first-child {
     line-height: 1.2;
   }
 }
+
+/* ==========================
+   Props page
+   ========================== */
+
+.propIntro {
+  max-width: 900px;
+}
+
+/* Scrolls sideways inside its own box on a narrow screen, with the player frozen.
+   Separate borders for the same reason as Performances: Chrome leaves collapsed
+   borders behind as frozen cells scroll. */
+.propTableWrap {
+  overflow-x: auto;
+}
+.propTable,
+.propRecordTable {
+  width: auto;
+}
+.propTable {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-top: 1px solid #2f3440;
+  border-left: 1px solid #2f3440;
+}
+.propTable > :not(caption) > * > * {
+  border-width: 0 1px 1px 0;
+}
+.propTable th, .propTable td,
+.propRecordTable th, .propRecordTable td {
+  padding: 6px 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.propTable .propPlayer {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: inset -1px 0 0 var(--bs-border-color);
+}
+.propTable .propNum,
+.propRecordTable .propNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.propTable .propGame {
+  color: #93a4bd;
+}
+/* Too few games for the average to mean much. Dimmed with colour rather than
+   opacity, which would let the scrolling cells show through the frozen player. */
+.propTable .propFewGames > td {
+  color: #6b7a90;
+}
+
+/* How far the line has moved since it opened. */
+.propLineMove {
+  font-size: 0.75em;
+  color: #93a4bd;
+  margin-left: 2px;
+}
+
+/* The lean: green when the average is over the line, red when under. */
+.propLeanOver {
+  color: #86efac;
+}
+.propLeanUnder {
+  color: #fca5a5;
+}
+
+/* Last N games as small chips, shaded by which side of the line each one landed. */
+.propGameValue {
+  display: inline-block;
+  min-width: 34px;
+  margin-right: 3px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+.propGameOver {
+  background-color: #1a4d1a;
+  color: #86efac;
+}
+.propGameUnder {
+  background-color: #4d1a1a;
+  color: #fca5a5;
+}
+.propGamePush {
+  background-color: #2f3440;
+  color: #dbeafe;
+}
+
+.propOutcome {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  margin-left: 2px;
+}
+
+/* A season bucket whose lean beat the -110 break-even rate. */
+.propBeatsBreakEven {
+  color: #86efac;
+  font-weight: 600;
+}

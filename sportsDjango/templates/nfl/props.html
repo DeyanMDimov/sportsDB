@@ -1,0 +1,156 @@
+{% extends 'nfl/base.html'%}
+{% load static %}
+{% load templateFilters %}
+{% block props %}
+    <div class="container">
+        <form method="GET" class="border rounded p-3 mb-3">
+            <div class="row g-2">
+                <div class="mb-1 col-6 col-md-2">
+                    <div class="form-floating">
+                        <select name="season" id="season" class="form-control">
+                            {% for season in seasons %}
+                            <option value="{{ season }}"{% if season == selectedSeason %} selected{% endif %}>{{ season }}</option>
+                            {% endfor %}
+                        </select>
+                        <label for="season">Season:</label>
+                    </div>
+                </div>
+                <div class="mb-1 col-6 col-md-2">
+                    <div class="form-floating">
+                        <select name="week" id="week" class="form-control">
+                            {% for week in weeks %}
+                            <option value="{{ week.0 }}"{% if week.0 == selectedWeek %} selected{% endif %}>{{ week.1 }}</option>
+                            {% endfor %}
+                        </select>
+                        <label for="week">Week:</label>
+                    </div>
+                </div>
+                <div class="mb-1 col-12 col-md-5">
+                    <div class="form-floating">
+                        <select name="prop" id="prop" class="form-control">
+                            {% for propStat in propStats %}
+                            <option value="{{ propStat.0 }}"{% if propStat.0 == selectedProp %} selected{% endif %}>{{ propStat.1 }}</option>
+                            {% endfor %}
+                        </select>
+                        <label for="prop">Prop:</label>
+                    </div>
+                </div>
+                <div class="mb-1 col-6 col-md-3">
+                    <div class="form-floating">
+                        <select name="games" id="games" class="form-control">
+                            {% for gameCount in recentGameChoices %}
+                            <option value="{{ gameCount }}"{% if gameCount == selectedGames %} selected{% endif %}>Last {{ gameCount }} games</option>
+                            {% endfor %}
+                        </select>
+                        <label for="games">Average over:</label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Load!</button>
+        </form>
+
+        {% if not seasons %}
+        <p class="text-muted">No prop lines stored yet. Run <code>manage.py propLinesCommand</code> to pull them.</p>
+        {% else %}
+
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <a href="?season={{ selectedSeason }}&amp;week={{ previousWeek }}&amp;prop={{ selectedProp }}&amp;games={{ selectedGames }}" class="btn btn-dark btn-md{% if previousWeek == None %} disabled{% endif %}" aria-label="Previous week"{% if previousWeek == None %} aria-disabled="true"{% endif %}><span class="bi-chevron-left"></span></a>
+            <a href="?season={{ selectedSeason }}&amp;week={{ nextWeek }}&amp;prop={{ selectedProp }}&amp;games={{ selectedGames }}" class="btn btn-dark btn-md{% if nextWeek == None %} disabled{% endif %}" aria-label="Next week"{% if nextWeek == None %} aria-disabled="true"{% endif %}><span class="bi-chevron-right"></span></a>
+            <h3 class="mb-0 ms-2">{{ board.label }} &middot; {{ weekLabel }}, {{ selectedSeason }}</h3>
+        </div>
+        <p class="text-muted propIntro">
+            {{ sportsbooks }} lines against each player's average over his last {{ selectedGames }} games this season.
+            The <strong>lean</strong> is the side of the line that average is on, and the table is sorted by how far it sits from the line,
+            with players who have fewer than {{ board.minGames }} games (greyed out) at the bottom.
+            {% if board.weekRecord.bets %}This week the lean went {{ board.weekRecord.hits }}&ndash;{{ board.weekRecord.misses }} ({{ board.weekRecord.hitRate|percent }}).{% endif %}
+            At &minus;110 a side has to win {{ breakEvenRate|percent:1 }} of the time to break even.
+        </p>
+
+        {% if board.weekRows %}
+        <div class="propTableWrap mb-4">
+        <table class="table table-bordered table-sm propTable">
+            <thead>
+                <tr>
+                    <th class="propPlayer">Player</th>
+                    <th>Game</th>
+                    <th class="propNum">Line</th>
+                    <th class="propNum">L{{ selectedGames }} Avg</th>
+                    <th class="propNum">Edge</th>
+                    <th class="propNum">Over</th>
+                    <th>Last {{ selectedGames }} (newest first)</th>
+                    <th class="propNum">Season Avg</th>
+                    <th class="propNum">Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in board.weekRows %}
+                <tr{% if not row.enoughGames %} class="propFewGames"{% endif %}>
+                    <td class="propPlayer">{{ row.player.name }}</td>
+                    <td class="propGame">{{ row.matchup }}</td>
+                    <td class="propNum">
+                        {{ row.line|floatformat:"-1" }}
+                        {% if row.lineMove %}<span class="propLineMove" title="Opened at {{ row.propLine.openLine|floatformat:'-1' }}">{{ row.lineMove|signed }}</span>{% endif %}
+                    </td>
+                    {% if row.recentAverage == None %}
+                    <td class="propNum text-muted" colspan="5">No games yet this season</td>
+                    {% else %}
+                    <td class="propNum">{{ row.recentAverage|floatformat:1 }}</td>
+                    <td class="propNum {% if row.lean == 'over' %}propLeanOver{% elif row.lean == 'under' %}propLeanUnder{% endif %}">{{ row.edgeShare|percent }}</td>
+                    <td class="propNum">{{ row.recentOvers }}/{{ row.recentGames|length }}</td>
+                    <td class="propGames">
+                        {% for game in row.recentGames %}<span class="propGameValue propGame{{ game.outcome|title }}" title="Week {{ game.week }}">{{ game.value }}</span>{% endfor %}
+                    </td>
+                    <td class="propNum">{{ row.seasonAverage|floatformat:1 }} <span class="text-muted">({{ row.gamesPlayed }})</span></td>
+                    {% endif %}
+                    <td class="propNum {% if row.enoughGames and row.leanHit == True %}correctBet{% elif row.enoughGames and row.leanHit == False %}wrongBet{% endif %}">
+                        {% if row.result != None %}{{ row.result }} <span class="propOutcome">{{ row.outcome }}</span>{% else %}<span class="text-muted">&ndash;</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No {{ board.label|lower }} lines for this week.</p>
+        {% endif %}
+
+        <h4>{{ selectedSeason }} Season Record &middot; {{ board.label }}</h4>
+        {% with record=board.seasonRecord %}
+        {% if record.all.bets %}
+        <p class="text-muted propIntro">
+            Across {{ record.all.bets }} decided lines this season, betting the lean of the last-{{ selectedGames }} average went
+            {{ record.all.hits }}&ndash;{{ record.all.misses }} ({{ record.all.hitRate|percent:1 }}).
+            When the average was at least 15% from the line it went {{ record.strong.hits }}&ndash;{{ record.strong.misses }} ({{ record.strong.hitRate|percent:1 }}).
+            The over came in {{ record.overRate|percent:1 }} of the time. Pushes, players who didn't take part in the game
+            and players with fewer than {{ board.minGames }} games before it aren't counted.
+        </p>
+        <table class="table table-bordered table-sm propRecordTable">
+            <thead>
+                <tr>
+                    <th>Average vs line</th>
+                    <th class="propNum">Lines</th>
+                    <th class="propNum">Lean record</th>
+                    <th class="propNum">Lean hit rate</th>
+                    <th class="propNum">Over hit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bucket in record.buckets %}
+                <tr>
+                    <td>{{ bucket.label }}</td>
+                    <td class="propNum">{{ bucket.bets }}</td>
+                    <td class="propNum">{{ bucket.hits }}&ndash;{{ bucket.misses }}</td>
+                    <td class="propNum {% if bucket.hitRate != None and bucket.hitRate > breakEvenRate %}propBeatsBreakEven{% endif %}">{{ bucket.hitRate|percent:1 }}</td>
+                    <td class="propNum">{{ bucket.overRate|percent:1 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No finished games with {{ board.label|lower }} lines and stored plays yet this season.</p>
+        {% endif %}
+        {% endwith %}
+
+        {% endif %}
+    </div>
+{% endblock %}

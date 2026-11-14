@@ -5,7 +5,8 @@ import json
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
 from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit
 from django.db import models
-from nfl_db import businessLogic, crudLogic, players
+from nfl_db import businessLogic, crudLogic, players, propBoard, propLines
+from nfl_db.models import playerPropLine
 import datetime, time, requests, traceback, re
 from zoneinfo import ZoneInfo
 
@@ -2079,6 +2080,54 @@ def getMatchup(request):
     pageDictionary['sections'] = sections
 
     return render(request, 'nfl/matchup.html', pageDictionary)
+
+def getProps(request):
+    # Props page: one prop type's lines for a week, each against the player's recent
+    # games, plus how the lean has done across the season.
+    pageDictionary = {
+        'propStats': [(propTypeId, label) for propTypeId, label, statKeys, edgeFloor in propBoard.PROP_STATS],
+        'recentGameChoices': propBoard.RECENT_GAME_CHOICES,
+    }
+    seasons = sorted(set(playerPropLine.objects.values_list('nflMatch__yearOfSeason', flat = True)), reverse = True)
+    pageDictionary['seasons'] = seasons
+    if not seasons:
+        return render(request, 'nfl/props.html', pageDictionary)
+
+    def intParam(name, default, allowed):
+        try:
+            value = int(request.GET.get(name, default))
+        except ValueError:
+            return default
+        return value if value in allowed else default
+
+    currentSeason = crudLogic.currentSeasonYear()
+    yearOfSeason = intParam('season', currentSeason if currentSeason in seasons else seasons[0], seasons)
+    weeksWithLines = sorted(set(playerPropLine.objects.filter(nflMatch__yearOfSeason = yearOfSeason)
+                                .values_list('nflMatch__weekOfSeason', flat = True)))
+    # This week if its props are up, otherwise the latest week that has any.
+    upcomingWeek = propLines.currentWeek(yearOfSeason)
+    defaultWeek = upcomingWeek if upcomingWeek in weeksWithLines else weeksWithLines[-1]
+    weekOfSeason = intParam('week', defaultWeek, weeksWithLines)
+    propTypeId = intParam('prop', propBoard.PROP_STATS[0][0], propBoard.PROP_STATS_BY_ID)
+    recentGames = intParam('games', propBoard.DEFAULT_RECENT_GAMES, propBoard.RECENT_GAME_CHOICES)
+
+    weekLabels = dict(weeksOnPage_Helper())
+    pageDictionary.update({
+        'selectedSeason': yearOfSeason,
+        'selectedWeek': weekOfSeason,
+        'selectedProp': propTypeId,
+        'selectedGames': recentGames,
+        'weeks': [(week, weekLabels.get(week, week) if week > 18 else week) for week in weeksWithLines],
+        'weekLabel': ("Week " + str(weekOfSeason)) if weekOfSeason <= 18 else weekLabels.get(weekOfSeason, "Week " + str(weekOfSeason)),
+        'previousWeek': max([week for week in weeksWithLines if week < weekOfSeason], default = None),
+        'nextWeek': min([week for week in weeksWithLines if week > weekOfSeason], default = None),
+        'board': propBoard.buildPropBoard(yearOfSeason, weekOfSeason, propTypeId, recentGames),
+        'breakEvenRate': 110 / 210,
+    })
+    sportsbooks = sorted(set(playerPropLine.objects.filter(nflMatch__yearOfSeason = yearOfSeason, nflMatch__weekOfSeason = weekOfSeason)
+                             .values_list('sportsbook', flat = True)))
+    pageDictionary['sportsbooks'] = ", ".join(sportsbooks)
+    return render(request, 'nfl/props.html', pageDictionary)
 
 def getTouchdownsByWeek(request):
     yearsOnPage = yearsOnPage_Helper()
