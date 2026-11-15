@@ -1961,7 +1961,7 @@ def matchupPlayerRows(team, seasonYear, statKeys, throughWeek, weekColumns, resu
             return cell
         line = float(propLine.line)
         margin = cell['value'] - line
-        return dict(cell, propLine = {'line': line, 'sportsbook': propLine.sportsbook, 'margin': abs(margin),
+        return dict(cell, propLine = {'line': line,
             'outcome': 'over' if margin > 0 else 'under' if margin < 0 else 'push'})
 
     topRows = []
