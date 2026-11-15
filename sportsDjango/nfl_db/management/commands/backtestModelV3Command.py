@@ -10,12 +10,23 @@ class Command(BaseCommand):
         parser.add_argument('--from', dest = 'firstSeason', type = int, default = 2019,
                             help = 'First season to include (default 2019, the first with a full previous season to rate teams on).')
         parser.add_argument('--to', dest = 'lastSeason', type = int, default = None, help = 'Last season to include (default: the latest).')
+        parser.add_argument('--quarterbacks', default = "actual", choices = ["actual", "expected", "none"],
+                            help = 'Who each team is rated with: "actual" is whoever took its first dropback (known by kickoff, the default), '
+                                   '"expected" is whoever started its previous game, "none" leaves the quarterback adjustment out.')
 
     def handle(self, *args, **options):
-        predictions = bettingModelV3.backtestPredictions(options['firstSeason'], options['lastSeason'])
+        data = bettingModelV3.modelData(useAvailability = False)
+        predictionsByMode = {
+            mode: bettingModelV3.backtestPredictions(options['firstSeason'], options['lastSeason'], mode, data)
+            for mode in ("none", "expected", "actual")
+        }
+        predictions = predictionsByMode[options['quarterbacks']]
         if len(predictions) == 0:
             print("No completed games with book lines in that range.")
             return
+
+        self.printQuarterbackComparison(predictionsByMode)
+        print("The tables below rate each team with its " + options['quarterbacks'] + " quarterback.")
 
         minimumEdge = bettingModelV3.MINIMUM_EDGE_POINTS
 
@@ -61,6 +72,30 @@ class Command(BaseCommand):
             print()
             print("For every point the model disagreed with the book's line, the result moved {:+.2f} points the model's way.".format(summary['edgeSlope']))
             print("1.00 would mean the model was right and the book wrong; 0.00 means the disagreement told you nothing.")
+        print()
+
+    def printQuarterbackComparison(self, predictionsByMode):
+        # Only seasons where there is passing on record to adjust with.
+        seasons = sorted(set(
+            withQuarterback.yearOfSeason
+            for withQuarterback, without in zip(predictionsByMode["actual"], predictionsByMode["none"])
+            if withQuarterback.modelSpread != without.modelSpread
+        ))
+        if len(seasons) == 0:
+            return
+        print()
+        print("What the quarterback adjustment is worth, " + str(seasons[0]) + " to " + str(seasons[-1]) + " (average line miss in points):")
+        print()
+        labels = {
+            "none": "No quarterback adjustment",
+            "expected": "Assuming last game's starter",
+            "actual": "Starter known at kickoff",
+        }
+        for mode in ("none", "expected", "actual"):
+            seasonPredictions = [prediction for prediction in predictionsByMode[mode] if prediction.yearOfSeason in seasons]
+            summary = bettingModelV3.evaluatePredictions(seasonPredictions)
+            print("{:<34}{:>8.2f}".format(labels[mode], summary['modelSpreadError']))
+        print("{:<34}{:>8.2f}".format("Book", summary['bookSpreadError']))
         print()
 
     def recordText(self, record):

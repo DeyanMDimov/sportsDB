@@ -1336,7 +1336,8 @@ class matchModelDetails:
 
 class individualV3ModelResult(individualBettingModelResult):
     """One game predicted by bettingModelV3: expected points from opponent-adjusted
-    team ratings. team1 is the home team, as in the other models."""
+    team ratings and each team's starting quarterback. team1 is the home team, as
+    in the other models."""
 
     # True when there were too few earlier games to rate the teams.
     emptyModel = False
@@ -1357,6 +1358,18 @@ class individualV3ModelResult(individualBettingModelResult):
     team2OffenseRank = None
     team2DefenseRank = None
     team2OverallRank = None
+
+    # Each team's quarterback: his value in points per game over a quarterback
+    # nobody has seen, and what starting him adds to the team's expected score.
+    # The starter is only "expected" until the game has been played.
+    team1Quarterback = None
+    team1QuarterbackValue = None
+    team1QuarterbackAdjustment = None
+    team1QuarterbackExpected = False
+    team2Quarterback = None
+    team2QuarterbackValue = None
+    team2QuarterbackAdjustment = None
+    team2QuarterbackExpected = False
 
     def __init__(self, t1name, t2name, team1Points, team2Points):
         self.team1Name = t1name
@@ -1414,15 +1427,13 @@ def lineBetLabel(teamAbbreviation, teamLine):
         return teamAbbreviation + " " + str(teamLine)
     return teamAbbreviation + " ML"
 
-def generateBettingModelV3(match, ratingsByWeek = None):
-    """Predict one match from the team ratings going into its week. ratingsByWeek
-    lets a caller working through many matches fit each week's ratings once."""
-    if ratingsByWeek is None:
-        ratingsByWeek = {}
+def generateBettingModelV3(match, v3Data = None):
+    """Predict one match from the team ratings and quarterbacks going into its week.
+    v3Data lets a caller working through many matches read each season once."""
+    if v3Data is None:
+        v3Data = bettingModelV3.modelData()
     week = (int(match.yearOfSeason), int(match.weekOfSeason))
-    if week not in ratingsByWeek:
-        ratingsByWeek[week] = bettingModelV3.ratingsForWeek(*week)
-    ratings = ratingsByWeek[week]
+    ratings = v3Data.ratingsForWeek(*week)
 
     homeTeamName = nflTeam.objects.get(espnId = match.homeTeamEspnId).abbreviation
     awayTeamName = nflTeam.objects.get(espnId = match.awayTeamEspnId).abbreviation
@@ -1432,7 +1443,9 @@ def generateBettingModelV3(match, ratingsByWeek = None):
         modelResult.emptyModel = True
         return modelResult
 
-    homePoints, awayPoints = ratings.expectedPoints(match.homeTeamEspnId, match.awayTeamEspnId, match.neutralStadium)
+    homeQuarterbackPoints = ratings.quarterbackAdjustment(match.homeTeamEspnId, v3Data.startingQuarterback(*week, match.homeTeamEspnId).playerId)
+    awayQuarterbackPoints = ratings.quarterbackAdjustment(match.awayTeamEspnId, v3Data.startingQuarterback(*week, match.awayTeamEspnId).playerId)
+    homePoints, awayPoints = ratings.expectedPoints(match.homeTeamEspnId, match.awayTeamEspnId, match.neutralStadium, homeQuarterbackPoints, awayQuarterbackPoints)
     return individualV3ModelResult(homeTeamName, awayTeamName, homePoints, awayPoints)
 
 def setModelBetsV3(modelResult):
@@ -1482,16 +1495,15 @@ def setBetRankings(modelResults, selectedModel):
     return setBetRankingsV1(modelResults)
 
 def addV3RatingDetails(matches, modelResults):
-    """Attach the team ratings behind each V3 prediction. Stored results don't carry
-    them, so they are refitted here, once per week."""
-    ratingsByWeek = {}
+    """Attach the team ratings and quarterbacks behind each V3 prediction. Stored
+    results don't carry them, so they are refitted here, once per week."""
+    v3Data = bettingModelV3.modelData()
     rankingsByWeek = {}
     for match, modelResult in zip(matches, modelResults):
         week = (int(match.yearOfSeason), int(match.weekOfSeason))
-        if week not in ratingsByWeek:
-            ratingsByWeek[week] = bettingModelV3.ratingsForWeek(*week)
-            rankingsByWeek[week] = ratingsByWeek[week].rankings()
-        ratings = ratingsByWeek[week]
+        ratings = v3Data.ratingsForWeek(*week)
+        if week not in rankingsByWeek:
+            rankingsByWeek[week] = ratings.rankings()
         rankings = rankingsByWeek[week]
         if not ratings.hasEnoughGames:
             continue
@@ -1506,6 +1518,17 @@ def addV3RatingDetails(matches, modelResults):
             setattr(modelResult, prefix + 'OffenseRank', offenseRank)
             setattr(modelResult, prefix + 'DefenseRank', defenseRank)
             setattr(modelResult, prefix + 'OverallRank', overallRank)
+
+            starter = v3Data.startingQuarterback(*week, teamEspnId)
+            if ratings.quarterbacks is None or starter.playerId is None:
+                continue
+            if starter.playerId == bettingModelV3.UNPROVEN_QUARTERBACK:
+                setattr(modelResult, prefix + 'Quarterback', "Unknown (usual starter out)")
+            else:
+                setattr(modelResult, prefix + 'Quarterback', starter.name)
+            setattr(modelResult, prefix + 'QuarterbackValue', round(ratings.quarterbacks.pointsAboveUnproven(starter.playerId), 1))
+            setattr(modelResult, prefix + 'QuarterbackAdjustment', round(ratings.quarterbackAdjustment(teamEspnId, starter.playerId), 1))
+            setattr(modelResult, prefix + 'QuarterbackExpected', not starter.hasPlayed)
     return modelResults
 
 
@@ -1519,10 +1542,10 @@ STORED_RESULT_FIELDS = [
     if field.name not in ('id', 'nflMatch', 'modelVersion', 'movingAverageWeeks', 'yearOfSeason', 'weekOfSeason', 'computedAt')
 ]
 
-def computeModelResult(match, selectedModel, movingAverageWeeks = 0, v3RatingsByWeek = None):
+def computeModelResult(match, selectedModel, movingAverageWeeks = 0, v3Data = None):
     """Run the selected model for one match and fill in actual results and bet outcomes."""
     if selectedModel == "v3":
-        modelResult = generateBettingModelV3(match, v3RatingsByWeek)
+        modelResult = generateBettingModelV3(match, v3Data)
     elif selectedModel == "v2":
         modelResult = generateBettingModelHistV2(match, week1 = (int(match.weekOfSeason) == 1))
     elif selectedModel == "v1.5":
@@ -1615,14 +1638,14 @@ def getModelResultsForMatches(matches, selectedModel, movingAverageWeeks = 0):
 
     modelResults = []
     newRows = []
-    v3RatingsByWeek = {}
+    v3Data = bettingModelV3.modelData()
     for match in matches:
         storedResult = storedResultsByMatch.get(match.id)
         if storedResult != None:
             modelResults.append(modelResultFromRow(storedResult))
             continue
 
-        modelResult = computeModelResult(match, selectedModel, movingAverageWeeks, v3RatingsByWeek)
+        modelResult = computeModelResult(match, selectedModel, movingAverageWeeks, v3Data)
         modelResults.append(modelResult)
         if match.completed:
             newRows.append(modelResultToRow(modelResult, match, selectedModel, movingAverageWeeks))
@@ -1635,7 +1658,7 @@ def getModelResultsForMatches(matches, selectedModel, movingAverageWeeks = 0):
 def invalidateModelResults(yearOfSeason, weekOfSeason):
     """Drop stored results that may have used data from this week: later weeks of the
     same season, and all of the next season (early weeks, moving averages and V3's
-    ratings reach back into the previous year, and no further)."""
+    ratings and quarterback values reach back into the previous year, and no further)."""
     yearOfSeason = int(yearOfSeason)
     weekOfSeason = int(weekOfSeason)
     bettingModelResult.objects.filter(

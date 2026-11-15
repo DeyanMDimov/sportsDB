@@ -800,7 +800,7 @@ class BettingModelV3PageTests(TestCase):
         computed = businessLogic.getModelResultsForMatches([self.played, self.upcoming], "v3")[0]
         stored = bettingModelResult.objects.get(modelVersion = "v3")
         self.assertEqual(stored.nflMatch, self.played)
-        with mock.patch.object(bettingModelV3, 'ratingsForWeek', side_effect = AssertionError("should have used the stored result")):
+        with mock.patch.object(bettingModelV3.modelData, 'ratingsForWeek', side_effect = AssertionError("should have used the stored result")):
             readBack = businessLogic.getModelResultsForMatches([self.played], "v3")[0]
         self.assertIsInstance(readBack, businessLogic.individualV3ModelResult)
         for attribute in ('team1Name', 'team2Name', 'team1CalculatedPoints', 'team2CalculatedPoints', 'calculatedSpread', 'calculatedTotal',
@@ -827,3 +827,172 @@ class BettingModelV3PageTests(TestCase):
         page = self.client.get('/loadYearlySummary/', {'season': "2024", 'model': "v3", 'movingavg': "5", 'topNumResults': "20"})
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "disagrees with the book most")
+
+
+def v3QuarterbackGame(year, week, team, passer, yardsPerDropback, dropbacks = 40, starter = None):
+    return bettingModelV3.quarterbackGame(year, week, team, starter if starter != None else passer, passer, dropbacks, yardsPerDropback * dropbacks)
+
+
+def v3PassingLeague(weeks = 10):
+    """Team 1's quarterback (id 10) passes for 8 adjusted yards a dropback; teams
+    2 to 4 (ids 20, 30, 40) pass for 6."""
+    games = []
+    for week in range(1, weeks + 1):
+        games.append(v3QuarterbackGame(2024, week, 1, 10, 8.0))
+        for team in (2, 3, 4):
+            games.append(v3QuarterbackGame(2024, week, team, team * 10, 6.0))
+    return games
+
+
+class BettingModelV3QuarterbackTests(SimpleTestCase):
+    def test_adjusted_passing_yards(self):
+        self.assertEqual(bettingModelV3.adjustedPassingYards(300, 2, 1, 15), 280)
+        # Sack yards count against the passer whichever sign they are stored with.
+        self.assertEqual(bettingModelV3.adjustedPassingYards(300, 2, 1, -15), 280)
+
+    def test_no_passing_on_record(self):
+        self.assertIsNone(bettingModelV3.fitQuarterbackValues([], 2024, 5))
+        ratings = bettingModelV3.fitRatings(v3League(), 2024, 13)
+        self.assertEqual(ratings.quarterbackAdjustment(1, 10), 0.0)
+
+    def test_values_are_points_per_game_against_the_league(self):
+        quarterbacks = bettingModelV3.fitQuarterbackValues(v3PassingLeague(), 2024, 11)
+        self.assertAlmostEqual(quarterbacks.leagueAverage, 6.5)
+        # Someone nobody has seen is 2 yards a dropback below the league: 6 points a game.
+        self.assertAlmostEqual(quarterbacks.pointsAboveAverage(99), -6.0)
+        self.assertAlmostEqual(quarterbacks.pointsAboveUnproven(99), 0.0)
+        self.assertGreater(quarterbacks.pointsAboveAverage(10), quarterbacks.pointsAboveAverage(20) + 3)
+
+    def test_a_quarterback_is_pulled_toward_the_unproven_level(self):
+        games = v3PassingLeague() + [v3QuarterbackGame(2024, 10, 5, 50, 12.0)]
+        quarterbacks = bettingModelV3.fitQuarterbackValues(games, 2024, 11)
+        unproven = quarterbacks.leagueAverage - bettingModelV3.UNPROVEN_QUARTERBACK_PENALTY
+        # One 40-dropback game moves him less than a fifth of the way to 12.
+        self.assertGreater(quarterbacks.yardsPerDropback[50], unproven)
+        self.assertLess(quarterbacks.yardsPerDropback[50], unproven + (12.0 - unproven) / 5)
+
+    def test_the_usual_quarterback_changes_nothing(self):
+        quarterbacks = bettingModelV3.fitQuarterbackValues(v3PassingLeague(), 2024, 11)
+        self.assertAlmostEqual(quarterbacks.adjustment(1, 10), 0.0)
+
+    def test_an_unseen_backup_costs_a_good_team_more(self):
+        quarterbacks = bettingModelV3.fitQuarterbackValues(v3PassingLeague(), 2024, 11)
+        self.assertLess(quarterbacks.adjustment(1, 99), -5)
+        self.assertLess(quarterbacks.adjustment(1, 99), quarterbacks.adjustment(2, 99) - 3)
+        self.assertLess(quarterbacks.adjustment(2, 99), 0)
+
+    def test_the_starter_coming_back_adds_points(self):
+        # Team 1's starter missed the last three games; a poor backup (id 11) played them.
+        games = [game for game in v3PassingLeague() if not (game.teamEspnId == 1 and game.weekOfSeason >= 8)]
+        games += [v3QuarterbackGame(2024, week, 1, 11, 4.0) for week in (8, 9, 10)]
+        quarterbacks = bettingModelV3.fitQuarterbackValues(games, 2024, 11)
+        self.assertGreater(quarterbacks.adjustment(1, 10), 1)
+        self.assertLess(quarterbacks.adjustment(1, 11), -1)
+
+    def test_unknown_starter_or_team_means_no_adjustment(self):
+        quarterbacks = bettingModelV3.fitQuarterbackValues(v3PassingLeague(), 2024, 11)
+        self.assertEqual(quarterbacks.adjustment(1, None), 0.0)
+        self.assertEqual(quarterbacks.adjustment(7, 10), 0.0)
+
+    def test_only_earlier_weeks_count(self):
+        games = v3PassingLeague() + [v3QuarterbackGame(2024, 11, 1, 10, 0.0), v3QuarterbackGame(2024, 12, 1, 10, 0.0)]
+        self.assertEqual(
+            bettingModelV3.fitQuarterbackValues(games, 2024, 11).yardsPerDropback[10],
+            bettingModelV3.fitQuarterbackValues(v3PassingLeague(), 2024, 11).yardsPerDropback[10])
+
+    def test_expected_starter_is_whoever_started_last(self):
+        # Week 10: the starter (10) was hurt early and the backup (11) threw most of the passes.
+        games = [game for game in v3PassingLeague() if not (game.teamEspnId == 1 and game.weekOfSeason == 10)]
+        games.append(v3QuarterbackGame(2024, 10, 1, 11, 5.0, starter = 10))
+        quarterbacks = bettingModelV3.fitQuarterbackValues(games, 2024, 11)
+        self.assertEqual(quarterbacks.expectedStarter(1), 10)
+        self.assertEqual(quarterbacks.expectedStarter(1, unavailable = {10}), 11)
+        self.assertEqual(quarterbacks.expectedStarter(1, unavailable = {10, 11}), bettingModelV3.UNPROVEN_QUARTERBACK)
+        self.assertIsNone(quarterbacks.expectedStarter(7))
+        # The stand-in for "nobody we know" is valued as unproven.
+        self.assertAlmostEqual(quarterbacks.pointsAboveUnproven(bettingModelV3.UNPROVEN_QUARTERBACK), 0.0)
+
+    def test_adjustments_move_each_teams_expected_score(self):
+        ratings = bettingModelV3.fitRatings(v3League(), 2024, 13)
+        homePoints, awayPoints = ratings.expectedPoints(1, 4)
+        adjustedHome, adjustedAway = ratings.expectedPoints(1, 4, homeQuarterbackPoints = -3.0, awayQuarterbackPoints = 1.0)
+        self.assertAlmostEqual(adjustedHome, homePoints - 3.0, delta = 0.11)
+        self.assertAlmostEqual(adjustedAway, awayPoints + 1.0, delta = 0.11)
+
+
+class BettingModelV3QuarterbackDataTests(TestCase):
+    def setUp(self):
+        from nfl_db.models import driveOfPlay, playByPlay, passerStatSplit, teamMatchPerformance
+        self.home = nflTeam.objects.create(abbreviation = "AAA", teamName = "AAA", espnId = 1)
+        self.away = nflTeam.objects.create(abbreviation = "BBB", teamName = "BBB", espnId = 2)
+        self.match = nflMatch.objects.create(espnId = 5001, yearOfSeason = 2024, weekOfSeason = 3, homeTeamEspnId = 1, awayTeamEspnId = 2,
+                                             completed = True, homeTeamPoints = 20, awayTeamPoints = 17)
+        self.nextWeek = nflMatch.objects.create(espnId = 5002, yearOfSeason = 2024, weekOfSeason = 4, homeTeamEspnId = 2, awayTeamEspnId = 1)
+        drive = driveOfPlay.objects.create(nflMatch = self.match, teamOnOffense = self.home, reachedRedZone = False)
+        self.starter = player.objects.create(espnId = 10, name = "Starting Passer", playerPosition = 1)
+        self.backup = player.objects.create(espnId = 11, name = "Backup Passer", playerPosition = 1)
+        self.receiver = player.objects.create(espnId = 12, name = "Trick Receiver", playerPosition = 2)
+
+        def passPlay(sequenceNumber, passer, playType = 2, copies = 1):
+            play = playByPlay.objects.create(nflMatch = self.match, teamOnOffense = self.home, driveOfPlay = drive, playType = playType,
+                                             sequenceNumber = sequenceNumber, turnover = False, penaltyOnPlay = False, scoringPlay = False)
+            for copy in range(copies):
+                passerStatSplit.objects.create(play = play, player = passer)
+
+        passPlay(50, self.receiver)                  # trick play on the first snap
+        passPlay(100, self.starter)
+        passPlay(200, self.starter, playType = 4)    # sacked and hurt
+        for sequenceNumber in (300, 400, 500):
+            passPlay(sequenceNumber, self.backup)
+        passPlay(600, self.backup, playType = 3, copies = 2)    # stored twice
+
+        teamMatchPerformance.objects.create(matchEspnId = 5001, teamEspnId = 1, yearOfSeason = 2024, weekOfSeason = 3,
+                                            passingAttempts = 6, sacksTaken = 1, totalPassingYards = 80, passingTouchdowns = 1,
+                                            interceptionsOnOffense = 0, sackYardsLost = Decimal('8.0'))
+
+    def test_passing_line_goes_to_the_main_passer_and_the_first_dropback_starts(self):
+        quarterbackGames, names = bettingModelV3.loadSeasonQuarterbackGames(2024)
+        self.assertEqual(len(quarterbackGames), 1)
+        game = quarterbackGames[0]
+        self.assertEqual((game.yearOfSeason, game.weekOfSeason, game.teamEspnId), (2024, 3, 1))
+        # The backup's four plays outnumber the starter's two, the duplicate row not counting.
+        self.assertEqual((game.starterId, game.passerId), (self.starter.id, self.backup.id))
+        self.assertEqual((game.dropbacks, game.adjustedYards), (7, 80 + 20 - 8))
+        self.assertEqual(names[self.backup.id], "Backup Passer")
+
+    def test_starter_of_a_played_game_and_of_the_next_one(self):
+        data = bettingModelV3.modelData()
+        played = data.startingQuarterback(2024, 3, 1)
+        self.assertEqual((played.playerId, played.name, played.hasPlayed), (self.starter.id, "Starting Passer", True))
+        expected = data.startingQuarterback(2024, 4, 1)
+        self.assertEqual((expected.playerId, expected.hasPlayed), (self.starter.id, False))
+        # No passing on record for the other team.
+        self.assertIsNone(data.startingQuarterback(2024, 4, 2).playerId)
+
+    def test_a_starter_listed_as_out_gives_way_to_the_backup(self):
+        playerWeekStatus.objects.create(player = self.starter, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 4, reportDate = date(2024, 9, 27))
+        self.assertEqual(bettingModelV3.modelData().startingQuarterback(2024, 4, 1).playerId, self.backup.id)
+        self.assertEqual(bettingModelV3.modelData(useAvailability = False).startingQuarterback(2024, 4, 1).playerId, self.starter.id)
+        # Both out: somebody without a track record.
+        playerWeekStatus.objects.create(player = self.backup, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 3, reportDate = date(2024, 9, 27))
+        self.assertEqual(bettingModelV3.modelData().startingQuarterback(2024, 4, 1).playerId, bettingModelV3.UNPROVEN_QUARTERBACK)
+
+    def test_only_the_latest_status_counts(self):
+        # Out on Wednesday (and in an undated row), cleared on Friday; questionable is not out.
+        playerWeekStatus.objects.create(player = self.starter, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 4, reportDate = date(2024, 9, 25))
+        playerWeekStatus.objects.create(player = self.starter, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 4, reportDate = None)
+        playerWeekStatus.objects.create(player = self.starter, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 1, reportDate = date(2024, 9, 27))
+        playerWeekStatus.objects.create(player = self.backup, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 2, reportDate = date(2024, 9, 27))
+        self.assertEqual(bettingModelV3.quarterbacksOut(2024, 4), set())
+        playerWeekStatus.objects.create(player = self.backup, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 5, reportDate = date(2024, 9, 28))
+        self.assertEqual(bettingModelV3.quarterbacksOut(2024, 4), {self.backup.id})
+
+    def test_details_name_the_quarterback(self):
+        with mock.patch.object(bettingModelV3, 'MINIMUM_GAMES_FOR_RATINGS', 1):
+            results = businessLogic.getModelResultsForMatches([self.nextWeek], "v3")
+            businessLogic.addV3RatingDetails([self.nextWeek], results)
+        upcoming = results[0]
+        # AAA is the away team next week.
+        self.assertEqual((upcoming.team2Quarterback, upcoming.team2QuarterbackExpected), ("Starting Passer", True))
+        self.assertAlmostEqual(upcoming.team2QuarterbackAdjustment, 0.0, delta = 2.0)
+        self.assertIsNone(upcoming.team1Quarterback)

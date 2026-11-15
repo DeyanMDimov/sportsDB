@@ -83,9 +83,11 @@
                     <li>Recent games count more: a game 10 weeks old counts half as much as last week's, and the offseason ages last year's games by another 8 weeks.</li>
                     <li>Every rating is pulled toward average, as if the team had also played 4 games at exactly league average. That keeps a couple of unusual games from producing an extreme rating.</li>
                     <li>Expected score = league average score, plus the team's offense rating, minus the opponent's defense rating, plus half of home field for the home team and minus half for the visitor.</li>
+                    <li>Each team's score then moves by its quarterback adjustment: how many points better or worse this week's starter has passed than the quarterbacks who played the games behind the team's rating. It is zero when the same quarterback played all of them.</li>
+                    <li>For a game that hasn't been played, the model assumes the quarterback who started the team's last game, unless he is listed as out. He is marked "expected". If someone else starts, the adjustment is wrong.</li>
                     <li>The model only names a bet when its line or total is at least 1 point away from the book's. "Edge" is the size of that gap.</li>
                 </ol>
-                <p>Backtested from 2019 on, this lands about 10.2 points from the final margin in a typical game, against 9.8 for the closing line, and its bets against the closing line have won about half the time. docs/betting-model-v3.md has the full explanation.</p>
+                <p>Backtested from 2019 on, this lands about 10.1 points from the final margin in a typical game, against 9.8 for the closing line, and its bets against the closing line have won about half the time. docs/betting-model-v3.md has the full explanation.</p>
                 {% else %}
                 <ol>
                     <li>Average the team's offensive yards per game with opponents defensive yards allowed per game.</li>
@@ -119,6 +121,16 @@
                             <td> Overall Rating </td>
                             <td colspan="2"> {{ result.team1OverallRating|signed }} pts (rank {{ result.team1OverallRank }})</td>
                             <td colspan="2"> {{ result.team2OverallRating|signed }} pts (rank {{ result.team2OverallRank }})</td>
+                        </tr>
+                        <tr>
+                            <td> Quarterback </td>
+                            <td colspan="2"> {{ result.team1Quarterback|default:"-" }}{% if result.team1QuarterbackExpected %} (expected){% endif %}{% if result.team1Quarterback %}: {{ result.team1QuarterbackValue|signed }} pts over an unproven QB{% endif %}</td>
+                            <td colspan="2"> {{ result.team2Quarterback|default:"-" }}{% if result.team2QuarterbackExpected %} (expected){% endif %}{% if result.team2Quarterback %}: {{ result.team2QuarterbackValue|signed }} pts over an unproven QB{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <td> Quarterback Adjustment </td>
+                            <td colspan="2"> {{ result.team1QuarterbackAdjustment|signed }}{% if result.team1Quarterback %} pts{% endif %}</td>
+                            <td colspan="2"> {{ result.team2QuarterbackAdjustment|signed }}{% if result.team2Quarterback %} pts{% endif %}</td>
                         </tr>
                         <tr>
                             <td> League Average / Home Field </td>
