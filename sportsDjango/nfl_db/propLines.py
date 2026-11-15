@@ -187,9 +187,38 @@ def currentWeek(seasonYear):
     return nextMatch.weekOfSeason if nextMatch else None
 
 
+def newPullSummary(seasonYear):
+    return {'season': seasonYear, 'matches': 0, 'created': 0, 'updated': 0, 'unchanged': 0, 'ambiguous': 0,
+            'sportsbooks': set(), 'matchesWithoutProps': [], 'upcomingWithoutProps': 0, 'failedMatches': [], 'unmatchedPlayers': {}}
+
+
+def upcomingPropMatchIds(seasonYear, weeks):
+    # The games a Pull Data run pulls lines for: those in the pulled weeks and the week
+    # after the last one that haven't kicked off yet. Lines move until kickoff and stay
+    # put after it, so a game already under way has nothing new to give.
+    pullWeeks = set(weeks) | {max(weeks) + 1}
+    return list(nflMatch.objects.filter(
+        yearOfSeason = seasonYear, weekOfSeason__in = pullWeeks, datePlayed__gt = djangoTimezone.now(),
+    ).order_by('datePlayed').values_list('espnId', flat = True))
+
+
+def pullMatchPropLines(matchEspnId):
+    # One game's lines, for the Pull Data page to call game by game: a web request
+    # there can't run the worker threads pullPropLines uses.
+    match = nflMatch.objects.filter(espnId = matchEspnId).prefetch_related('homeTeam', 'awayTeam').first()
+    if match == None:
+        return {'status': 'error', 'error': 'Unknown game'}
+    summary = newPullSummary(match.yearOfSeason)
+    storePropLines([match], [fetchMatchPropLines(match.espnId)], summary)
+    if summary['failedMatches']:
+        return {'status': 'error', 'label': matchLabel(match), 'error': summary['failedMatches'][0]}
+    return {'status': 'ok', 'label': matchLabel(match), 'posted': bool(summary['sportsbooks']),
+            'lines': summary['created'] + summary['updated'] + summary['unchanged'],
+            'unmatchedProps': sum(details['props'] for details in summary['unmatchedPlayers'].values())}
+
+
 def pullPropLines(seasonYear, weeks = None):
-    summary = {'season': seasonYear, 'matches': 0, 'created': 0, 'updated': 0, 'unchanged': 0, 'ambiguous': 0,
-               'sportsbooks': set(), 'matchesWithoutProps': [], 'upcomingWithoutProps': 0, 'failedMatches': [], 'unmatchedPlayers': {}}
+    summary = newPullSummary(seasonYear)
 
     seasonMatches = nflMatch.objects.filter(yearOfSeason = seasonYear).prefetch_related('homeTeam', 'awayTeam')
     if weeks:

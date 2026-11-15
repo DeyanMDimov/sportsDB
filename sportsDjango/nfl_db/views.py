@@ -210,6 +210,7 @@ def getData(request):
                 else:
                     message = "Games loaded for Week " + str(startWeek) + " through Week " + str(endWeek) + " of " + str(yearOfSeason) + " season."
                 pageDictionary['message'] = message
+                pageDictionary['propMessage'] = propPullMessage(inputReq)
                 return render (request, 'nfl/pullData.html', pageDictionary)
 
             # Every game is ten-odd ESPN requests, so even one week can run past
@@ -647,6 +648,46 @@ def gamePullStep(request):
         seasonYear = int(request.GET.get('season', '0'))
         weekOfSeason = int(request.GET.get('week', '0'))
         return JsonResponse(crudLogic.pullGameData(seasonYear, weekOfSeason, gameEspnId))
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"status": "error", "error": str(e)})
+
+def propPullMessage(inputReq):
+    # What the prop line step of a Pull Data run stored, from the counts the page
+    # passes along when it reloads.
+    try:
+        gameCount, postedCount, lineCount = (int(inputReq[key]) for key in ('propGames', 'propPosted', 'propLines'))
+    except (KeyError, ValueError):
+        return None
+    if gameCount == 0:
+        return "No upcoming games in these weeks or the week after, so no prop lines to pull."
+    message = ("Prop lines: " + str(lineCount) + " stored for " + str(postedCount) + " of " + str(gameCount)
+               + " upcoming game" + ("" if gameCount == 1 else "s") + ".")
+    if postedCount < gameCount:
+        missingCount = gameCount - postedCount
+        message += " " + str(missingCount) + (" has" if missingCount == 1 else " have") + " no props posted yet."
+    return message
+
+def propPullGames(request):
+    # The upcoming games whose prop lines the Pull Data page pulls once its games are in.
+    try:
+        seasonYear = int(request.GET.get('season', '0'))
+        weeks = [int(week) for week in request.GET.get('weeks', '').split(',') if week.strip()]
+        if not weeks:
+            return JsonResponse({"status": "error", "error": "No weeks given"})
+        return JsonResponse({"status": "ok", "games": propLines.upcomingPropMatchIds(seasonYear, weeks)})
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"status": "error", "error": str(e)})
+
+def propPullStep(request):
+    # One game's prop lines, for the Pull Data page.
+    gameEspnId = request.GET.get('game', '').strip()
+    if not gameEspnId.isdigit():
+        return JsonResponse({"status": "error", "error": "Unknown game"})
+
+    try:
+        return JsonResponse(propLines.pullMatchPropLines(int(gameEspnId)))
     except Exception as e:
         traceback.print_exc()
         return JsonResponse({"status": "error", "error": str(e)})

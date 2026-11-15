@@ -23,5 +23,7 @@ urlpatterns = [
     path('ajax/rosterPullStep/', views.rosterPullStep, name="rosterPullStep"),
     path('ajax/gamePullWeek/', views.gamePullWeek, name="gamePullWeek"),
     path('ajax/gamePullStep/', views.gamePullStep, name="gamePullStep"),
+    path('ajax/propPullGames/', views.propPullGames, name="propPullGames"),
+    path('ajax/propPullStep/', views.propPullStep, name="propPullStep"),
     path('ajax/performancePlayerOptions/', views.performancePlayerOptions, name="performancePlayerOptions")
 ]

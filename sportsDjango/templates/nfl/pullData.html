@@ -76,7 +76,9 @@
                 <h4>Loading games&hellip;</h4>
                 <p class="text-muted">
                     This page loads one game at a time, so a whole season takes a
-                    while. Keep this tab open; it reloads when it's done.
+                    while. Once the games are in, it pulls the sportsbook prop lines for
+                    upcoming games in these weeks and the week after. Keep this tab open;
+                    it reloads when it's done.
                 </p>
                 <p><strong id="gamePullProgress">Starting&hellip;</strong></p>
                 <div class="spinner-border" role="status" aria-label="Loading"></div>
@@ -86,12 +88,24 @@
             <script>
                 (function () {
                     var pull = JSON.parse(document.getElementById("gamePullData").textContent);
-                    var resultsUrl = "?" + $.param({ season: pull.season, startWeek: pull.startWeek, endWeek: pull.endWeek, pulled: 1 });
                     var weekIndex = 0;
                     var games = [];
                     var gameIndex = 0;
                     var gameCount = 0;
                     var problemCount = 0;
+                    var propGames = [];
+                    var propIndex = 0;
+                    var propPosted = 0;
+                    var propLineCount = 0;
+                    var propGamesFound = false;
+
+                    function resultsUrl() {
+                        var params = { season: pull.season, startWeek: pull.startWeek, endWeek: pull.endWeek, pulled: 1 };
+                        if (propGamesFound) {
+                            $.extend(params, { propGames: propGames.length, propPosted: propPosted, propLines: propLineCount });
+                        }
+                        return "?" + $.param(params);
+                    }
 
                     function noteProblem(where, problem) {
                         problemCount++;
@@ -107,20 +121,77 @@
 
                     function finish() {
                         if (problemCount === 0) {
-                            window.location = resultsUrl;
+                            window.location = resultsUrl();
                             return;
                         }
                         // Reloading the page from here shouldn't start the pull over.
-                        history.replaceState(null, "", resultsUrl);
+                        history.replaceState(null, "", resultsUrl());
                         $("#gamePullProcessing h4").text("Finished loading games");
                         $("#gamePullProcessing .text-muted, #gamePullProcessing .spinner-border").hide();
-                        $("#gamePullProgress").text("Loaded " + gameCount + " game" + (gameCount === 1 ? "" : "s") + ", with the problems below.");
+                        $("#gamePullProgress").text("Loaded " + gameCount + " game" + (gameCount === 1 ? "" : "s") +
+                            " and " + propLineCount + " prop line" + (propLineCount === 1 ? "" : "s") + ", with the problems below.");
+                    }
+
+                    // After the games: prop lines for the upcoming ones, a game at a time.
+                    function nextPropGame() {
+                        propIndex++;
+                        if (propIndex >= propGames.length) {
+                            finish();
+                            return;
+                        }
+                        setTimeout(runPropGame, pull.delaySeconds * 1000);
+                    }
+
+                    function runPropGame() {
+                        var gameId = propGames[propIndex];
+                        $("#gamePullProgress").text("Prop lines: game " + (propIndex + 1) + " / " + propGames.length +
+                            " (" + propLineCount + " lines so far)");
+                        $.getJSON("../ajax/propPullStep/", { game: gameId })
+                            .done(function (data) {
+                                if (data.status === "ok") {
+                                    propLineCount += data.lines;
+                                    if (data.posted) {
+                                        propPosted++;
+                                    }
+                                } else {
+                                    noteProblem("Prop lines, " + (data.label || "game " + gameId), { heading: data.error || "something went wrong." });
+                                }
+                                nextPropGame();
+                            })
+                            .fail(function (xhr) {
+                                noteProblem("Prop lines, game " + gameId, { heading: "request failed (" + xhr.status + ")." });
+                                nextPropGame();
+                            });
+                    }
+
+                    function loadProps() {
+                        $("#gamePullProgress").text("Finding upcoming games for prop lines (" + gameCount + " games loaded)");
+                        $.getJSON("../ajax/propPullGames/", { season: pull.season, weeks: pull.weeks.join(",") })
+                            .done(function (data) {
+                                if (data.status !== "ok") {
+                                    noteProblem("Prop lines", { heading: data.error || "something went wrong." });
+                                    finish();
+                                    return;
+                                }
+                                propGames = data.games;
+                                propGamesFound = true;
+                                propIndex = 0;
+                                if (propGames.length === 0) {
+                                    finish();
+                                    return;
+                                }
+                                runPropGame();
+                            })
+                            .fail(function (xhr) {
+                                noteProblem("Prop lines", { heading: "request failed (" + xhr.status + ")." });
+                                finish();
+                            });
                     }
 
                     function nextWeek() {
                         weekIndex++;
                         if (weekIndex >= pull.weeks.length) {
-                            finish();
+                            loadProps();
                             return;
                         }
                         setTimeout(loadWeek, pull.delaySeconds * 1000);
@@ -375,6 +446,7 @@
 
         <div>
             <h4>{{ message }}</h4>
+            {% if propMessage %}<p>{{ propMessage }}</p>{% endif %}
         </div>
         <br>
         <br>
