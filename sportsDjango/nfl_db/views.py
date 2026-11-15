@@ -2137,7 +2137,7 @@ def getProps(request):
     def intParam(name, default, allowed):
         try:
             value = int(request.GET.get(name, default))
-        except ValueError:
+        except (TypeError, ValueError):
             return default
         return value if value in allowed else default
 
@@ -2151,14 +2151,10 @@ def getProps(request):
     weekOfSeason = intParam('week', defaultWeek, weeksWithLines)
     propTypeId = intParam('prop', propBoard.PROP_STATS[0][0], propBoard.PROP_STATS_BY_ID)
     recentGames = intParam('games', propBoard.DEFAULT_RECENT_GAMES, propBoard.RECENT_GAME_CHOICES)
-    # A team narrows the table to its game. One without a game this week (a bye, or
-    # props not posted yet) falls back to every game, with a note saying so.
+    # A game narrows the table to the props of both its teams.
     gameChoices = propBoard.weekGameChoices(yearOfSeason, weekOfSeason)
-    matchByTeam = {abbreviation: matchId for abbreviation, gameLabel, matchId in gameChoices}
-    requestedTeam = request.GET.get('team', '').strip().upper()
-    selectedTeam = requestedTeam if requestedTeam in matchByTeam else ''
-    if requestedTeam and not selectedTeam and nflTeam.objects.filter(abbreviation = requestedTeam).exists():
-        pageDictionary['teamMissingNote'] = requestedTeam + " has no game with prop lines this week, so every game is shown."
+    gameLabels = dict(gameChoices)
+    selectedGame = intParam('game', None, gameLabels)
 
     weekLabels = dict(weeksOnPage_Helper())
     pageDictionary.update({
@@ -2166,14 +2162,14 @@ def getProps(request):
         'selectedWeek': weekOfSeason,
         'selectedProp': propTypeId,
         'selectedGames': recentGames,
-        'selectedTeam': selectedTeam,
+        'selectedGame': selectedGame,
         'gameChoices': gameChoices,
-        'selectedGameLabel': next((gameLabel for abbreviation, gameLabel, matchId in gameChoices if abbreviation == selectedTeam), None),
+        'selectedGameLabel': gameLabels.get(selectedGame),
         'weeks': [(week, weekLabels.get(week, week) if week > 18 else week) for week in weeksWithLines],
         'weekLabel': ("Week " + str(weekOfSeason)) if weekOfSeason <= 18 else weekLabels.get(weekOfSeason, "Week " + str(weekOfSeason)),
         'previousWeek': max([week for week in weeksWithLines if week < weekOfSeason], default = None),
         'nextWeek': min([week for week in weeksWithLines if week > weekOfSeason], default = None),
-        'board': propBoard.buildPropBoard(yearOfSeason, weekOfSeason, propTypeId, recentGames, matchByTeam.get(selectedTeam)),
+        'board': propBoard.buildPropBoard(yearOfSeason, weekOfSeason, propTypeId, recentGames, selectedGame),
         'breakEvenRate': 110 / 210,
     })
     sportsbooks = sorted(set(playerPropLine.objects.filter(nflMatch__yearOfSeason = yearOfSeason, nflMatch__weekOfSeason = weekOfSeason)

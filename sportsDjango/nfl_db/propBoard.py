@@ -205,21 +205,16 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
 
 
 def weekGameChoices(seasonYear, weekOfSeason):
-    # The Team dropdown: every team with a game in the week that has prop lines, as
-    # (abbreviation, "BUF @ KC", match id), by abbreviation. Picking a team shows
-    # both sides of its game.
+    # The Game dropdown: every game in the week that has prop lines, as (match id,
+    # "BUF @ KC"), in kickoff order.
     teamsByEspnId = {team.espnId: team for team in nflTeam.objects.all()}
     matchIds = set(playerPropLine.objects.filter(nflMatch__yearOfSeason = seasonYear, nflMatch__weekOfSeason = weekOfSeason)
                    .values_list('nflMatch_id', flat = True).distinct())
     choices = []
-    for match in nflMatch.objects.filter(id__in = matchIds):
+    for match in nflMatch.objects.filter(id__in = matchIds).order_by('datePlayed', 'espnId'):
         homeTeam, awayTeam = teamsByEspnId.get(match.homeTeamEspnId), teamsByEspnId.get(match.awayTeamEspnId)
-        if homeTeam == None or awayTeam == None:
-            continue
-        gameLabel = awayTeam.abbreviation + " @ " + homeTeam.abbreviation
-        for team in (awayTeam, homeTeam):
-            choices.append((team.abbreviation, gameLabel, match.id))
-    return sorted(choices)
+        choices.append((match.id, (awayTeam.abbreviation if awayTeam else "?") + " @ " + (homeTeam.abbreviation if homeTeam else "?")))
+    return choices
 
 
 def addMatchups(weekRows):
