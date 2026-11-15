@@ -1905,11 +1905,12 @@ def matchupTeamStatRows(rowSpecs, seasonStats, seasonYear, throughWeek, weekColu
 MATCHUP_COUNTING_PLAYER_STATS = ["rushingTds", "receivingTds", "redZoneCarries", "redZoneReceptions"]
 
 
-def matchupPlayerRows(team, seasonYear, statKeys, throughWeek, weekColumns, resultWeek, playerCount):
+def matchupPlayerRows(team, seasonYear, statKeys, throughWeek, weekColumns, resultWeek, playerCount, lineWeek):
     # The team's leading players over weeks 1..throughWeek for one stat, or
     # several added together (rushing + receiving TDs), laid out on the same week
     # columns as the team tables so bye weeks line up. The ranking only looks at
-    # those weeks; resultWeek's cells ride along hidden.
+    # those weeks; resultWeek's cells ride along hidden. Each row also carries the
+    # player's line for the lineWeek game (the one being previewed), if any.
     def combinedWeekCells(throughWeekLimit):
         # {player id: player}, {player id: {week: cell}} with the stat keys summed.
         playersById, cellsByPlayerId = {}, {}
@@ -1984,6 +1985,7 @@ def matchupPlayerRows(team, seasonYear, statKeys, throughWeek, weekColumns, resu
             'player': playersById[playerId],
             'seasonTotal': seasonTotals[playerId],
             'weekCells': weekCells,
+            'line': float(linesByPlayerWeek[(playerId, lineWeek)].line) if (playerId, lineWeek) in linesByPlayerWeek else None,
         })
     return topRows
 
@@ -2135,7 +2137,9 @@ def getMatchup(request):
                 side.append({'kind': 'player', 'title': f"{offenseTeam.abbreviation} {sectionSetup['title']}", 'team': offenseTeam,
                     'statLabel': sectionSetup['statLabel'], 'showPosition': sectionSetup.get('showPosition', False),
                     'opponentRows': [opponentRow(offenseTeam)],
-                    'rows': matchupPlayerRows(offenseTeam, yearOfSeason, sectionSetup['statKeys'], throughWeek, weekColumns, resultWeek, sectionSetup['count'])})
+                    # Stats with a sportsbook prop get a Line column for this game.
+                    'lineColumn': tuple(sectionSetup['statKeys']) in propBoard.PROP_TYPE_BY_STAT_KEYS,
+                    'rows': matchupPlayerRows(offenseTeam, yearOfSeason, sectionSetup['statKeys'], throughWeek, weekColumns, resultWeek, sectionSetup['count'], weekOfSeason)})
         return side
 
     sections = sideSections(selectedTeam, opponent) + [{'kind': 'split'}] + sideSections(opponent, selectedTeam)

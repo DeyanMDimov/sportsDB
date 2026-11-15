@@ -1160,6 +1160,33 @@ table thead tr th:first-child {
   padding-right: 4px;
 }
 
+/* Player tables with a prop: the lines for the game being previewed sit in a
+   Line column set apart on the right, like a table of their own. The table is
+   that much wider, so the wrap is nudged right by half of it to keep its left
+   edge in line with the tables above and below. */
+.byTeamTableWrap.matchupWithLine .matchupTable {
+  width: calc(144px + var(--matchup-label-width) + 50px * var(--matchup-week-count) + 80px);
+}
+.byTeamTableWrap.matchupWithLine {
+  transform: translateX(calc(-50% + 40px));
+}
+.matchupTable .matchupLineGapCol {
+  width: 16px;
+}
+.matchupTable .matchupLineCol {
+  width: 64px;
+}
+.matchupTable > :not(caption) > tr > .matchupLineGap {
+  border-top-style: hidden;
+  border-bottom-style: hidden;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+.matchupTable .matchupLine {
+  font-weight: 600;
+}
+
 /* Headings and the split line sit on the same centered column as the tables
    (same centering as .byTeamTableWrap) so everything shares one left edge. */
 .matchupColumn {
@@ -1289,6 +1316,9 @@ table thead tr th:first-child {
     white-space: normal;
     overflow-wrap: anywhere;
     line-height: 1.2;
+  }
+  .byTeamTableWrap.matchupWithLine {
+    transform: translateX(-50%);
   }
 }
 

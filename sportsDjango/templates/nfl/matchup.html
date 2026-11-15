@@ -91,7 +91,7 @@
         {% if section.kind == "team" %}
         {% include 'nfl/matchupStatTable.html' with statRows=section.rows opponentRows=section.opponentRows %}
         {% else %}
-        {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows %}
+        {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows lineColumn=section.lineColumn %}
         {% endif %}
         </div>
         {% endif %}

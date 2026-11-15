@@ -1,17 +1,19 @@
 {% comment %}
 A team's leading players for one stat on the Matchup page, on the same week
 columns as the team tables. A game the sportsbooks had a line on for this stat
-can be hovered to see the line and whether the player went over it.
-{% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows %}
+can be hovered to see the line and whether the player went over it. With
+lineColumn, the lines for the game being previewed sit in a column off to the right.
+{% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows lineColumn=section.lineColumn %}
 {% endcomment %}
 {% if playerRows %}
-<div class="byTeamTableWrap">
+<div class="byTeamTableWrap{% if lineColumn %} matchupWithLine{% endif %}">
 <table class="table table-bordered table-sm byTeamTable matchupTable">
     <colgroup>
         <col class="matchupRankCol"><col class="matchupLabelCol"><col class="matchupTotalCol">
         {% for wk in matchupWeeks %}<col class="matchupWeekCol">{% endfor %}
+        {% if lineColumn %}<col class="matchupLineGapCol"><col class="matchupLineCol">{% endif %}
     </colgroup>
-    {% include 'nfl/matchupTableHead.html' with rankHeader="#" labelHeader="Player" %}
+    {% include 'nfl/matchupTableHead.html' with rankHeader="#" labelHeader="Player" lineColumn=lineColumn %}
     <tbody>
         {% for playerRow in playerRows %}
         <tr>
@@ -30,6 +32,10 @@ can be hovered to see the line and whether the player went over it.
                 <template class="matchupHoverContent"><div class="matchupHoverTitle">Line: {{ propLine.line|floatformat:"-1" }}</div>{% if propLine.outcome == "push" %}<div>Push</div>{% else %}<div class="{% if propLine.outcome == "over" %}propLeanOver{% else %}propLeanUnder{% endif %}">{{ propLine.outcome|title }}</div>{% endif %}</template>{% endwith %}{% endif %}</td>
             {% endif %}
             {% endfor %}
+            {% if lineColumn %}
+            <td class="matchupLineGap"></td>
+            <td class="byTeamNum matchupLine">{% if playerRow.line != None %}{{ playerRow.line|floatformat:"-1" }}{% endif %}</td>
+            {% endif %}
         </tr>
         {% endfor %}
     </tbody>

@@ -2,7 +2,8 @@
 Header shared by the Matchup tables: the week labels, then a row of opponents
 under them for each team in opponentRows. On a table mixing both teams each
 opponent row is labelled with its team, underlined in the team's colors, and
-shaded like that team's stat rows (offense or defense).
+shaded like that team's stat rows (offense or defense). lineColumn adds the
+header for the player tables' Line column, set apart on the right.
 {% include 'nfl/matchupTableHead.html' with rankHeader="Rank" labelHeader="Stat" opponentRows=opponentRows %}
 {% endcomment %}
 {% with headerRowSpan=opponentRows|length|add:1 %}
@@ -14,6 +15,10 @@ shaded like that team's stat rows (offense or defense).
         {% for wk in matchupWeeks %}
         <th class="byTeamNum{% if wk.isResult %} matchupResultCell{% endif %}">{{ wk.label }}</th>
         {% endfor %}
+        {% if lineColumn %}
+        <th class="matchupLineGap" rowspan="{{ headerRowSpan }}"></th>
+        <th class="byTeamNum matchupLine" rowspan="{{ headerRowSpan }}">Line</th>
+        {% endif %}
     </tr>
     {% for opponentRow in opponentRows %}
     <tr{% if opponentRow.side %} class="matchupSide-{{ opponentRow.side }}"{% endif %}>
