@@ -1,4 +1,5 @@
 from nfl_db import models
+from nfl_db import bettingModelV3
 from nfl_db.models import nflMatch, teamMatchPerformance, nflTeam, driveOfPlay, bettingModelResult
 from django.db.models import Q
 from datetime import datetime
@@ -1331,6 +1332,183 @@ class matchModelDetails:
         self.awayTeamDefenseYdsPerGmRank = awayTeamArray[4]
 
 
+#-------Betting Model V3-------#
+
+class individualV3ModelResult(individualBettingModelResult):
+    """One game predicted by bettingModelV3: expected points from opponent-adjusted
+    team ratings. team1 is the home team, as in the other models."""
+
+    # True when there were too few earlier games to rate the teams.
+    emptyModel = False
+
+    # The ratings behind the prediction. They are not stored with the result;
+    # addV3RatingDetails fills them in for the pages that show them.
+    leagueAveragePoints = None
+    homeFieldPoints = None
+    team1OffenseRating = None
+    team1DefenseRating = None
+    team1OverallRating = None
+    team1OffenseRank = None
+    team1DefenseRank = None
+    team1OverallRank = None
+    team2OffenseRating = None
+    team2DefenseRating = None
+    team2OverallRating = None
+    team2OffenseRank = None
+    team2DefenseRank = None
+    team2OverallRank = None
+
+    def __init__(self, t1name, t2name, team1Points, team2Points):
+        self.team1Name = t1name
+        self.team2Name = t2name
+        self.team1CalculatedPoints = round(team1Points, 1)
+        self.team2CalculatedPoints = round(team2Points, 1)
+        self.calculatedSpread = round(self.team2CalculatedPoints - self.team1CalculatedPoints, 1)
+        self.calculatedTotal = round(self.team1CalculatedPoints + self.team2CalculatedPoints, 1)
+
+    @property
+    def hasBookLines(self):
+        return not self.emptyModel and bool(self.bookProvidedTotal) and self.bookProvidedSpread is not None
+
+    @property
+    def spreadEdge(self):
+        """Points by which the model likes the home team more than the book does
+        (negative: it likes the away team)."""
+        if not self.hasBookLines:
+            return None
+        return round(bettingModelV3.spreadEdge(self.calculatedSpread, self.bookProvidedSpread), 1)
+
+    @property
+    def totalEdge(self):
+        """Points by which the model's total is above the book's."""
+        if not self.hasBookLines:
+            return None
+        return round(bettingModelV3.totalEdge(self.calculatedTotal, self.bookProvidedTotal), 1)
+
+    @property
+    def spreadEdgeSize(self):
+        return abs(self.spreadEdge) if self.spreadEdge is not None else None
+
+    @property
+    def totalEdgeSize(self):
+        return abs(self.totalEdge) if self.totalEdge is not None else None
+
+    @property
+    def spreadEdgeTeam(self):
+        if not self.spreadEdge:
+            return None
+        return self.team1Name if self.spreadEdge > 0 else self.team2Name
+
+    @property
+    def totalEdgeSide(self):
+        if not self.totalEdge:
+            return None
+        return "Over" if self.totalEdge > 0 else "Under"
+
+
+def lineBetLabel(teamAbbreviation, teamLine):
+    teamLine = float(teamLine)
+    if teamLine > 0:
+        return teamAbbreviation + " +" + str(teamLine)
+    elif teamLine < 0:
+        return teamAbbreviation + " " + str(teamLine)
+    return teamAbbreviation + " ML"
+
+def generateBettingModelV3(match, ratingsByWeek = None):
+    """Predict one match from the team ratings going into its week. ratingsByWeek
+    lets a caller working through many matches fit each week's ratings once."""
+    if ratingsByWeek is None:
+        ratingsByWeek = {}
+    week = (int(match.yearOfSeason), int(match.weekOfSeason))
+    if week not in ratingsByWeek:
+        ratingsByWeek[week] = bettingModelV3.ratingsForWeek(*week)
+    ratings = ratingsByWeek[week]
+
+    homeTeamName = nflTeam.objects.get(espnId = match.homeTeamEspnId).abbreviation
+    awayTeamName = nflTeam.objects.get(espnId = match.awayTeamEspnId).abbreviation
+
+    if not ratings.hasEnoughGames:
+        modelResult = individualV3ModelResult(homeTeamName, awayTeamName, 0, 0)
+        modelResult.emptyModel = True
+        return modelResult
+
+    homePoints, awayPoints = ratings.expectedPoints(match.homeTeamEspnId, match.awayTeamEspnId, match.neutralStadium)
+    return individualV3ModelResult(homeTeamName, awayTeamName, homePoints, awayPoints)
+
+def setModelBetsV3(modelResult):
+    """Name the bets V3 would make against the book's lines, and grade them once the
+    game is over. It passes unless it disagrees with the book by MINIMUM_EDGE_POINTS."""
+    if not modelResult.hasBookLines:
+        return modelResult
+
+    modelResult.overUnderBet = "PASS"
+    modelResult.lineBet = "PASS"
+
+    if modelResult.totalEdgeSize >= bettingModelV3.MINIMUM_EDGE_POINTS:
+        modelResult.overUnderBet = "OVER" if modelResult.totalEdge > 0 else "UNDER"
+        if modelResult.gameCompleted:
+            totalVersusBook = modelResult.actualTotal - float(modelResult.bookProvidedTotal)
+            if totalVersusBook == 0:
+                modelResult.overUnderBetIsCorrect = 'Push'
+            else:
+                modelResult.overUnderBetIsCorrect = str((totalVersusBook > 0) == (modelResult.totalEdge > 0))
+
+    if modelResult.spreadEdgeSize >= bettingModelV3.MINIMUM_EDGE_POINTS:
+        homeTeamLine = float(modelResult.bookProvidedSpread)
+        if modelResult.spreadEdge > 0:
+            modelResult.lineBet = lineBetLabel(modelResult.team1Name, homeTeamLine)
+        else:
+            modelResult.lineBet = lineBetLabel(modelResult.team2Name, -homeTeamLine)
+        if modelResult.gameCompleted:
+            # The home team covers when the result beats the line it was given.
+            homeCoverMargin = homeTeamLine - modelResult.actualSpread
+            if homeCoverMargin == 0:
+                modelResult.lineBetIsCorrect = 'Push'
+            else:
+                modelResult.lineBetIsCorrect = str((homeCoverMargin > 0) == (modelResult.spreadEdge > 0))
+
+    return modelResult
+
+def setBetRankingsV3(modelResults):
+    """Put the games the model disagrees with the book on most first."""
+    for modelResult in modelResults:
+        modelResult.betRankScore = max(modelResult.spreadEdgeSize or 0, modelResult.totalEdgeSize or 0)
+    modelResults.sort(key = lambda modelResult: modelResult.betRankScore, reverse = True)
+    return modelResults
+
+def setBetRankings(modelResults, selectedModel):
+    if selectedModel == "v3":
+        return setBetRankingsV3(modelResults)
+    return setBetRankingsV1(modelResults)
+
+def addV3RatingDetails(matches, modelResults):
+    """Attach the team ratings behind each V3 prediction. Stored results don't carry
+    them, so they are refitted here, once per week."""
+    ratingsByWeek = {}
+    rankingsByWeek = {}
+    for match, modelResult in zip(matches, modelResults):
+        week = (int(match.yearOfSeason), int(match.weekOfSeason))
+        if week not in ratingsByWeek:
+            ratingsByWeek[week] = bettingModelV3.ratingsForWeek(*week)
+            rankingsByWeek[week] = ratingsByWeek[week].rankings()
+        ratings = ratingsByWeek[week]
+        rankings = rankingsByWeek[week]
+        if not ratings.hasEnoughGames:
+            continue
+
+        modelResult.leagueAveragePoints = round(ratings.leagueAveragePoints, 1)
+        modelResult.homeFieldPoints = 0.0 if match.neutralStadium else round(ratings.homeFieldPoints, 1)
+        for prefix, teamEspnId in (('team1', match.homeTeamEspnId), ('team2', match.awayTeamEspnId)):
+            offenseRank, defenseRank, overallRank = rankings.get(teamEspnId, (None, None, None))
+            setattr(modelResult, prefix + 'OffenseRating', round(ratings.offenseRating(teamEspnId), 1))
+            setattr(modelResult, prefix + 'DefenseRating', round(ratings.defenseRating(teamEspnId), 1))
+            setattr(modelResult, prefix + 'OverallRating', round(ratings.overallRating(teamEspnId), 1))
+            setattr(modelResult, prefix + 'OffenseRank', offenseRank)
+            setattr(modelResult, prefix + 'DefenseRank', defenseRank)
+            setattr(modelResult, prefix + 'OverallRank', overallRank)
+    return modelResults
+
+
 #-------Stored Model Results-------#
 
 MODEL_VERSIONS = [version for version, label in bettingModelResult.modelVersions]
@@ -1341,9 +1519,11 @@ STORED_RESULT_FIELDS = [
     if field.name not in ('id', 'nflMatch', 'modelVersion', 'movingAverageWeeks', 'yearOfSeason', 'weekOfSeason', 'computedAt')
 ]
 
-def computeModelResult(match, selectedModel, movingAverageWeeks = 0):
+def computeModelResult(match, selectedModel, movingAverageWeeks = 0, v3RatingsByWeek = None):
     """Run the selected model for one match and fill in actual results and bet outcomes."""
-    if selectedModel == "v2":
+    if selectedModel == "v3":
+        modelResult = generateBettingModelV3(match, v3RatingsByWeek)
+    elif selectedModel == "v2":
         modelResult = generateBettingModelHistV2(match, week1 = (int(match.weekOfSeason) == 1))
     elif selectedModel == "v1.5":
         modelResult = generateBettingModelHistV1(match, movingAverageWeeks)
@@ -1373,13 +1553,20 @@ def computeModelResult(match, selectedModel, movingAverageWeeks = 0):
                 modelResult.actual_t2_DrivesRedZone = team2_drives.filter(reachedRedZone = True).count()
                 modelResult.actual_t2_RedZoneConv = team2_drives.filter(driveResult = 1).count()
 
-        if match.overUnderLine != 0 and match.overUnderLine != None:
+        if match.overUnderLine != 0 and match.overUnderLine != None and selectedModel != "v3":
             modelResult = checkModelBets(match.overUnderLine, match.matchLineHomeTeam, modelResult, homeTeam.abbreviation, awayTeam.abbreviation)
     else:
         if match.overUnderLine != 0 and match.overUnderLine != None:
             modelResult.bookProvidedTotal = match.overUnderLine
         if match.matchLineHomeTeam != None:
             modelResult.bookProvidedSpread = match.matchLineHomeTeam
+
+    if selectedModel == "v3":
+        # V3 names its bets before the game as well, so they show for upcoming weeks.
+        if match.overUnderLine != 0 and match.overUnderLine != None and match.matchLineHomeTeam != None:
+            modelResult.bookProvidedTotal = match.overUnderLine
+            modelResult.bookProvidedSpread = match.matchLineHomeTeam
+        modelResult = setModelBetsV3(modelResult)
 
     return modelResult
 
@@ -1400,7 +1587,9 @@ def modelResultToRow(modelResult, match, selectedModel, movingAverageWeeks):
 def modelResultFromRow(storedResult):
     # v2 falls back to a v1 result object when the previous week isn't finished,
     # so rebuild the same class the model would have returned.
-    if storedResult.modelVersion == "v2" and not storedResult.previousWeekNotFinished:
+    if storedResult.modelVersion == "v3":
+        modelResult = individualV3ModelResult.__new__(individualV3ModelResult)
+    elif storedResult.modelVersion == "v2" and not storedResult.previousWeekNotFinished:
         modelResult = individualV2ModelResult.__new__(individualV2ModelResult)
     else:
         modelResult = individualBettingModelResult.__new__(individualBettingModelResult)
@@ -1426,13 +1615,14 @@ def getModelResultsForMatches(matches, selectedModel, movingAverageWeeks = 0):
 
     modelResults = []
     newRows = []
+    v3RatingsByWeek = {}
     for match in matches:
         storedResult = storedResultsByMatch.get(match.id)
         if storedResult != None:
             modelResults.append(modelResultFromRow(storedResult))
             continue
 
-        modelResult = computeModelResult(match, selectedModel, movingAverageWeeks)
+        modelResult = computeModelResult(match, selectedModel, movingAverageWeeks, v3RatingsByWeek)
         modelResults.append(modelResult)
         if match.completed:
             newRows.append(modelResultToRow(modelResult, match, selectedModel, movingAverageWeeks))
@@ -1444,8 +1634,8 @@ def getModelResultsForMatches(matches, selectedModel, movingAverageWeeks = 0):
 
 def invalidateModelResults(yearOfSeason, weekOfSeason):
     """Drop stored results that may have used data from this week: later weeks of the
-    same season, and all of the next season (early weeks and moving averages reach
-    back into the previous year)."""
+    same season, and all of the next season (early weeks, moving averages and V3's
+    ratings reach back into the previous year, and no further)."""
     yearOfSeason = int(yearOfSeason)
     weekOfSeason = int(weekOfSeason)
     bettingModelResult.objects.filter(

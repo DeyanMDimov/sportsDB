@@ -28,7 +28,7 @@ class Command(BaseCommand):
                 print("Pass --season to precompute results for a season.")
             return
 
-        models = [options['model']] if options['model'] != None else ["v1", "v1.5"]
+        models = [options['model']] if options['model'] != None else ["v1", "v1.5", "v3"]
         seasonMatches = list(nflMatch.objects.filter(yearOfSeason = options['season'], completed = True).order_by('weekOfSeason'))
 
         for selectedModel in models:

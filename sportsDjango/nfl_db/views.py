@@ -734,6 +734,8 @@ def loadModel(request, target):
             gamesInWeek = list(nflMatch.objects.filter(yearOfSeason = yearOfSeason).filter(weekOfSeason = int(weekOfSeason)))
 
             modelResults = businessLogic.getModelResultsForMatches(gamesInWeek, selectedModel, selectedLen)
+            if selectedModel == "v3":
+                businessLogic.addV3RatingDetails(gamesInWeek, modelResults)
 
             for match, individualModelResult in zip(gamesInWeek, modelResults):
                 if match.completed:
@@ -805,7 +807,7 @@ def loadModel(request, target):
             actualOverCount = len(list(filter(lambda x: x.actualTotal > x.bookProvidedTotal, gamesWithActualTotal)))
             actualUnderCount = len(list(filter(lambda x: x.actualTotal < x.bookProvidedTotal, gamesWithActualTotal)))
 
-            modelResults = businessLogic.setBetRankingsV1(modelResults)
+            modelResults = businessLogic.setBetRankings(modelResults, selectedModel)
             for m in modelResults:
                 print(m.team1Name + " vs. " + m.team2Name + " Bet Rank Score: " + str(m.betRankScore))
             
@@ -843,6 +845,7 @@ def loadModelYear(request):
     modelsOnPage = []
     modelsOnPage.append(['v1', 'V1.0 (Avg Yds/Yds per Pt)'])
     modelsOnPage.append(['v1.5', 'V1.5 (V1 with Moving Avg.)'])
+    modelsOnPage.append(['v3', 'V3.0 (Opponent-Adjusted Ratings)'])
     #modelsOnPage.append(['v2','V2.0 (Drives vs Drive Result)'])
     
     movingAvgLenOptions = []
@@ -976,7 +979,7 @@ def loadModelYear(request):
             for wk in range (2, weeksInSeason+1):
                 if wk not in unfinishedWeeks:
                     modelWeekResults = [modelResult for match, modelResult in zip(finishedMatches, finishedResults) if match.weekOfSeason == wk]
-                    modelWeekResults = businessLogic.setBetRankingsV1(modelWeekResults)
+                    modelWeekResults = businessLogic.setBetRankings(modelWeekResults, selectedModel)
 
                     topModelWeekResults = []
                     if topNumResults == 20:

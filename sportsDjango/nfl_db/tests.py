@@ -551,3 +551,279 @@ class PropTypeTests(SimpleTestCase):
     def test_labels(self):
         self.assertEqual(propLines.propTypeLabel('Total Receiving Yards (incl. overtime)'), 'Receiving Yards')
         self.assertEqual(propLines.propTypeLabel('Longest Rush (incl. overtime)'), 'Longest Rush')
+
+
+from nfl_db import bettingModelV3, businessLogic
+from nfl_db.models import bettingModelResult
+
+
+def v3Game(year, week, home, away, homePoints, awayPoints, neutral = False):
+    return bettingModelV3.pastGame(year, week, home, away, homePoints, awayPoints, neutral)
+
+
+def v3League(year = 2024, weeks = 12, homeEdge = 1, extraPoints = None):
+    """Four teams whose scores follow the model exactly: 20 points, plus the
+    offense's strength, minus the defense's, plus or minus homeEdge."""
+    offense = {1: 6, 2: 2, 3: -2, 4: -6}
+    defense = {1: 3, 2: -3, 3: 3, 4: -3}
+    pairings = [((1, 2), (3, 4)), ((1, 3), (2, 4)), ((1, 4), (2, 3))]
+    games = []
+    for week in range(1, weeks + 1):
+        for teamA, teamB in pairings[(week - 1) % 3]:
+            # Swap who hosts every time the pairings come round again.
+            home, away = (teamA, teamB) if ((week - 1) // 3) % 2 == 0 else (teamB, teamA)
+            homePoints = 20 + offense[home] - defense[away] + homeEdge
+            awayPoints = 20 + offense[away] - defense[home] - homeEdge
+            if extraPoints != None:
+                homePoints += extraPoints(week, home)
+                awayPoints += extraPoints(week, away)
+            games.append(v3Game(year, week, home, away, homePoints, awayPoints))
+    return games
+
+
+class BettingModelV3RatingTests(SimpleTestCase):
+    def test_ratings_recover_the_teams_behind_the_scores(self):
+        ratings = bettingModelV3.fitRatings(v3League(), 2024, 13, shrinkageGames = 0.001)
+        self.assertAlmostEqual(ratings.homeFieldPoints, 2.0, places = 3)
+        self.assertAlmostEqual(ratings.leagueAveragePoints, 20, delta = 0.05)
+        # Team 1 is 9 points better than average, team 4 is 9 worse.
+        self.assertAlmostEqual(ratings.overallRating(1), 9, delta = 0.05)
+        self.assertAlmostEqual(ratings.overallRating(4), -9, delta = 0.05)
+        self.assertAlmostEqual(ratings.offenseRating(2), 2, delta = 0.05)
+        self.assertAlmostEqual(ratings.defenseRating(3), 3, delta = 0.05)
+        self.assertEqual(ratings.rankings()[1], (1, 1, 1))
+        self.assertEqual(ratings.rankings()[4][2], 4)
+
+    def test_expected_score_adds_home_field_and_both_matchups(self):
+        ratings = bettingModelV3.fitRatings(v3League(), 2024, 13, shrinkageGames = 0.001)
+        homePoints, awayPoints = ratings.expectedPoints(1, 4)
+        # Margin: 2 for home field + 9 - (-9). Total: 40, plus 0.8 of the teams' lean
+        # toward scoring ((6 + 3) + (-6 - 3) = 0).
+        self.assertAlmostEqual(homePoints - awayPoints, 20, delta = 0.11)
+        self.assertAlmostEqual(homePoints + awayPoints, 40, delta = 0.11)
+        neutralHome, neutralAway = ratings.expectedPoints(1, 4, neutralStadium = True)
+        self.assertAlmostEqual(neutralHome - neutralAway, 18, delta = 0.11)
+
+    def test_totals_lean_only_part_of_the_way(self):
+        ratings = bettingModelV3.fitRatings(v3League(), 2024, 13, shrinkageGames = 0.001)
+        # Team 1's offense against team 2's poor defense leans the game 8 points over.
+        homePoints, awayPoints = ratings.expectedPoints(1, 2)
+        self.assertAlmostEqual(homePoints + awayPoints, 40 + bettingModelV3.TOTAL_RATING_WEIGHT * 8, delta = 0.11)
+
+    def test_points_against_a_good_defense_count_for_more(self):
+        # Teams 1 and 2 both score 24; team 1 did it against the stingy defense.
+        games = []
+        for week in range(1, 9):
+            games.append(v3Game(2024, week, 1, 3, 24, 10))
+            games.append(v3Game(2024, week, 2, 4, 24, 30))
+            games.append(v3Game(2024, week, 5, 3, 10, 10))
+            games.append(v3Game(2024, week, 6, 4, 30, 30))
+        ratings = bettingModelV3.fitRatings(games, 2024, 9)
+        self.assertGreater(ratings.offenseRating(1), ratings.offenseRating(2) + 2)
+        self.assertGreater(ratings.offenseRating(1), 0)
+        self.assertLess(ratings.offenseRating(2), 0)
+
+    def test_shrinkage_pulls_ratings_toward_average(self):
+        games = v3League(weeks = 3)
+        barelyShrunk = bettingModelV3.fitRatings(games, 2024, 4, shrinkageGames = 0.001)
+        shrunk = bettingModelV3.fitRatings(games, 2024, 4)
+        self.assertLess(abs(shrunk.overallRating(1)), abs(barelyShrunk.overallRating(1)) * 0.7)
+        self.assertGreater(shrunk.overallRating(1), 0)
+
+    def test_recent_games_count_more(self):
+        # Team 1's offense finds 14 extra points a game from week 9 on.
+        games = v3League(extraPoints = lambda week, team: 14 if team == 1 and week >= 9 else 0)
+        shortMemory = bettingModelV3.fitRatings(games, 2024, 13, halfLifeWeeks = 2, shrinkageGames = 0.001)
+        longMemory = bettingModelV3.fitRatings(games, 2024, 13, halfLifeWeeks = 1000, shrinkageGames = 0.001)
+        self.assertGreater(shortMemory.offenseRating(1), longMemory.offenseRating(1) + 2)
+
+    def test_last_season_is_older_than_the_calendar_says(self):
+        lastWeekOfLastSeason = v3Game(2023, 18, 1, 2, 20, 20)
+        self.assertEqual(bettingModelV3.gameAgeInWeeks(lastWeekOfLastSeason, 2024, 1), 1 - 18 + bettingModelV3.WEEKS_BETWEEN_SEASONS)
+        self.assertEqual(bettingModelV3.gameAgeInWeeks(v3Game(2024, 3, 1, 2, 20, 20), 2024, 5), 2)
+
+    def test_only_earlier_weeks_of_this_season_and_last_are_used(self):
+        games = [
+            v3Game(2022, 18, 1, 2, 20, 20),
+            v3Game(2023, 18, 1, 2, 20, 20),
+            v3Game(2024, 4, 1, 2, 20, 20),
+            v3Game(2024, 5, 1, 2, 20, 20),
+            v3Game(2024, 6, 1, 2, 20, 20),
+        ]
+        usable = bettingModelV3.gamesBeforeWeek(games, 2024, 5)
+        self.assertEqual([(game.yearOfSeason, game.weekOfSeason) for game in usable], [(2023, 18), (2024, 4)])
+
+    def test_home_field_is_pulled_toward_the_prior(self):
+        self.assertEqual(bettingModelV3.homeFieldPoints([]), bettingModelV3.HOME_FIELD_PRIOR_POINTS)
+        blowouts = [v3Game(2024, 1, 1, 2, 30, 20)] * bettingModelV3.HOME_FIELD_PRIOR_GAMES
+        self.assertAlmostEqual(bettingModelV3.homeFieldPoints(blowouts), 6.0)
+        # Neutral-site games say nothing about home field.
+        self.assertEqual(bettingModelV3.homeFieldPoints([v3Game(2024, 1, 1, 2, 50, 0, neutral = True)]), bettingModelV3.HOME_FIELD_PRIOR_POINTS)
+
+    def test_no_earlier_games(self):
+        ratings = bettingModelV3.fitRatings([], 2024, 1)
+        self.assertFalse(ratings.hasEnoughGames)
+        self.assertEqual(ratings.overallRating(1), 0.0)
+
+
+class BettingModelV3EdgeTests(SimpleTestCase):
+    def prediction(self, modelSpread, bookSpread, actualSpread, modelTotal = 44, bookTotal = 44, actualTotal = 44):
+        return bettingModelV3.predictedGame(2024, 5, modelSpread, modelTotal, bookSpread, bookTotal, actualSpread, actualTotal)
+
+    def test_edges(self):
+        # Model has the home team by 6, the book by 3.
+        self.assertEqual(bettingModelV3.spreadEdge(-6.0, Decimal('-3.0')), 3.0)
+        self.assertEqual(bettingModelV3.spreadEdge(2.5, Decimal('-3.0')), -5.5)
+        self.assertEqual(bettingModelV3.totalEdge(47.5, Decimal('44.5')), 3.0)
+
+    def test_cover_probability(self):
+        self.assertEqual(bettingModelV3.coverProbability(0), 0.5)
+        self.assertAlmostEqual(bettingModelV3.coverProbability(bettingModelV3.MARGIN_STANDARD_DEVIATION), 0.8413, places = 3)
+        self.assertAlmostEqual(bettingModelV3.coverProbability(3) + bettingModelV3.coverProbability(-3), 1)
+
+    def test_bet_record(self):
+        predictions = [
+            self.prediction(-6.0, -3.0, -7),    # took the home team -3, won by 7
+            self.prediction(-6.0, -3.0, -3),    # won by exactly 3: push
+            self.prediction(1.0, -3.0, -10),    # took the away team +3, lost by 10
+            self.prediction(-3.5, -3.0, -20),   # half a point apart: no bet at a 1 point minimum
+        ]
+        self.assertEqual(bettingModelV3.betRecord(predictions, 1), (1, 1, 1))
+        self.assertEqual(bettingModelV3.betRecord(predictions, 0), (2, 1, 1))
+        totals = [self.prediction(0, 0, 0, modelTotal = 48, bookTotal = 44.5, actualTotal = 51), self.prediction(0, 0, 0, modelTotal = 40, bookTotal = 44.5, actualTotal = 51)]
+        self.assertEqual(bettingModelV3.betRecord(totals, 1, betOnTotals = True), (1, 1, 0))
+
+    def test_evaluation(self):
+        summary = bettingModelV3.evaluatePredictions([self.prediction(-6.0, -3.0, -7), self.prediction(1.0, -2.0, -10, modelTotal = 40, bookTotal = 45, actualTotal = 50)])
+        self.assertEqual(summary['games'], 2)
+        self.assertEqual(summary['modelSpreadError'], 6.0)
+        self.assertEqual(summary['bookSpreadError'], 6.0)
+        self.assertEqual(summary['modelTotalError'], 5.0)
+        self.assertEqual(summary['bookTotalError'], 2.5)
+        self.assertIsNone(bettingModelV3.evaluatePredictions([]))
+
+
+class BettingModelV3BetTests(SimpleTestCase):
+    def result(self, homePoints, awayPoints, bookSpread, bookTotal, actual = None):
+        modelResult = businessLogic.individualV3ModelResult("KC", "DEN", homePoints, awayPoints)
+        modelResult.bookProvidedSpread = bookSpread
+        modelResult.bookProvidedTotal = bookTotal
+        if actual != None:
+            modelResult.gameCompleted = True
+            modelResult.actualSpread = actual[1] - actual[0]
+            modelResult.actualTotal = actual[0] + actual[1]
+        return businessLogic.setModelBetsV3(modelResult)
+
+    def test_spread_and_total_follow_the_expected_score(self):
+        modelResult = businessLogic.individualV3ModelResult("KC", "DEN", 27.3, 20.1)
+        self.assertEqual(modelResult.calculatedSpread, -7.2)
+        self.assertEqual(modelResult.calculatedTotal, 47.4)
+
+    def test_home_team_laying_points(self):
+        modelResult = self.result(27.0, 20.0, Decimal('-3.5'), Decimal('44.5'))
+        self.assertEqual((modelResult.spreadEdge, modelResult.spreadEdgeTeam), (3.5, "KC"))
+        self.assertEqual(modelResult.lineBet, "KC -3.5")
+        self.assertEqual((modelResult.totalEdge, modelResult.overUnderBet), (2.5, "OVER"))
+        # Nothing is graded before the game is played.
+        self.assertEqual((modelResult.lineBetIsCorrect, modelResult.overUnderBetIsCorrect), ("None", "None"))
+
+    def test_away_team_getting_points(self):
+        modelResult = self.result(21.0, 20.0, Decimal('-6.5'), Decimal('48.0'))
+        self.assertEqual((modelResult.spreadEdge, modelResult.spreadEdgeTeam), (-5.5, "DEN"))
+        self.assertEqual(modelResult.lineBet, "DEN +6.5")
+        self.assertEqual(modelResult.overUnderBet, "UNDER")
+
+    def test_passes_inside_the_minimum_edge(self):
+        modelResult = self.result(23.4, 20.0, Decimal('-3.0'), Decimal('44.0'), actual = (30, 10))
+        self.assertEqual((modelResult.lineBet, modelResult.overUnderBet), ("PASS", "PASS"))
+        self.assertEqual((modelResult.lineBetIsCorrect, modelResult.overUnderBetIsCorrect), ("None", "None"))
+
+    def test_pick_em_line(self):
+        self.assertEqual(self.result(24.0, 20.0, Decimal('0.0'), Decimal('44.0')).lineBet, "KC ML")
+
+    def test_grading(self):
+        won = self.result(27.0, 20.0, Decimal('-3.5'), Decimal('44.5'), actual = (31, 20))
+        self.assertEqual((won.lineBetIsCorrect, won.overUnderBetIsCorrect), ("True", "True"))
+        lost = self.result(27.0, 20.0, Decimal('-3.5'), Decimal('44.5'), actual = (20, 17))
+        self.assertEqual((lost.lineBetIsCorrect, lost.overUnderBetIsCorrect), ("False", "False"))
+        push = self.result(27.0, 20.0, Decimal('-3.0'), Decimal('45.0'), actual = (24, 21))
+        self.assertEqual((push.lineBetIsCorrect, push.overUnderBetIsCorrect), ("Push", "Push"))
+        awayCovered = self.result(21.0, 20.0, Decimal('-6.5'), Decimal('48.0'), actual = (24, 20))
+        self.assertEqual((awayCovered.lineBetIsCorrect, awayCovered.overUnderBetIsCorrect), ("True", "True"))
+
+    def test_no_book_lines_means_no_bets(self):
+        modelResult = self.result(27.0, 20.0, None, None)
+        self.assertEqual((modelResult.lineBet, modelResult.overUnderBet), ("", ""))
+        self.assertIsNone(modelResult.spreadEdge)
+
+    def test_biggest_disagreements_rank_first(self):
+        small = self.result(24.0, 20.0, Decimal('-3.0'), Decimal('44.0'))
+        bigLine = self.result(30.0, 20.0, Decimal('-3.0'), Decimal('50.0'))
+        bigTotal = self.result(24.0, 20.0, Decimal('-4.0'), Decimal('35.0'))
+        ranked = businessLogic.setBetRankings([small, bigLine, bigTotal], "v3")
+        self.assertEqual(ranked, [bigTotal, bigLine, small])
+        self.assertEqual([modelResult.betRankScore for modelResult in ranked], [9.0, 7.0, 1.0])
+
+
+class BettingModelV3PageTests(TestCase):
+    def setUp(self):
+        for espnId, abbreviation in ((1, "AAA"), (2, "BBB"), (3, "CCC"), (4, "DDD")):
+            nflTeam.objects.create(abbreviation = abbreviation, teamName = abbreviation, espnId = espnId)
+        self.nextEspnId = 1000
+        for game in v3League(year = 2024, weeks = 12):
+            self.match(game.yearOfSeason, game.weekOfSeason, game.homeTeamEspnId, game.awayTeamEspnId, game.homeTeamPoints, game.awayTeamPoints)
+        # Week 13: one game already played, one still to come.
+        self.played = self.match(2024, 13, 1, 4, 31, 13, line = Decimal('-14.5'), total = Decimal('41.5'))
+        self.upcoming = self.match(2024, 13, 2, 3, None, None, line = Decimal('-1.0'), total = Decimal('40.5'))
+        patcher = mock.patch.object(bettingModelV3, 'MINIMUM_GAMES_FOR_RATINGS', 10)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def match(self, year, week, home, away, homePoints, awayPoints, line = None, total = None):
+        self.nextEspnId += 1
+        return nflMatch.objects.create(
+            espnId = self.nextEspnId, yearOfSeason = year, weekOfSeason = week, homeTeamEspnId = home, awayTeamEspnId = away,
+            completed = homePoints != None, homeTeamPoints = homePoints, awayTeamPoints = awayPoints,
+            homeTeamTotalYards = 300, awayTeamTotalYards = 300, matchLineHomeTeam = line, overUnderLine = total)
+
+    def test_predicts_from_earlier_weeks_only(self):
+        played, upcoming = businessLogic.getModelResultsForMatches([self.played, self.upcoming], "v3")
+        # AAA is far better than DDD in the earlier weeks; this week's 31-13 is not in the ratings.
+        self.assertLess(played.calculatedSpread, -10)
+        self.assertEqual((played.team1ActualPoints, played.actualSpread, played.actualTotal), (31, -18, 44))
+        self.assertTrue(played.gameCompleted)
+        self.assertFalse(upcoming.gameCompleted)
+        self.assertEqual(upcoming.bookProvidedTotal, Decimal('40.5'))
+        self.assertIn(upcoming.overUnderBet, ("OVER", "UNDER", "PASS"))
+
+    def test_played_games_are_stored_and_read_back_the_same(self):
+        computed = businessLogic.getModelResultsForMatches([self.played, self.upcoming], "v3")[0]
+        stored = bettingModelResult.objects.get(modelVersion = "v3")
+        self.assertEqual(stored.nflMatch, self.played)
+        with mock.patch.object(bettingModelV3, 'ratingsForWeek', side_effect = AssertionError("should have used the stored result")):
+            readBack = businessLogic.getModelResultsForMatches([self.played], "v3")[0]
+        self.assertIsInstance(readBack, businessLogic.individualV3ModelResult)
+        for attribute in ('team1Name', 'team2Name', 'team1CalculatedPoints', 'team2CalculatedPoints', 'calculatedSpread', 'calculatedTotal',
+                          'spreadEdge', 'totalEdge', 'lineBet', 'lineBetIsCorrect', 'overUnderBet', 'overUnderBetIsCorrect'):
+            self.assertEqual(getattr(readBack, attribute), getattr(computed, attribute), attribute)
+
+    def test_not_enough_history_makes_no_prediction(self):
+        opener = self.match(2020, 1, 1, 2, 20, 17, line = Decimal('-3.0'), total = Decimal('44.0'))
+        modelResult = businessLogic.getModelResultsForMatches([opener], "v3")[0]
+        self.assertTrue(modelResult.emptyModel)
+        self.assertEqual((modelResult.lineBet, modelResult.overUnderBet), ("", ""))
+
+    def test_weekly_summary_and_breakdown_pages(self):
+        for url in ('/loadModelSummary/', '/loadModel/'):
+            page = self.client.get(url, {'season': "2024", 'week': "13", 'model': "v3", 'movingavg': "5"})
+            self.assertEqual(page.status_code, 200)
+            results = page.context['modelResults']
+            self.assertEqual(len(results), 2)
+            # The ratings behind each prediction are attached for display.
+            self.assertEqual(results[0].team1OverallRank + results[0].team2OverallRank, 5)
+            self.assertContains(page, "Offense Rating")
+
+    def test_yearly_summary_page(self):
+        page = self.client.get('/loadYearlySummary/', {'season': "2024", 'model': "v3", 'movingavg': "5", 'topNumResults': "20"})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "disagrees with the book most")

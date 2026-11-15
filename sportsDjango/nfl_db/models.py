@@ -691,7 +691,7 @@ class playerPropLine(models.Model):
 #-------Betting Model Results-------#
 
 class bettingModelResult(models.Model):
-    # Cached output of a betting model (v1 / v1.5 / v2) for one match, so the
+    # Cached output of a betting model (v1 / v1.5 / v2 / v3) for one match, so the
     # model and yearly summary pages don't recompute every game on each load.
     # Only completed matches are stored; see businessLogic.getModelResultsForMatches.
     nflMatch        = models.ForeignKey(nflMatch, on_delete = models.CASCADE)
@@ -699,6 +699,7 @@ class bettingModelResult(models.Model):
         ("v1", "V1.0"),
         ("v1.5", "V1.5"),
         ("v2", "V2.0"),
+        ("v3", "V3.0"),
     )
     modelVersion        = models.CharField(max_length = 5, choices = modelVersions)
     movingAverageWeeks  = models.SmallIntegerField(default = 0)

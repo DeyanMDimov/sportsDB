@@ -1,6 +1,7 @@
 {% extends 'nfl/base.html'%}
 {% load static %}
 {% load bootstrap_icons %}
+{% load templateFilters %}
 {% block loadModel %}
     <div class = "container">
         {% include 'nfl/modelTabs.html' with activeModelTab='weekly' %}
@@ -54,6 +55,10 @@
                                 {% endif %}>
                                     V2.0 (Drives vs Drive Result)
                                 </option> {% endcomment %}
+                                <option value="v3"
+                                {% if selectedModel == "v3" %}
+                                    selected
+                                {% endif %}>V3.0 (Opponent-Adjusted Ratings)</option>
                             </select>
                             <label for="select_s_week">Model</label>
                         </div>
@@ -110,6 +115,16 @@
                     <li>Divide the result from Step 1 (expected offensive yards in the game) by the result from Step 2 (expected yards per point).</li>
                     <li>Result from Step 3 is your expected score.</li>
                 </ol>
+                {% elif selectedModel == "v3" %}
+                <ol>
+                    <li>Every team gets an offense rating (points it scores above an average team) and a defense rating (points it holds an average opponent below their usual score). Zero is league average.</li>
+                    <li>All the ratings are solved for together from this season's and last season's results, so points scored against a good defense count for more than the same points against a bad one.</li>
+                    <li>Recent games count more: a game 10 weeks old counts half as much as last week's, and the offseason ages last year's games by another 8 weeks.</li>
+                    <li>Every rating is pulled toward average, as if the team had also played 4 games at exactly league average. That keeps a couple of unusual games from producing an extreme rating.</li>
+                    <li>Expected score = league average score, plus the team's offense rating, minus the opponent's defense rating, plus half of home field for the home team and minus half for the visitor.</li>
+                    <li>The model only names a bet when its line or total is at least 1 point away from the book's. "Edge" is the size of that gap.</li>
+                </ol>
+                <p>Backtested from 2019 on, this lands about 10.2 points from the final margin in a typical game, against 9.8 for the closing line, and its bets against the closing line have won about half the time. docs/betting-model-v3.md has the full explanation.</p>
                 {% else %}
                 <ol>
                     <li>Look at the average number of drives a team gets.</li>
@@ -217,7 +232,7 @@
                                         +{% endif %}{{result.actualSpread }}
                                     {% endif %}
                                 </td>
-                                {% if result.gameCompleted %}
+                                {% if result.gameCompleted or selectedModel == "v3" %}
                                 <td class="modelSummaryLine 
                                     {% if result.overUnderBetIsCorrect == 'True' %}
                                         correctBet
@@ -250,6 +265,44 @@
                                 <td colspan="5">
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
+                                            {% if selectedModel == "v3" %}
+                                            <tr>
+                                                <td></td>
+                                                <td>{{result.team1Name}}</td>
+                                                <td></td>
+                                                <td>{{result.team2Name}}</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="font-size:0.85em">Offense Rating:</th>
+                                                <td>{{result.team1OffenseRating|signed}} (#{{result.team1OffenseRank}})</td>
+                                                <td></td>
+                                                <td>{{result.team2OffenseRating|signed}} (#{{result.team2OffenseRank}})</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="font-size:0.85em">Defense Rating:</th>
+                                                <td>{{result.team1DefenseRating|signed}} (#{{result.team1DefenseRank}})</td>
+                                                <td></td>
+                                                <td>{{result.team2DefenseRating|signed}} (#{{result.team2DefenseRank}})</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="font-size:0.85em">Overall Rating:</th>
+                                                <td>{{result.team1OverallRating|signed}} (#{{result.team1OverallRank}})</td>
+                                                <td></td>
+                                                <td>{{result.team2OverallRating|signed}} (#{{result.team2OverallRank}})</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="font-size:0.85em">Home Field:</th>
+                                                <td colspan="3">{{result.homeFieldPoints|signed}} pts for {{result.team1Name}}</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="font-size:0.85em">Line Edge:</th>
+                                                <td colspan="3">{% if result.spreadEdgeTeam %}{{result.spreadEdgeTeam}} by {{result.spreadEdgeSize}} pts{% else %}-{% endif %}</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row" style="font-size:0.85em">Total Edge:</th>
+                                                <td colspan="3">{% if result.totalEdgeSide %}{{result.totalEdgeSide}} by {{result.totalEdgeSize}} pts{% else %}-{% endif %}</td>
+                                            </tr>
+                                            {% else %}
                                             <tr>
                                                 <td>
                                                 </td>
@@ -335,6 +388,7 @@
                                                     {{result.awayTeamTurnoverDiff}}
                                                 </td>
                                             </tr>
+                                        {% endif %}
                                         </tbody>
                                     </table>
                                 </td>
@@ -470,6 +524,7 @@
                                             </tr>
                                         </tbody>
                                     </table> {% endcomment %}
+                                    {% if selectedModel != "v3" %}
                                     <table style="font-size:0.9em" class="table text-start">
                                         <tbody>
                                             <tr>
@@ -559,6 +614,7 @@
 
                                         </tbody>
                                     </table>
+                                    {% endif %}
 
                                 </td>
                             </tr>

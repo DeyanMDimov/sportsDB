@@ -38,6 +38,10 @@
                                 {% endif %}>
                                     V2.0 (Drives vs Drive Result)
                                 </option>
+                                <option value="v3"
+                                {% if selectedModel == "v3" %}
+                                    selected
+                                {% endif %}>V3.0 (Opponent-Adjusted Ratings)</option>
                             </select>
                             <label for="select_s_week">Model</label>
                         </div>
@@ -84,6 +88,12 @@
             
             <br>
             <h3>How are games ranked?</h3>
+            {% if selectedModel == "v3" %}
+            <p>
+                By how far the model is from the book, in points: the larger of the gap between its line and the book's line and the gap between its total and the book's total. <br>
+                The games at the top are the ones where the model disagrees with the book most. The records only count games the model bet, which takes a gap of at least 1 point.
+            </p>
+            {% else %}
             <p>
                 Absolute Value of ("Team 1 Ranked on Offense Yards Per Game" + "Team 1 Ranked on Offense Yards Per Point" - ("Team 2 Ranked on Defense Yards Per Game" + "Team 2 Ranked on Defense Yards Per Point")) <br>
                 +<br>
@@ -91,6 +101,7 @@
 
                 This result will be highest when the best offense faces the worst defense and when the worst offense faces the best defense. It highlights the biggest imbalances.
             </p>
+            {% endif %}
             <br>
             <p>Here are the results for {{yearOfSeason}}</p>
         
