@@ -15,7 +15,7 @@ class Command(BaseCommand):
                                    '"expected" is whoever started its previous game, "none" leaves the quarterback adjustment out.')
 
     def handle(self, *args, **options):
-        data = bettingModelV3.modelData(useAvailability = False)
+        data = bettingModelV3.modelData(usePregameNews = False)
         predictionsByMode = {
             mode: bettingModelV3.backtestPredictions(options['firstSeason'], options['lastSeason'], mode, data)
             for mode in ("none", "expected", "actual")

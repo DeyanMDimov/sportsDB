@@ -799,6 +799,22 @@ class bettingModelResult(models.Model):
         ]
 
 
+class chosenStartingQuarterback(models.Model):
+    # The quarterback picked by hand as a team's starter for a game that hasn't
+    # been played, so betting model V3 rates the team with him instead of assuming
+    # whoever started its last game. Ignored once the game has been played.
+    team            = models.ForeignKey(nflTeam, on_delete = models.CASCADE)
+    player          = models.ForeignKey(player, on_delete = models.CASCADE)
+    yearOfSeason    = models.SmallIntegerField(validators = [MinValueValidator(2002)])
+    weekOfSeason    = models.SmallIntegerField(validators = [MinValueValidator(-4), MaxValueValidator(22)])
+    updatedAt       = models.DateTimeField(auto_now = True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields = ['team', 'yearOfSeason', 'weekOfSeason'], name = 'unique_chosen_quarterback_per_team_week')
+        ]
+
+
 #-------Background Job Models-------#
 
 class availabilityJob(models.Model):
