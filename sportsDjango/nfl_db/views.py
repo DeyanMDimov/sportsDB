@@ -1944,6 +1944,26 @@ def matchupPlayerRows(team, seasonYear, statKeys, throughWeek, weekColumns, resu
     if playerCount != None:
         rankedPlayerIds = rankedPlayerIds[:playerCount]
 
+    # The sportsbook's line for each player's game, for stats with a prop (yards,
+    # catches, carries), keyed by (player id, week). Only this team's games count.
+    propTypeId = propBoard.PROP_TYPE_BY_STAT_KEYS.get(tuple(statKeys))
+    linesByPlayerWeek = {}
+    if propTypeId != None:
+        for propLine in playerPropLine.objects.filter(
+            player_id__in = rankedPlayerIds, propTypeId = propTypeId, nflMatch__yearOfSeason = seasonYear,
+        ).filter(models.Q(nflMatch__homeTeamEspnId = team.espnId) | models.Q(nflMatch__awayTeamEspnId = team.espnId)).select_related('nflMatch'):
+            linesByPlayerWeek.setdefault((propLine.player_id, propLine.nflMatch.weekOfSeason), propLine)
+
+    def withPropLine(playerId, weekNumber, cell):
+        # The cell plus how it did against its line, when there was one.
+        propLine = linesByPlayerWeek.get((playerId, weekNumber))
+        if propLine == None or cell['state'] != 'value':
+            return cell
+        line = float(propLine.line)
+        margin = cell['value'] - line
+        return dict(cell, propLine = {'line': line, 'sportsbook': propLine.sportsbook, 'margin': abs(margin),
+            'outcome': 'over' if margin > 0 else 'under' if margin < 0 else 'push'})
+
     topRows = []
     for playerId in rankedPlayerIds:
         weekCells = []
@@ -1952,11 +1972,11 @@ def matchupPlayerRows(team, seasonYear, statKeys, throughWeek, weekColumns, resu
             if weekNumber == resultWeek:
                 # Not in the result rows at all means no part in that game's stat.
                 resultCell = resultCellsByPlayerId.get(playerId, {}).get(weekNumber, {'state': 'value', 'value': 0})
-                weekCells.append(dict(resultCell, result = True))
+                weekCells.append(withPropLine(playerId, weekNumber, dict(resultCell, result = True)))
             elif weekNumber > throughWeek:
                 weekCells.append({'state': 'future'})
             elif weekNumber in cellsByPlayerId[playerId]:
-                weekCells.append(cellsByPlayerId[playerId][weekNumber])
+                weekCells.append(withPropLine(playerId, weekNumber, cellsByPlayerId[playerId][weekNumber]))
             else:
                 weekCells.append({'state': 'bye'})
         topRows.append({
@@ -2073,10 +2093,11 @@ def getMatchup(request):
 
     categorySetup = MATCHUP_CATEGORIES[category]
     opponent = pageDictionary['opponent']
-    # Columns for the whole regular season; only weeks 1..throughWeek have data.
-    # A playoff match's result gets a column of its own on the end.
-    weekColumns = [{'week': weekNumber, 'label': f"W{weekNumber}"}
-        for weekNumber in range(1, crudLogic.regularSeasonWeekCount(yearOfSeason) + 1)]
+    # Columns up to the week being previewed (its own column holds the result), or
+    # the whole regular season for a playoff match, whose result gets a column of
+    # its own on the end.
+    lastWeekColumn = min(weekOfSeason, crudLogic.regularSeasonWeekCount(yearOfSeason))
+    weekColumns = [{'week': weekNumber, 'label': f"W{weekNumber}"} for weekNumber in range(1, lastWeekColumn + 1)]
     if resultWeek != None and resultWeek > weekColumns[-1]['week']:
         weekColumns.append({'week': resultWeek, 'label': shortPlayoffLabels.get(resultWeek, f"W{resultWeek}")})
     for weekColumn in weekColumns:

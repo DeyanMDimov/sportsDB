@@ -1,6 +1,7 @@
 {% comment %}
 A team's leading players for one stat on the Matchup page, on the same week
-columns as the team tables.
+columns as the team tables. A game the sportsbooks had a line on for this stat
+can be hovered to see the line and whether the player went over it.
 {% include 'nfl/matchupPlayerTable.html' with playerRows=section.rows showPosition=section.showPosition opponentRows=section.opponentRows %}
 {% endcomment %}
 {% if playerRows %}
@@ -24,7 +25,9 @@ columns as the team tables.
             <td class="byTeamNum text-muted">&ndash;</td>
             {% else %}
             {# The match being previewed is hidden until Show result is ticked #}
-            <td class="byTeamNum{% if weekCell.result %} matchupResultCell{% endif %}"{% if weekCell.label %} title="{{ weekCell.label }}"{% endif %}>{% if weekCell.result %}<span class="matchupResult">{% endif %}{% if weekCell.state == "value" %}{{ weekCell.value }}{% elif weekCell.state == "out" %}&#10060;{% elif weekCell.state == "notInRoster" %}&#10134;{% else %}0{% endif %}{% if weekCell.result %}</span>{% endif %}</td>
+            <td class="byTeamNum{% if weekCell.result %} matchupResultCell{% endif %}{% if weekCell.propLine %} matchupHoverCell{% endif %}"{% if weekCell.label and not weekCell.propLine %} title="{{ weekCell.label }}"{% endif %}>{% if weekCell.result %}<span class="matchupResult">{% endif %}{% if weekCell.state == "value" %}{{ weekCell.value }}{% elif weekCell.state == "out" %}&#10060;{% elif weekCell.state == "notInRoster" %}&#10134;{% else %}0{% endif %}{% if weekCell.result %}</span>{% endif %}{% if weekCell.propLine %}{% with propLine=weekCell.propLine %}
+                {# The sportsbook line for this game, shown in the hover popup #}
+                <template class="matchupHoverContent"><div class="matchupHoverTitle">{{ propLine.sportsbook }} line: {{ propLine.line|floatformat:"-1" }}</div>{% if propLine.outcome == "push" %}<div>Push</div>{% else %}<div class="{% if propLine.outcome == "over" %}propLeanOver{% else %}propLeanUnder{% endif %}">{{ propLine.outcome|title }} by {{ propLine.margin|floatformat:"-1" }}</div>{% endif %}</template>{% endwith %}{% endif %}</td>
             {% endif %}
             {% endfor %}
         </tr>

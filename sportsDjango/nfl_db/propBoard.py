@@ -20,6 +20,9 @@ PROP_STATS = [
     (8, "Passing Yards", ["passingYards"], 10),
     (10, "Passing Touchdowns", ["passingTds"], 1),
 ]
+# The single-stat props by the stat they're on, for tables elsewhere (the Matchup
+# page) that show one stat and want its line: ("receivingYards",) -> 13.
+PROP_TYPE_BY_STAT_KEYS = {tuple(statKeys): propTypeId for propTypeId, label, statKeys, edgeFloor in PROP_STATS if len(statKeys) == 1}
 PROP_STATS_BY_ID = {propTypeId: (label, statKeys, edgeFloor) for propTypeId, label, statKeys, edgeFloor in PROP_STATS}
 
 # Not a By Team stat, so defined here: a touchdown pass on a play that stood.
