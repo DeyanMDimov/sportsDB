@@ -34,7 +34,7 @@ lineColumn, the lines for the game being previewed sit in a column off to the ri
             {% endfor %}
             {% if lineColumn %}
             <td class="matchupLineGap"></td>
-            <td class="byTeamNum matchupLine">{% if playerRow.line != None %}{{ playerRow.line|floatformat:"-1" }}{% endif %}</td>
+            <td class="byTeamNum matchupLine">{% if playerRow.line != None %}&plusmn;{{ playerRow.line|floatformat:"-1" }}{% endif %}</td>
             {% endif %}
         </tr>
         {% endfor %}
