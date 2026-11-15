@@ -1,9 +1,10 @@
 from nfl_db import models, players, businessLogic
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, playByPlay, player, playerTeamTenure, playerMatchPerformance, playerMatchOffense, playerMatchDefense, playerWeekStatus, playerMatchUsage, playerInjuryReport
 from nfl_db.models import rusherStatSplit, receiverStatSplit, returnerStatSplit, passerStatSplit
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum, Count
 from django.utils import timezone as djangoTimezone
+from collections import namedtuple
 from datetime import datetime, date, time, timezone, timedelta
 from zoneinfo import ZoneInfo
 
@@ -1457,8 +1458,9 @@ def reprocessMatchPlays(match_espn_id):
             receiverStatSplit.objects.filter(play=play).delete()
             returnerStatSplit.objects.filter(play=play).delete()
             
-            # Recreate stat splits with correct info
-            populatePlayStatSplits(play, None, match_espn_id)
+            # Recreate stat splits with correct info. There's no play JSON to
+            # hand over here, so have each play's participants fetched.
+            populatePlayStatSplits(play, None, match_espn_id, True)
             
             plays_updated += 1
         
@@ -1647,15 +1649,16 @@ def organizeRosterAvailabilityArrays(seasonAvailability, weekAvailability, weekN
 # Three sources, because no single one is complete:
 #   * counts (attempts, receptions, touchdowns, sacks taken) come from the
 #     per-play stat splits, which are reliable row-for-row;
-#   * yardage is read out of the play description ("... for 16 yards"). The
-#     yardage columns on the split rows are not usable - roughly half the
-#     player-game groups repeat the whole-game total on every row while the rest
-#     hold per-play yards - and play.yardsOnPlay includes penalty yardage tacked
-#     onto the play, so it overstates the gain;
-#   * interceptions, fumbles, targets and drops are not recorded at all. The
-#     split rows only exist for the play types that produced them, so their
-#     interception/fumble flags are never set, and receiver rows are only written
-#     for completions. These are read back out of the play descriptions too.
+#   * yardage is read out of the play description ("... for 16 yards").
+#     play.yardsOnPlay includes penalty yardage tacked onto the play, so it
+#     overstates the gain. The yardage columns on the split rows hold the same
+#     description reading for rows written or repaired since November 2026
+#     (see runStatSplitRepair); before that many repeated the player's
+#     whole-game total on every row;
+#   * interceptions, fumbles, targets and drops are read back out of the play
+#     descriptions too. Passer rows are written for interceptions now, but
+#     older games only have them once the repair has run, the fumble flags are
+#     never set, and receiver rows are only written for completions.
 # Team totals come from teamMatchPerformance, which ESPN populates directly.
 # ---------------------------------------------------------------------------
 
@@ -1692,8 +1695,10 @@ PERFORMANCE_POSITIONS = [(1, "QB"), (4, "RB"), (2, "WR"), (3, "TE")]
 
 PLAY_YARDS_REGEX = re.compile(r"for (-?\d+) yards?|for no gain")
 # Some plays carry ESPN's summary wording instead: "JuJu Smith-Schuster 13 Yd
-# pass from Patrick Mahomes", "Daniel Jones Pass Complete for 48 Yds to Laquon Treadwell".
-SCORING_PLAY_YARDS_REGEX = re.compile(r"(-?\d+) Yds?\b")
+# pass from Patrick Mahomes", "Daniel Jones Pass Complete for 48 Yds to Laquon Treadwell",
+# and for 2021's touchdowns "DJ Moore Pass From Sam Darnold for 2 Yrds",
+# "Mike Evans Pass From Tom Brady for 1 Yard", "Taysom Hill 44 Yard Rush".
+SCORING_PLAY_YARDS_REGEX = re.compile(r"(-?\d+) (?:Yds?|Yrds?|Yards?)\b")
 # After a replay reversal ESPN repeats the play as it now stands: "...and the
 # play was REVERSED.(Shotgun) T.Lawrence pass short left to P.Washington ran ob
 # at CIN 41 for 7 yards".
@@ -1837,7 +1842,8 @@ def completedPassDescription(playDescription):
 def playAsRuled(playDescription):
     # A reversed two-point try after a touchdown leaves the play itself as it was.
     ruledParts = [part for part in REPLAY_REVERSED_REGEX.split(playDescription or "") if not part.startswith("TWO-POINT CONVERSION")]
-    return ruledParts[-1]
+    # Nothing left when the description is only a two-point try.
+    return ruledParts[-1] if len(ruledParts) > 0 else (playDescription or "")
 
 
 def yardsGainedOnPlay(playDescription, yardsFromEndzone = None):
@@ -1954,6 +1960,38 @@ def playWasNullified(playDescription):
     # A penalty can wipe out a play entirely. ESPN still lists it, but none of
     # its yardage or attempts count towards anyone's stats.
     return "No Play" in (playDescription or "")
+
+
+# What the yards column of a stat split holds: the yards the player is credited
+# with on that one play, read the same way the pages read them, and nothing for a
+# play a penalty wiped out - so a game's rows add up to the box score. ESPN's
+# play participants have at times carried a "stats" list, but that is the
+# player's total for the whole game, repeated on every play.
+def passingYardsForSplit(play):
+    if playWasNullified(play.playDescription):
+        return 0
+    return passingYardsOnPlay(play.playType, play.playDescription, play.yardsFromEndzone)
+
+
+def rushingYardsForSplit(play):
+    if playWasNullified(play.playDescription):
+        return 0
+    return yardsGainedOnPlay(play.playDescription, play.yardsFromEndzone)
+
+
+def receivingYardsForSplit(play, playerRole = 3, playerName = None):
+    if playWasNullified(play.playDescription):
+        return 0
+    return receivingYardsOnPlay(play.playDescription, play.yardsFromEndzone, playerRole, playerName)
+
+
+INTERCEPTION_PLAY_TYPES = [15, 16]
+
+
+def passWasIntercepted(play):
+    # An interception the returner went on to fumble is typed by the recovery.
+    return (playTypeBeforeFumble(play.playType, play.playDescription) in INTERCEPTION_PLAY_TYPES
+            and not playWasNullified(play.playDescription))
 
 
 def abbreviatedNamePattern(playerName):
@@ -2968,19 +3006,30 @@ def findWrongTeamWeekStatusIds():
     return wrongTeamIds
 
 
-def findDuplicateStatSplitIds(splitModel):
+def duplicateStatSplitRows(splitModel, seasonYear = None):
     # A player throws, carries, catches or returns the ball at most once on a
-    # given play, so anything past the first row for a play is a re-pull.
+    # given play, so every row but one for a play is a re-pull. The newest row
+    # is the one kept: where the copies differ it is the newest that has the
+    # touchdown flag and the tenure the older ones were written without.
+    # Returns (row id, season) for each row to go.
+    splitRows = splitModel.objects.all()
+    if seasonYear != None:
+        splitRows = splitRows.filter(play__nflMatch__yearOfSeason = int(seasonYear))
+
     seenPlays = set()
-    duplicateIds = []
-    for rowId, playerId, playId in splitModel.objects.order_by('id').values_list('id', 'player_id', 'play_id'):
+    duplicateRows = []
+    for rowId, playerId, playId, rowSeason in splitRows.order_by('-id').values_list('id', 'player_id', 'play_id', 'play__nflMatch__yearOfSeason'):
         playKey = (playerId, playId)
         if playKey in seenPlays:
-            duplicateIds.append(rowId)
+            duplicateRows.append((rowId, rowSeason))
         else:
             seenPlays.add(playKey)
 
-    return duplicateIds
+    return duplicateRows
+
+
+def findDuplicateStatSplitIds(splitModel):
+    return [rowId for rowId, rowSeason in duplicateStatSplitRows(splitModel)]
 
 
 def describeWeekStatusRows(rowIds, sampleSize = 8):
@@ -3082,6 +3131,317 @@ def deleteRowsInChunks(rowModel, rowIds):
     # Chunked so the delete doesn't build one enormous IN (...) clause.
     for chunkStart in range(0, len(rowIds), DELETE_CHUNK_SIZE):
         rowModel.objects.filter(id__in = rowIds[chunkStart:chunkStart + DELETE_CHUNK_SIZE]).delete()
+
+
+# ---------------------------------------------------------------------------
+# Stat split repair (manage.py repairPlayStatSplitsCommand)
+#
+# Three things were wrong with the stored passer, rusher and receiver rows:
+#   * repeat rows. Splits were first written when the Plays page was opened,
+#     behind a check-then-write that a second request could get past while the
+#     first was still asking ESPN for the play, so the weeks stored back then
+#     (2025 weeks 1-4 mostly) hold up to 35 copies of a row.
+#   * the yards column. ESPN's play participants used to carry a "stats" list,
+#     which is the player's total for the whole game, and that was stored on
+#     every one of that player's plays (2023, 2024, 2025 weeks 1-5). Rows written since
+#     ESPN dropped the list hold the play's statYardage, which counts penalty
+#     yards and still doesn't add up to the box score.
+#   * interceptions had no passer row at all: the writer only took completions,
+#     incompletions and sacks.
+# The writers are fixed; this brings the rows already stored into line with
+# what they write now. Like the cleanup above it works out what it would change
+# first and only touches the database when asked to.
+# ---------------------------------------------------------------------------
+
+# Enough of a play for the ...YardsForSplit functions, without loading the row.
+storedPlay = namedtuple('storedPlay', ['playType', 'playDescription', 'yardsFromEndzone'])
+
+STAT_SPLIT_YARDS_COLUMNS = [
+    (passerStatSplit, 'passingYards', lambda play, playerRole, playerName: passingYardsForSplit(play)),
+    (rusherStatSplit, 'rushingYards', lambda play, playerRole, playerName: rushingYardsForSplit(play)),
+    (receiverStatSplit, 'receivingYards', lambda play, playerRole, playerName: receivingYardsForSplit(play, playerRole, playerName)),
+]
+
+# Where the passer is named on an interception: "J.Allen pass deep middle
+# intended for D.Harty INTERCEPTED by J.Whitehead at NYJ 4". Anything after
+# INTERCEPTED is the return, or a two-point try by the other team's passer.
+INTERCEPTED_REGEX = re.compile(r"\bINTERCEPTED\b")
+REPAIR_SAMPLE_SIZE = 6
+BOX_SCORE_YARDS_TOLERANCE = 3
+
+
+def reviewStatSplitYards(splitModel, yardsField, creditedYards, duplicateIds, seasonYear = None):
+    # Every row that will be kept, against what its play credits the player.
+    # Returns the rows to correct as (row id, season, stored, credited), and
+    # what each team's rows in each game will add up to afterwards.
+    splitRows = splitModel.objects.all()
+    if seasonYear != None:
+        splitRows = splitRows.filter(play__nflMatch__yearOfSeason = int(seasonYear))
+
+    corrections = []
+    yardsByTeamGame = {}
+    for rowId, storedYards, rowSeason, matchEspnId, teamEspnId, playType, playDescription, yardsFromEndzone, playerRole, playerName in splitRows.values_list(
+        'id', yardsField, 'play__nflMatch__yearOfSeason', 'play__nflMatch__espnId', 'play__teamOnOffense__espnId',
+        'play__playType', 'play__playDescription', 'play__yardsFromEndzone', 'playerRole', 'player__name',
+    ).iterator():
+        if rowId in duplicateIds:
+            continue
+        credited = creditedYards(storedPlay(playType, playDescription, yardsFromEndzone), playerRole, playerName)
+        yardsByTeamGame[(matchEspnId, teamEspnId)] = yardsByTeamGame.get((matchEspnId, teamEspnId), 0) + credited
+        if storedYards != credited:
+            corrections.append((rowId, rowSeason, storedYards, credited))
+
+    return corrections, yardsByTeamGame
+
+
+def updateStatSplitYards(splitModel, yardsField, corrections):
+    # One UPDATE per value rather than per row: a play gains somewhere between
+    # -20 and 99 yards, so there are only so many.
+    rowIdsByYards = {}
+    for rowId, rowSeason, storedYards, credited in corrections:
+        rowIdsByYards.setdefault(credited, []).append(rowId)
+
+    for credited, rowIds in rowIdsByYards.items():
+        for chunkStart in range(0, len(rowIds), DELETE_CHUNK_SIZE):
+            splitModel.objects.filter(id__in = rowIds[chunkStart:chunkStart + DELETE_CHUNK_SIZE]).update(**{yardsField: credited})
+
+
+def findInterceptionPassers(seasonYear = None):
+    # Interception plays with no passer row, and who threw each one where the
+    # description names somebody known to be on the offense: a player who threw
+    # the team's other passes in that game, or failing that one on its weekly
+    # rosters that season. Pick-sixes in ESPN's summary wording ("Tyrann Mathieu
+    # 34 Yd Interception Return") name no passer, and are left for
+    # backfillPlayStatSplitsCommand to fetch.
+    interceptionPlays = playByPlay.objects.filter(playType__in = INTERCEPTION_PLAY_TYPES + FUMBLE_PLAY_TYPES)
+    passerRows = passerStatSplit.objects.all()
+    if seasonYear != None:
+        interceptionPlays = interceptionPlays.filter(nflMatch__yearOfSeason = int(seasonYear))
+        passerRows = passerRows.filter(play__nflMatch__yearOfSeason = int(seasonYear))
+
+    playIdsWithPasser = set(passerRows.filter(
+        play__playType__in = INTERCEPTION_PLAY_TYPES + FUMBLE_PLAY_TYPES,
+    ).values_list('play_id', flat = True))
+
+    # Some plays are stored under the wrong team, so a passer belongs to
+    # whichever team most of their passes in the game were for.
+    passPlaysByMatchPlayer = {}
+    for matchId, teamId, playerId, passPlays in passerRows.values_list(
+        'play__nflMatch_id', 'play__teamOnOffense_id', 'player_id',
+    ).annotate(passPlays = Count('play', distinct = True)):
+        passPlaysByMatchPlayer.setdefault((matchId, playerId), {})[teamId] = passPlays
+
+    passerTeamByMatchPlayer = {}
+    passerIdsByMatchTeam = {}
+    for (matchId, playerId), passPlaysByTeam in passPlaysByMatchPlayer.items():
+        teamId = max(passPlaysByTeam, key = passPlaysByTeam.get)
+        passerTeamByMatchPlayer[(matchId, playerId)] = teamId
+        passerIdsByMatchTeam.setdefault((matchId, teamId), set()).add(playerId)
+
+    rosterIdsByTeamSeason = {}
+
+    def rosterIds(teamId, rowSeason):
+        if (teamId, rowSeason) not in rosterIdsByTeamSeason:
+            rosterIdsByTeamSeason[(teamId, rowSeason)] = set(playerWeekStatus.objects.filter(
+                team_id = teamId, yearOfSeason = rowSeason,
+            ).values_list('player_id', flat = True))
+        return rosterIdsByTeamSeason[(teamId, rowSeason)]
+
+    playerNamesById = {}
+    passerRegexByPlayerId = {}
+
+    def playersNamedAsPasser(playerIds, description):
+        unnamedIds = [playerId for playerId in playerIds if playerId not in playerNamesById]
+        for playerId, playerName in player.objects.filter(id__in = unnamedIds).values_list('id', 'name'):
+            playerNamesById[playerId] = playerName
+        named = []
+        for playerId in playerIds:
+            if playerId not in passerRegexByPlayerId:
+                nameRegex = descriptionNameRegex(playerNamesById.get(playerId, ""))
+                passerRegexByPlayerId[playerId] = re.compile(nameRegex.pattern + r"\s+pass\b") if nameRegex != None else None
+            if passerRegexByPlayerId[playerId] != None and passerRegexByPlayerId[playerId].search(description) != None:
+                named.append(playerId)
+        return named
+
+    passersFound = []
+    playsWithoutPasser = []
+    for playId, playType, playDescription, matchId, teamId, rowSeason in interceptionPlays.order_by('id').values_list(
+        'id', 'playType', 'playDescription', 'nflMatch_id', 'teamOnOffense_id', 'nflMatch__yearOfSeason',
+    ).iterator():
+        if playId in playIdsWithPasser or playTypeBeforeFumble(playType, playDescription) not in INTERCEPTION_PLAY_TYPES:
+            continue
+
+        description = playAsRuled(playDescription)
+        interceptedMatch = INTERCEPTED_REGEX.search(description)
+        named = []
+        if interceptedMatch != None:
+            description = description[:interceptedMatch.start()]
+            named = playersNamedAsPasser(passerIdsByMatchTeam.get((matchId, teamId), set()), description)
+            if len(named) == 0:
+                # Not somebody who passed for the other team in this game.
+                onRoster = [playerId for playerId in rosterIds(teamId, rowSeason)
+                            if passerTeamByMatchPlayer.get((matchId, playerId), teamId) == teamId]
+                named = playersNamedAsPasser(onRoster, description)
+
+        # Two teammates who'd be written the same way: can't tell which.
+        if len(named) == 1:
+            passersFound.append({'playId': playId, 'playerId': named[0], 'teamId': teamId, 'season': rowSeason,
+                                 'interception': not playWasNullified(playDescription)})
+        else:
+            playsWithoutPasser.append((playId, rowSeason))
+
+    return passersFound, playsWithoutPasser
+
+
+def createInterceptionPasserRows(passersFound):
+    tenureIdByPlayerTeam = {}
+    for tenureId, playerId, teamId in playerTeamTenure.objects.filter(
+        player_id__in = set(found['playerId'] for found in passersFound),
+    ).order_by('-id').values_list('id', 'player_id', 'team_id'):
+        # Newest first, so the oldest tenure with the team is the one left standing.
+        tenureIdByPlayerTeam[(playerId, teamId)] = tenureId
+
+    passerStatSplit.objects.bulk_create([
+        passerStatSplit(
+            play_id = found['playId'],
+            player_id = found['playerId'],
+            currentTenure_id = tenureIdByPlayerTeam.get((found['playerId'], found['teamId'])),
+            playerRole = 1,
+            playerPosition = 1,
+            passingYards = 0,
+            interception = found['interception'],
+        ) for found in passersFound
+    ], batch_size = DELETE_CHUNK_SIZE)
+
+
+def countBySeason(seasons):
+    seasonCounts = {}
+    for rowSeason in seasons:
+        seasonCounts[rowSeason] = seasonCounts.get(rowSeason, 0) + 1
+    return seasonCounts
+
+
+def firstOfEachSeason(rows, seasonOf, sampleSize = REPAIR_SAMPLE_SIZE):
+    # A few rows for the report, spread over the seasons rather than all from the first.
+    rowsBySeason = {}
+    for row in rows:
+        rowsBySeason.setdefault(seasonOf(row), []).append(row)
+
+    samples = []
+    depth = 0
+    while len(samples) < sampleSize and any(depth < len(seasonRows) for seasonRows in rowsBySeason.values()):
+        for rowSeason in sorted(rowsBySeason):
+            if depth < len(rowsBySeason[rowSeason]) and len(samples) < sampleSize:
+                samples.append(rowsBySeason[rowSeason][depth])
+        depth += 1
+    return samples
+
+
+def describeSplitRows(splitModel, rowIds):
+    described = {}
+    for rowId, rowSeason, weekOfSeason, playerName, playDescription in splitModel.objects.filter(id__in = rowIds).values_list(
+        'id', 'play__nflMatch__yearOfSeason', 'play__nflMatch__weekOfSeason', 'player__name', 'play__playDescription',
+    ):
+        described[rowId] = {'season': rowSeason, 'week': weekOfSeason, 'player': playerName, 'play': playDescription or ""}
+    return described
+
+
+def boxScorePassingCheck(passingYardsByTeamGame, seasonYear = None):
+    # How the passer rows will add up against ESPN's own passing yards for the
+    # team in each game, season by season.
+    teamPerformances = teamMatchPerformance.objects.all()
+    if seasonYear != None:
+        teamPerformances = teamPerformances.filter(yearOfSeason = int(seasonYear))
+
+    checkBySeason = {}
+    for matchEspnId, teamEspnId, rowSeason, boxScoreYards in teamPerformances.values_list('matchEspnId', 'teamEspnId', 'yearOfSeason', 'totalPassingYards'):
+        if boxScoreYards == None or (matchEspnId, teamEspnId) not in passingYardsByTeamGame:
+            continue
+        gap = abs(passingYardsByTeamGame[(matchEspnId, teamEspnId)] - boxScoreYards)
+        seasonCheck = checkBySeason.setdefault(rowSeason, {'season': rowSeason, 'teamGames': 0, 'exact': 0, 'close': 0, 'largestGap': 0})
+        seasonCheck['teamGames'] += 1
+        seasonCheck['exact'] += 1 if gap == 0 else 0
+        seasonCheck['close'] += 1 if gap <= BOX_SCORE_YARDS_TOLERANCE else 0
+        seasonCheck['largestGap'] = max(seasonCheck['largestGap'], gap)
+
+    return [checkBySeason[rowSeason] for rowSeason in sorted(checkBySeason)]
+
+
+def runStatSplitRepair(applyChanges = False, seasonYear = None):
+    # Always works out what is wrong first; only changes anything when asked to.
+    duplicates = []
+    duplicateIdsByModel = {}
+    for splitModel in STAT_SPLIT_MODELS_TO_DEDUPLICATE:
+        duplicateRows = duplicateStatSplitRows(splitModel, seasonYear)
+        duplicateIdsByModel[splitModel] = [rowId for rowId, rowSeason in duplicateRows]
+        sampleRows = firstOfEachSeason(duplicateRows, lambda row: row[1])
+        described = describeSplitRows(splitModel, [rowId for rowId, rowSeason in sampleRows])
+        duplicates.append({
+            'model': splitModel,
+            'label': splitModel.__name__,
+            'total': len(duplicateRows),
+            'bySeason': countBySeason(rowSeason for rowId, rowSeason in duplicateRows),
+            'samples': [described[rowId] for rowId, rowSeason in sampleRows if rowId in described],
+        })
+
+    yards = []
+    passingYardsByTeamGame = {}
+    for splitModel, yardsField, creditedYards in STAT_SPLIT_YARDS_COLUMNS:
+        corrections, yardsByTeamGame = reviewStatSplitYards(splitModel, yardsField, creditedYards, set(duplicateIdsByModel[splitModel]), seasonYear)
+        if splitModel == passerStatSplit:
+            passingYardsByTeamGame = yardsByTeamGame
+        sampleRows = firstOfEachSeason(corrections, lambda row: row[1])
+        described = describeSplitRows(splitModel, [row[0] for row in sampleRows])
+        yards.append({
+            'model': splitModel,
+            'label': splitModel.__name__ + "." + yardsField,
+            'field': yardsField,
+            'corrections': corrections,
+            'total': len(corrections),
+            'bySeason': countBySeason(row[1] for row in corrections),
+            'samples': [dict(described[rowId], stored = storedYards, credited = credited)
+                        for rowId, rowSeason, storedYards, credited in sampleRows if rowId in described],
+        })
+
+    passersFound, playsWithoutPasser = findInterceptionPassers(seasonYear)
+    sampleFound = firstOfEachSeason(passersFound, lambda found: found['season'])
+    sampleWithout = firstOfEachSeason(playsWithoutPasser, lambda row: row[1])
+    playsById = {}
+    for playId, weekOfSeason, playDescription in playByPlay.objects.filter(
+        id__in = [found['playId'] for found in sampleFound] + [playId for playId, rowSeason in sampleWithout],
+    ).values_list('id', 'nflMatch__weekOfSeason', 'playDescription'):
+        playsById[playId] = (weekOfSeason, playDescription or "")
+    samplePlayerNames = dict(player.objects.filter(id__in = [found['playerId'] for found in sampleFound]).values_list('id', 'name'))
+
+    repairReport = {
+        'applied': applyChanges,
+        'duplicates': duplicates,
+        'yards': yards,
+        'interceptions': {
+            'total': len(passersFound),
+            'bySeason': countBySeason(found['season'] for found in passersFound),
+            'samples': [{'season': found['season'], 'week': playsById[found['playId']][0], 'player': samplePlayerNames.get(found['playerId'], "?"),
+                         'play': playsById[found['playId']][1]} for found in sampleFound],
+            'withoutPasserTotal': len(playsWithoutPasser),
+            'withoutPasserBySeason': countBySeason(rowSeason for playId, rowSeason in playsWithoutPasser),
+            'withoutPasserSamples': [{'season': rowSeason, 'week': playsById[playId][0], 'play': playsById[playId][1]} for playId, rowSeason in sampleWithout],
+        },
+        'boxScoreCheck': boxScorePassingCheck(passingYardsByTeamGame, seasonYear),
+    }
+    repairReport['totalChanges'] = (sum(entry['total'] for entry in duplicates) + sum(entry['total'] for entry in yards) + len(passersFound))
+
+    if not applyChanges:
+        return repairReport
+
+    # All of it or none of it.
+    with transaction.atomic():
+        for entry in duplicates:
+            deleteRowsInChunks(entry['model'], duplicateIdsByModel[entry['model']])
+        for entry in yards:
+            updateStatSplitYards(entry['model'], entry['field'], entry['corrections'])
+        createInterceptionPasserRows(passersFound)
+
+    return repairReport
 
 
 def buildAvailabilityFromDatabase(seasonYear, weekRaw, teamAbbreviation):
@@ -4213,13 +4573,8 @@ def processPlayParticipants(play, participants_data):
                         team=scorer_team
                     ).first()
                     
-                    stats_array = participant.get('stats', [])
-                    stats_dict = {}
-                    for stat in stats_array:
-                        stats_dict[stat['name']] = stat['value']
-                    
                     # Create returner stat split for defensive TD
-                    createReturnerStatSplit(play, player_obj, tenure, stats_dict)
+                    createReturnerStatSplit(play, player_obj, tenure)
                     
             else:
                 # Offensive players, on any play
@@ -4244,20 +4599,16 @@ def processPlayParticipants(play, participants_data):
                         team=play.teamOnOffense
                     ).first()
                     
-                    stats_array = participant.get('stats', [])
-                    stats_dict = {}
-                    for stat in stats_array:
-                        stats_dict[stat['name']] = stat['value']
-                    
-                    # Create appropriate stat split
+                    # Create appropriate stat split. The participant's own
+                    # "stats" are game totals, not this play's, so they're left alone.
                     if participant_type == 'passer':
-                        createPasserStatSplit(play, player_obj, tenure, stats_dict)
+                        createPasserStatSplit(play, player_obj, tenure)
                     elif participant_type == 'rusher':
-                        createRusherStatSplit(play, player_obj, tenure, stats_dict)
+                        createRusherStatSplit(play, player_obj, tenure)
                     elif participant_type == 'receiver':
-                        createReceiverStatSplit(play, player_obj, tenure, stats_dict)
+                        createReceiverStatSplit(play, player_obj, tenure)
                     elif participant_type == 'returner':
-                        createReturnerStatSplit(play, player_obj, tenure, stats_dict)
+                        createReturnerStatSplit(play, player_obj, tenure)
                 
         except Exception as e:
             print(f"Error processing participant for play {play.id}: {e}")
@@ -4308,9 +4659,10 @@ def creditLateralReceivers(play, participants_data):
         role = 3 if playerObj == catcher else LATERAL_RECEIVER_ROLE
         tdScored = bool(offenseScored and recipients[-1] == playerObj)
         # Re-pulled games can carry repeat rows for a play; keep them in step.
+        receivingYards = receivingYardsForSplit(play, role, playerObj.name)
         existingRows = receiverStatSplit.objects.filter(play = play, player = playerObj)
         if existingRows.exists():
-            existingRows.update(playerRole = role, receivingTdScored = tdScored)
+            existingRows.update(playerRole = role, receivingTdScored = tdScored, receivingYards = receivingYards)
         else:
             receiverStatSplit.objects.create(
                 play = play,
@@ -4318,6 +4670,7 @@ def creditLateralReceivers(play, participants_data):
                 currentTenure = playerTeamTenure.objects.filter(player = playerObj, team = play.teamOnOffense).first(),
                 playerRole = role,
                 playerPosition = 3,
+                receivingYards = receivingYards,
                 receivingTdScored = tdScored,
             )
 
@@ -4413,11 +4766,11 @@ def createPlayerFromAthleteRef(athlete_ref, team):
         print(f"Error creating player from athlete ref {athlete_ref}: {e}")
     return None
 
-def createPasserStatSplit(play, player_obj, tenure, stats_dict):
+def createPasserStatSplit(play, player_obj, tenure):
     """Create passer stat split record"""
     try:
-        # COMPLETED PASS, INCOMPLETE PASS, SACK - including ones that ended in a fumble
-        if playTypeBeforeFumble(play.playType, play.playDescription) not in [2, 3, 4]:
+        # COMPLETED PASS, INCOMPLETE PASS, SACK, INTERCEPTION - including ones that ended in a fumble
+        if playTypeBeforeFumble(play.playType, play.playDescription) not in [2, 3, 4] + INTERCEPTION_PLAY_TYPES:
             return None
             
         # get_or_create so re-pulling a match updates its splits instead of
@@ -4429,8 +4782,8 @@ def createPasserStatSplit(play, player_obj, tenure, stats_dict):
             currentTenure=tenure,
             playerRole=1,
             playerPosition=1,
-            passingYards=stats_dict.get('passingYards', play.yardsOnPlay if play.playType == 2 else 0),
-            interception=(play.playType == 15),
+            passingYards=passingYardsForSplit(play),
+            interception=passWasIntercepted(play),
             fumble=(play.playType in [21, 22]),
             fumbleLost=(play.playType == 21),
             passingTdScored=(play.scoringPlay and play.playType == 2 and play.offenseScored)
@@ -4440,7 +4793,7 @@ def createPasserStatSplit(play, player_obj, tenure, stats_dict):
         print(f"Error creating passer stat split: {e}")
         return None
 
-def createRusherStatSplit(play, player_obj, tenure, stats_dict):
+def createRusherStatSplit(play, player_obj, tenure):
     """Create rusher stat split record"""
     try:
         if playTypeBeforeFumble(play.playType, play.playDescription) != 1:  # Only for RUSH plays, fumbled ones included
@@ -4455,7 +4808,7 @@ def createRusherStatSplit(play, player_obj, tenure, stats_dict):
             currentTenure=tenure,
             playerRole=2,
             playerPosition=2,
-            rushingYards=stats_dict.get('rushingYards', play.yardsOnPlay),
+            rushingYards=rushingYardsForSplit(play),
             fumble=(play.playType in [17, 18, 19, 20]),
             fumbleLost=(play.playType in [19, 20]),
             rushingTdScored=(play.scoringPlay and play.playType == 1 and play.offenseScored)
@@ -4465,7 +4818,7 @@ def createRusherStatSplit(play, player_obj, tenure, stats_dict):
         print(f"Error creating rusher stat split: {e}")
         return None
 
-def createReceiverStatSplit(play, player_obj, tenure, stats_dict):
+def createReceiverStatSplit(play, player_obj, tenure):
     """Create receiver stat split record"""
     try:
         if playTypeBeforeFumble(play.playType, play.playDescription) != 2:  # Only for COMPLETED PASS plays, fumbled ones included
@@ -4480,8 +4833,8 @@ def createReceiverStatSplit(play, player_obj, tenure, stats_dict):
             currentTenure=tenure,
             playerRole=3,
             playerPosition=3,
-            receivingYards=stats_dict.get('receivingYards', play.yardsOnPlay),
-            yardsAfterCatch=stats_dict.get('yardsAfterCatch', 0),
+            receivingYards=receivingYardsForSplit(play, 3, player_obj.name),
+            yardsAfterCatch=0,
             fumble=(play.playType in [17, 18, 19, 20]),
             fumbleLost=(play.playType in [19, 20]),
             receivingTdScored=(play.scoringPlay and play.playType == 2 and play.offenseScored)
@@ -4491,7 +4844,7 @@ def createReceiverStatSplit(play, player_obj, tenure, stats_dict):
         print(f"Error creating receiver stat split: {e}")
         return None
 
-def createReturnerStatSplit(play, player_obj, tenure, stats_dict):
+def createReturnerStatSplit(play, player_obj, tenure):
     """Create returner stat split record for punt/kick returns"""
     try:
         return_type_map = {
@@ -4514,7 +4867,7 @@ def createReturnerStatSplit(play, player_obj, tenure, stats_dict):
             currentTenure=tenure,
             playerRole=4,
             playerPosition=4,
-            returnYards=stats_dict.get('returnYards', play.yardsOnPlay if play.yardsOnPlay else 0),
+            returnYards=play.yardsOnPlay if play.yardsOnPlay else 0,
             fumble=False,
             fumbleLost=False,
             returnType=return_type
@@ -4559,7 +4912,7 @@ def parsePlayDescription(play):
                             currentTenure=tenure,
                             playerRole=1,
                             playerPosition=1,
-                            passingYards=play.yardsOnPlay if play.playType == 2 else 0,
+                            passingYards=passingYardsForSplit(play),
                             interception=False,
                             fumble=False,
                             fumbleLost=False,
@@ -4583,7 +4936,7 @@ def parsePlayDescription(play):
                                 currentTenure=tenure,
                                 playerRole=3,
                                 playerPosition=3,
-                                receivingYards=play.yardsOnPlay,
+                                receivingYards=receivingYardsForSplit(play, 3, receiver.name),
                                 yardsAfterCatch=0,
                                 fumble=False,
                                 fumbleLost=False,
@@ -4613,7 +4966,7 @@ def parsePlayDescription(play):
                             currentTenure=tenure,
                             playerRole=2,
                             playerPosition=2,
-                            rushingYards=play.yardsOnPlay,
+                            rushingYards=rushingYardsForSplit(play),
                             fumble=False,
                             fumbleLost=False,
                             rushingTdScored=(play.scoringPlay and play.offenseScored),

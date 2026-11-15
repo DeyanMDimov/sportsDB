@@ -29,6 +29,17 @@ class YardsGainedOnPlayTests(SimpleTestCase):
         description = "J.Taylor left tackle for 53 yards, TOUCHDOWN NULLIFIED by Penalty.PENALTY on IND-A.Mitchell, Offensive Holding, 10 yards, enforced at LA 48."
         self.assertEqual(yardsGainedOnPlay(description, 53), 5)
 
+    def test_summary_wording_of_2021_touchdowns(self):
+        self.assertEqual(passingYardsOnPlay(2, "DJ Moore Pass From Sam Darnold for 2 Yrds Z.Gonzalez extra point is GOOD, Center-J.Jansen, Holder-J.Charlton.", 2), 2)
+        self.assertEqual(passingYardsOnPlay(2, "Mike Evans Pass From Tom Brady for 1 Yard R.Succop extra point is GOOD, Center-C.Tinker, Holder-B.Pinion.", 1), 1)
+        self.assertEqual(yardsGainedOnPlay("Taysom Hill 44 Yard Rush B.Maher extra point is GOOD, Center-Z.Wood, Holder-B.Gillikin.", 44), 44)
+
+    def test_description_that_is_only_a_two_point_try(self):
+        description = "TWO-POINT CONVERSION ATTEMPT. L.Jackson pass to M.Andrews is incomplete. ATTEMPT FAILS.\nPenalty on DET-B.Branch, Defensive Holding, offsetting, enforced at DET 2 - No Play."
+        # Used to raise: nothing is left of the description once the try is set aside.
+        self.assertEqual(passingYardsOnPlay(19, description, 2), 0)
+        self.assertEqual(yardsGainedOnPlay(description, 2), 0)
+
     def test_without_line_of_scrimmage_reads_the_description(self):
         description = "J.Warren up the middle to CIN 5 for 87 yards (J.Battle).PENALTY on PIT-D.Metcalf, Offensive Holding, 7 yards, enforced at PIT 14."
         self.assertEqual(yardsGainedOnPlay(description), 87)
@@ -996,3 +1007,227 @@ class BettingModelV3QuarterbackDataTests(TestCase):
         self.assertEqual((upcoming.team2Quarterback, upcoming.team2QuarterbackExpected), ("Starting Passer", True))
         self.assertAlmostEqual(upcoming.team2QuarterbackAdjustment, 0.0, delta = 2.0)
         self.assertIsNone(upcoming.team1Quarterback)
+
+
+import io
+from contextlib import redirect_stdout
+
+from django.core.management import call_command
+
+from nfl_db.models import driveOfPlay, playByPlay, passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit, teamMatchPerformance
+
+
+def espnParticipant(participantType, athleteEspnId, stats = None):
+    participant = {
+        'type': participantType,
+        'athlete': {'$ref': "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/2024/athletes/" + str(athleteEspnId) + "?lang=en&region=us"},
+    }
+    if stats != None:
+        # What ESPN used to send: the player's totals for the whole game.
+        participant['stats'] = [{'name': name, 'value': value} for name, value in stats.items()]
+    return participant
+
+
+class StatSplitTestCase(TestCase):
+    def setUp(self):
+        self.offense = nflTeam.objects.create(abbreviation = "AAA", teamName = "AAA", espnId = 1)
+        self.defense = nflTeam.objects.create(abbreviation = "BBB", teamName = "BBB", espnId = 2)
+        self.match = nflMatch.objects.create(espnId = 6001, yearOfSeason = 2024, weekOfSeason = 3, homeTeamEspnId = 1, awayTeamEspnId = 2,
+                                             completed = True, homeTeamPoints = 20, awayTeamPoints = 17)
+        self.drive = driveOfPlay.objects.create(nflMatch = self.match, teamOnOffense = self.offense, reachedRedZone = False)
+        self.passer = player.objects.create(espnId = 10, name = "Sam Passer", playerPosition = 1)
+        self.catcher = player.objects.create(espnId = 12, name = "Ray Catcher", playerPosition = 2)
+        self.runner = player.objects.create(espnId = 14, name = "Rob Runner", playerPosition = 4)
+        self.defender = player.objects.create(espnId = 20, name = "Dee Back", playerPosition = 9)
+        self.tenure = playerTeamTenure.objects.create(player = self.passer, team = self.offense)
+        self.sequenceNumber = 0
+
+    def play(self, playType, description, yardsFromEndzone = 60, yardsOnPlay = 0, **fields):
+        self.sequenceNumber += 100
+        fields = dict(dict(turnover = False, penaltyOnPlay = False, scoringPlay = False), **fields)
+        return playByPlay.objects.create(nflMatch = self.match, teamOnOffense = self.offense, driveOfPlay = self.drive, playType = playType,
+                                         sequenceNumber = self.sequenceNumber, playDescription = description,
+                                         yardsFromEndzone = yardsFromEndzone, yardsOnPlay = yardsOnPlay, **fields)
+
+
+class StatSplitWriterTests(StatSplitTestCase):
+    def test_yards_are_the_plays_not_the_game_totals_espn_sends(self):
+        catch = self.play(2, "(Shotgun) S.Passer pass short left to R.Catcher to AAA 43 for 14 yards (D.Back).", yardsOnPlay = 14)
+        crudLogic.processPlayParticipants(catch, [
+            espnParticipant('passer', 10, {'passingYards': 310}),
+            espnParticipant('receiver', 12, {'receivingYards': 120}),
+        ])
+        carry = self.play(1, "R.Runner up the middle to AAA 45 for 5 yards (D.Back).", yardsOnPlay = 5)
+        crudLogic.processPlayParticipants(carry, [espnParticipant('rusher', 14, {'rushingYards': 88})])
+
+        self.assertEqual(passerStatSplit.objects.get(play = catch).passingYards, 14)
+        self.assertEqual(receiverStatSplit.objects.get(play = catch).receivingYards, 14)
+        self.assertEqual(rusherStatSplit.objects.get(play = carry).rushingYards, 5)
+
+    def test_penalty_yards_are_not_the_players(self):
+        # statYardage counts the 15 yards tacked on; the catch was 5.
+        catch = self.play(2, "S.Passer pass short left to R.Catcher to AAA 45 for 5 yards (D.Back). PENALTY on BBB-D.Back, Unnecessary Roughness, 15 yards, enforced at AAA 45.", yardsOnPlay = 20)
+        nullified = self.play(2, "S.Passer pass deep right to R.Catcher to BBB 30 for 30 yards (D.Back). PENALTY on AAA-R.Runner, Offensive Holding, 10 yards, enforced at AAA 40 - No Play.", yardsOnPlay = -10)
+        for play in (catch, nullified):
+            crudLogic.processPlayParticipants(play, [espnParticipant('passer', 10), espnParticipant('receiver', 12)])
+
+        self.assertEqual(passerStatSplit.objects.get(play = catch).passingYards, 5)
+        self.assertEqual(receiverStatSplit.objects.get(play = catch).receivingYards, 5)
+        self.assertEqual(passerStatSplit.objects.get(play = nullified).passingYards, 0)
+        self.assertEqual(receiverStatSplit.objects.get(play = nullified).receivingYards, 0)
+
+    def test_sack_and_incompletion_gain_no_passing_yards(self):
+        sack = self.play(4, "S.Passer sacked at AAA 32 for -8 yards (D.Back).", yardsOnPlay = -8)
+        incompletion = self.play(3, "S.Passer pass incomplete short left to R.Catcher.")
+        for play in (sack, incompletion):
+            crudLogic.processPlayParticipants(play, [espnParticipant('passer', 10, {'passingYards': 310})])
+        self.assertEqual(list(passerStatSplit.objects.order_by('id').values_list('passingYards', 'interception')), [(0, False), (0, False)])
+
+    def test_interception_is_credited_to_the_passer(self):
+        interception = self.play(15, "S.Passer pass short left intended for R.Catcher INTERCEPTED by D.Back at AAA 45. D.Back to AAA 40 for 5 yards (R.Catcher).", turnover = True)
+        pickSix = self.play(16, "S.Passer pass deep right intended for R.Catcher INTERCEPTED by D.Back at BBB 30. D.Back for 70 yards, TOUCHDOWN.",
+                            turnover = True, scoringPlay = True, offenseScored = False)
+        fumbledReturn = self.play(19, "S.Passer pass short middle intended for R.Catcher INTERCEPTED by D.Back at AAA 30. D.Back to AAA 28 for 2 yards (R.Runner). FUMBLES (R.Runner), RECOVERED by AAA-R.Catcher at AAA 26.")
+        for play in (interception, pickSix, fumbledReturn):
+            crudLogic.processPlayParticipants(play, [espnParticipant('passer', 10), espnParticipant('returner', 20)])
+            passerSplit = passerStatSplit.objects.get(play = play)
+            self.assertEqual((passerSplit.player, passerSplit.currentTenure, passerSplit.interception, passerSplit.passingYards, passerSplit.passingTdScored),
+                             (self.passer, self.tenure, True, 0, False))
+            self.assertEqual(returnerStatSplit.objects.get(play = play).player, self.defender)
+
+    def test_interception_wiped_out_by_a_penalty_is_not_one(self):
+        nullified = self.play(15, "S.Passer pass short left intended for R.Catcher INTERCEPTED by D.Back at AAA 45. PENALTY on BBB-D.Back, Defensive Pass Interference, 12 yards, enforced at AAA 40 - No Play.")
+        crudLogic.processPlayParticipants(nullified, [espnParticipant('passer', 10)])
+        self.assertFalse(passerStatSplit.objects.get(play = nullified).interception)
+
+    def test_pulling_a_play_again_writes_no_second_row(self):
+        catch = self.play(2, "S.Passer pass short left to R.Catcher to AAA 43 for 14 yards (D.Back).", yardsOnPlay = 14)
+        for pull in range(2):
+            crudLogic.processPlayParticipants(catch, [espnParticipant('passer', 10), espnParticipant('receiver', 12)])
+        self.assertEqual((passerStatSplit.objects.count(), receiverStatSplit.objects.count()), (1, 1))
+
+    def test_lateral_takers_row_carries_their_yards(self):
+        lateraled = self.play(2, "S.Passer pass short left to R.Catcher to AAA 44 for 4 yards. Lateral to R.Runner pushed ob at BBB 44 for 12 yards (D.Back).", yardsOnPlay = 16)
+        crudLogic.processPlayParticipants(lateraled, [espnParticipant('passer', 10), espnParticipant('receiver', 12), espnParticipant('other', 14)])
+        self.assertEqual(passerStatSplit.objects.get(play = lateraled).passingYards, 16)
+        self.assertEqual(receiverStatSplit.objects.get(play = lateraled, player = self.catcher).receivingYards, 4)
+        self.assertEqual(receiverStatSplit.objects.get(play = lateraled, player = self.runner).receivingYards, 12)
+
+    def test_backfill_fetches_the_passer_of_an_interception(self):
+        interception = self.play(15, "S.Passer pass short left intended for R.Catcher INTERCEPTED by D.Back at AAA 45.", espnId = 600101)
+        returnerStatSplit.objects.create(play = interception, player = self.defender, returnType = 4)
+        participants = {"600101": [espnParticipant('passer', 10), espnParticipant('returner', 20)]}
+        commandPath = 'nfl_db.management.commands.backfillPlayStatSplitsCommand.'
+        with mock.patch(commandPath + 'fetchPlayParticipantsForMatch', return_value = participants), mock.patch(commandPath + 'clock.sleep'), redirect_stdout(io.StringIO()):
+            call_command('backfillPlayStatSplitsCommand', dryRun = True)
+            self.assertEqual(passerStatSplit.objects.count(), 0)
+            call_command('backfillPlayStatSplitsCommand')
+        self.assertTrue(passerStatSplit.objects.get(play = interception, player = self.passer).interception)
+        self.assertEqual(returnerStatSplit.objects.count(), 1)
+
+
+class StatSplitRepairTests(StatSplitTestCase):
+    def setUp(self):
+        super().setUp()
+        # A touchdown catch stored three times with the passer's game total; only the newest copy has the touchdown and the tenure.
+        self.catch = self.play(2, "(Shotgun) S.Passer pass short left to R.Catcher for 14 yards, TOUCHDOWN.", yardsFromEndzone = 14, yardsOnPlay = 14, scoringPlay = True, offenseScored = True)
+        for copy in range(3):
+            newest = copy == 2
+            passerStatSplit.objects.create(play = self.catch, player = self.passer, passingYards = 310, passingTdScored = newest, currentTenure = self.tenure if newest else None)
+            receiverStatSplit.objects.create(play = self.catch, player = self.catcher, playerRole = 3, receivingYards = 120, receivingTdScored = newest)
+        self.carry = self.play(1, "R.Runner up the middle to AAA 45 for 5 yards (D.Back).", yardsOnPlay = 5)
+        rusherStatSplit.objects.create(play = self.carry, player = self.runner, playerRole = 2, rushingYards = 88)
+        self.sack = self.play(4, "S.Passer sacked at AAA 32 for -8 yards (D.Back).", yardsOnPlay = -8)
+        passerStatSplit.objects.create(play = self.sack, player = self.passer, passingYards = 310)
+        # Already right: left alone.
+        self.goodCatch = self.play(2, "S.Passer pass short right to R.Catcher to AAA 47 for 7 yards (D.Back).", yardsOnPlay = 7)
+        passerStatSplit.objects.create(play = self.goodCatch, player = self.passer, passingYards = 7)
+        receiverStatSplit.objects.create(play = self.goodCatch, player = self.catcher, playerRole = 3, receivingYards = 7)
+
+        self.interception = self.play(15, "S.Passer pass short left intended for R.Catcher INTERCEPTED by D.Back at AAA 45. D.Back to AAA 40 for 5 yards (S.Passer).", turnover = True)
+        returnerStatSplit.objects.create(play = self.interception, player = self.defender, returnType = 4)
+        self.nullifiedInterception = self.play(15, "S.Passer pass deep left intended for R.Catcher INTERCEPTED by D.Back at BBB 20. PENALTY on BBB-D.Back, Defensive Holding, 5 yards, enforced at AAA 40 - No Play.")
+        # ESPN's summary wording names no passer.
+        self.pickSix = self.play(16, "Dee Back 34 Yd Interception Return (Kit Kicker Kick)", turnover = True, scoringPlay = True, offenseScored = False)
+
+        teamMatchPerformance.objects.create(matchEspnId = 6001, teamEspnId = 1, yearOfSeason = 2024, weekOfSeason = 3, totalPassingYards = 21)
+
+    def storedRows(self):
+        return [list(splitModel.objects.order_by('id').values_list()) for splitModel in (passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit)]
+
+    def test_dry_run_reports_and_changes_nothing(self):
+        before = self.storedRows()
+        report = crudLogic.runStatSplitRepair()
+        self.assertEqual(self.storedRows(), before)
+
+        self.assertFalse(report['applied'])
+        self.assertEqual([(entry['label'], entry['bySeason']) for entry in report['duplicates']],
+                         [("passerStatSplit", {2024: 2}), ("rusherStatSplit", {}), ("receiverStatSplit", {2024: 2}), ("returnerStatSplit", {})])
+        # The kept copy of the catch and the sack; the carry; the kept copy of the catch.
+        self.assertEqual([(entry['label'], entry['bySeason']) for entry in report['yards']],
+                         [("passerStatSplit.passingYards", {2024: 2}), ("rusherStatSplit.rushingYards", {2024: 1}), ("receiverStatSplit.receivingYards", {2024: 1})])
+        self.assertEqual(report['yards'][1]['samples'][0]['player'], "Rob Runner")
+        self.assertEqual((report['yards'][1]['samples'][0]['stored'], report['yards'][1]['samples'][0]['credited']), (88, 5))
+        self.assertEqual((report['interceptions']['bySeason'], report['interceptions']['withoutPasserBySeason']), ({2024: 2}, {2024: 1}))
+        self.assertEqual(report['interceptions']['samples'][0]['player'], "Sam Passer")
+        self.assertIn("Interception Return", report['interceptions']['withoutPasserSamples'][0]['play'])
+        self.assertEqual(report['totalChanges'], 4 + 4 + 2)
+        self.assertEqual(report['boxScoreCheck'], [{'season': 2024, 'teamGames': 1, 'exact': 1, 'close': 1, 'largestGap': 0}])
+
+    def test_apply_leaves_one_right_row_per_play(self):
+        crudLogic.runStatSplitRepair(applyChanges = True)
+
+        passerSplit = passerStatSplit.objects.get(play = self.catch)
+        self.assertEqual((passerSplit.passingYards, passerSplit.passingTdScored, passerSplit.currentTenure), (14, True, self.tenure))
+        receiverSplit = receiverStatSplit.objects.get(play = self.catch)
+        self.assertEqual((receiverSplit.receivingYards, receiverSplit.receivingTdScored), (14, True))
+        self.assertEqual(rusherStatSplit.objects.get(play = self.carry).rushingYards, 5)
+        self.assertEqual(passerStatSplit.objects.get(play = self.sack).passingYards, 0)
+        self.assertEqual(passerStatSplit.objects.get(play = self.goodCatch).passingYards, 7)
+
+        thrown = passerStatSplit.objects.get(play = self.interception)
+        self.assertEqual((thrown.player, thrown.currentTenure, thrown.interception, thrown.passingYards, thrown.playerRole), (self.passer, self.tenure, True, 0, 1))
+        self.assertFalse(passerStatSplit.objects.get(play = self.nullifiedInterception).interception)
+        self.assertFalse(passerStatSplit.objects.filter(play = self.pickSix).exists())
+        self.assertEqual(sum(passerStatSplit.objects.values_list('passingYards', flat = True)), 21)
+        self.assertEqual(returnerStatSplit.objects.count(), 1)
+
+        # Nothing left to do the second time round.
+        self.assertEqual(crudLogic.runStatSplitRepair()['totalChanges'], 0)
+
+    def test_passer_must_be_on_the_offense(self):
+        # Stored under AAA, but thrown by a passer who isn't one of theirs.
+        visitor = player.objects.create(espnId = 30, name = "Vic Visitor", playerPosition = 1)
+        misfiled = self.play(15, "V.Visitor pass short left intended for R.Catcher INTERCEPTED by D.Back at AAA 45.")
+        found, withoutPasser = crudLogic.findInterceptionPassers()
+        self.assertNotIn(misfiled.id, [passerFound['playId'] for passerFound in found])
+        self.assertIn(misfiled.id, [playId for playId, season in withoutPasser])
+
+        # On the team's roster that week, with no other pass in the game.
+        playerWeekStatus.objects.create(player = visitor, team = self.offense, yearOfSeason = 2024, weekOfSeason = 3, playerStatus = 1)
+        found, withoutPasser = crudLogic.findInterceptionPassers()
+        self.assertIn((misfiled.id, visitor.id), [(passerFound['playId'], passerFound['playerId']) for passerFound in found])
+
+    def test_only_the_season_asked_for(self):
+        report = crudLogic.runStatSplitRepair(applyChanges = True, seasonYear = 2023)
+        self.assertEqual(report['totalChanges'], 0)
+        self.assertEqual(passerStatSplit.objects.filter(play = self.catch).count(), 3)
+
+    def test_command_is_a_dry_run_unless_told_to_apply(self):
+        before = self.storedRows()
+        output = io.StringIO()
+        with redirect_stdout(output):
+            call_command('repairPlayStatSplitsCommand')
+        self.assertEqual(self.storedRows(), before)
+        self.assertIn("Dry run: nothing was changed. 10 rows would be deleted, corrected or added", output.getvalue())
+        self.assertIn("passingYards 310 -> 14, 2024 wk 3, Sam Passer", output.getvalue())
+
+        with redirect_stdout(output):
+            call_command('repairPlayStatSplitsCommand', apply = True)
+        self.assertEqual(passerStatSplit.objects.filter(play = self.catch).count(), 1)
+        self.assertIn("Done. 10 rows deleted, corrected or added.", output.getvalue())
+
+    def test_page_cleanup_keeps_the_newest_copy_too(self):
+        crudLogic.runPlayerDataCleanup(applyChanges = True)
+        self.assertTrue(passerStatSplit.objects.get(play = self.catch).passingTdScored)
+        self.assertTrue(receiverStatSplit.objects.get(play = self.catch).receivingTdScored)
