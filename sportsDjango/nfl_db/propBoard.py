@@ -112,10 +112,11 @@ def playerTeamsByMatch(playerIds, matchIds):
         player_id__in = playerIds, nflMatch_id__in = matchIds).select_related('team')}
 
 
-def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_RECENT_GAMES):
+def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_RECENT_GAMES, matchId = None):
     # Every line of one prop type in the season, each with the player's average over
-    # his last recentGames games before it. Returns the selected week's rows and the
-    # season's record of how the lean (the side of the line the average was on) did.
+    # his last recentGames games before it. Returns the selected week's rows (only one
+    # game's, given matchId) and the season's record of how the lean (the side of the
+    # line the average was on) did, which always covers every game.
     label, statKeys, edgeFloor = PROP_STATS_BY_ID[propTypeId]
     seasonLines = list(playerPropLine.objects.filter(
         nflMatch__yearOfSeason = seasonYear, propTypeId = propTypeId,
@@ -166,7 +167,8 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
                 row['leanHit'] = row['outcome'] == row['lean']
         rows.append(row)
 
-    weekRows = [row for row in rows if row['propLine'].nflMatch.weekOfSeason == weekOfSeason]
+    weekRows = [row for row in rows if row['propLine'].nflMatch.weekOfSeason == weekOfSeason
+                and (matchId == None or row['propLine'].nflMatch_id == matchId)]
     addMatchups(weekRows)
     # Biggest lean either way first; players with too few games at the bottom.
     weekRows.sort(key = lambda row: (not row['enoughGames'], row['edgeShare'] == None, -abs(row['edgeShare'] or 0), row['player'].name))
@@ -180,6 +182,24 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
         'minGames': min(MIN_GAMES, recentGames),
         'seasonLineCount': len(rows),
     }
+
+
+def weekGameChoices(seasonYear, weekOfSeason):
+    # The Team dropdown: every team with a game in the week that has prop lines, as
+    # (abbreviation, "BUF @ KC", match id), by abbreviation. Picking a team shows
+    # both sides of its game.
+    teamsByEspnId = {team.espnId: team for team in nflTeam.objects.all()}
+    matchIds = set(playerPropLine.objects.filter(nflMatch__yearOfSeason = seasonYear, nflMatch__weekOfSeason = weekOfSeason)
+                   .values_list('nflMatch_id', flat = True).distinct())
+    choices = []
+    for match in nflMatch.objects.filter(id__in = matchIds):
+        homeTeam, awayTeam = teamsByEspnId.get(match.homeTeamEspnId), teamsByEspnId.get(match.awayTeamEspnId)
+        if homeTeam == None or awayTeam == None:
+            continue
+        gameLabel = awayTeam.abbreviation + " @ " + homeTeam.abbreviation
+        for team in (awayTeam, homeTeam):
+            choices.append((team.abbreviation, gameLabel, match.id))
+    return sorted(choices)
 
 
 def addMatchups(weekRows):

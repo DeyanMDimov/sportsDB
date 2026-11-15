@@ -5,7 +5,7 @@
     <div class="container">
         <form method="GET" class="border rounded p-3 mb-3">
             <div class="row g-2">
-                <div class="mb-1 col-6 col-md-2">
+                <div class="mb-1 col-6 col-lg-2">
                     <div class="form-floating">
                         <select name="season" id="season" class="form-control">
                             {% for season in seasons %}
@@ -15,7 +15,7 @@
                         <label for="season">Season:</label>
                     </div>
                 </div>
-                <div class="mb-1 col-6 col-md-2">
+                <div class="mb-1 col-6 col-lg-2">
                     <div class="form-floating">
                         <select name="week" id="week" class="form-control">
                             {% for week in weeks %}
@@ -25,7 +25,18 @@
                         <label for="week">Week:</label>
                     </div>
                 </div>
-                <div class="mb-1 col-12 col-md-5">
+                <div class="mb-1 col-12 col-md-6 col-lg-3">
+                    <div class="form-floating">
+                        <select name="team" id="team" class="form-control">
+                            <option value="">All games</option>
+                            {% for team in gameChoices %}
+                            <option value="{{ team.0 }}"{% if team.0 == selectedTeam %} selected{% endif %}>{{ team.0 }} ({{ team.1 }})</option>
+                            {% endfor %}
+                        </select>
+                        <label for="team">Team:</label>
+                    </div>
+                </div>
+                <div class="mb-1 col-12 col-md-6 col-lg-3">
                     <div class="form-floating">
                         <select name="prop" id="prop" class="form-control">
                             {% for propStat in propStats %}
@@ -35,7 +46,7 @@
                         <label for="prop">Prop:</label>
                     </div>
                 </div>
-                <div class="mb-1 col-6 col-md-3">
+                <div class="mb-1 col-6 col-lg-2">
                     <div class="form-floating">
                         <select name="games" id="games" class="form-control">
                             {% for gameCount in recentGameChoices %}
@@ -54,15 +65,16 @@
         {% else %}
 
         <div class="d-flex align-items-center gap-2 mb-2">
-            <a href="?season={{ selectedSeason }}&amp;week={{ previousWeek }}&amp;prop={{ selectedProp }}&amp;games={{ selectedGames }}" class="btn btn-dark btn-md{% if previousWeek == None %} disabled{% endif %}" aria-label="Previous week"{% if previousWeek == None %} aria-disabled="true"{% endif %}><span class="bi-chevron-left"></span></a>
-            <a href="?season={{ selectedSeason }}&amp;week={{ nextWeek }}&amp;prop={{ selectedProp }}&amp;games={{ selectedGames }}" class="btn btn-dark btn-md{% if nextWeek == None %} disabled{% endif %}" aria-label="Next week"{% if nextWeek == None %} aria-disabled="true"{% endif %}><span class="bi-chevron-right"></span></a>
-            <h3 class="mb-0 ms-2">{{ board.label }} &middot; {{ weekLabel }}, {{ selectedSeason }}</h3>
+            <a href="?season={{ selectedSeason }}&amp;week={{ previousWeek }}&amp;team={{ selectedTeam }}&amp;prop={{ selectedProp }}&amp;games={{ selectedGames }}" class="btn btn-dark btn-md{% if previousWeek == None %} disabled{% endif %}" aria-label="Previous week"{% if previousWeek == None %} aria-disabled="true"{% endif %}><span class="bi-chevron-left"></span></a>
+            <a href="?season={{ selectedSeason }}&amp;week={{ nextWeek }}&amp;team={{ selectedTeam }}&amp;prop={{ selectedProp }}&amp;games={{ selectedGames }}" class="btn btn-dark btn-md{% if nextWeek == None %} disabled{% endif %}" aria-label="Next week"{% if nextWeek == None %} aria-disabled="true"{% endif %}><span class="bi-chevron-right"></span></a>
+            <h3 class="mb-0 ms-2">{{ board.label }} &middot; {{ weekLabel }}, {{ selectedSeason }}{% if selectedGameLabel %} &middot; {{ selectedGameLabel }}{% endif %}</h3>
         </div>
+        {% if teamMissingNote %}<p class="text-muted mb-2">{{ teamMissingNote }}</p>{% endif %}
         <p class="text-muted propIntro">
             {{ sportsbooks }} lines against each player's average over his last {{ selectedGames }} games this season.
             The <strong>lean</strong> is the side of the line that average is on, and the table is sorted by how far it sits from the line,
             with players who have fewer than {{ board.minGames }} games (greyed out) at the bottom.
-            {% if board.weekRecord.bets %}This week the lean went {{ board.weekRecord.hits }}&ndash;{{ board.weekRecord.misses }} ({{ board.weekRecord.hitRate|percent }}).{% endif %}
+            {% if board.weekRecord.bets %}{% if selectedGameLabel %}In this game{% else %}This week{% endif %} the lean went {{ board.weekRecord.hits }}&ndash;{{ board.weekRecord.misses }} ({{ board.weekRecord.hitRate|percent }}).{% endif %}
             At &minus;110 a side has to win {{ breakEvenRate|percent:1 }} of the time to break even.
         </p>
 
@@ -111,7 +123,7 @@
         </table>
         </div>
         {% else %}
-        <p class="text-muted">No {{ board.label|lower }} lines for this week.</p>
+        <p class="text-muted">No {{ board.label|lower }} lines for {% if selectedGameLabel %}this game{% else %}this week{% endif %}.</p>
         {% endif %}
 
         <h4>{{ selectedSeason }} Season Record &middot; {{ board.label }}</h4>
