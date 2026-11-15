@@ -110,7 +110,7 @@
                     <td class="propNum {% if row.lean == 'over' %}propLeanOver{% elif row.lean == 'under' %}propLeanUnder{% endif %}">{{ row.edgeShare|percent }}</td>
                     <td class="propNum">{{ row.recentOvers }}/{{ row.recentGames|length }}</td>
                     <td class="propGames">
-                        {% for game in row.recentGames %}<span class="propGameValue propGame{{ game.outcome|title }}" title="Week {{ game.week }}">{{ game.value }}</span>{% endfor %}
+                        {% for game in row.recentGames %}<span class="propGameValue propGame{{ game.outcome|title }}" data-opponent="{{ game.opponent }}">{{ game.value }}</span>{% endfor %}
                     </td>
                     <td class="propNum">{{ row.seasonAverage|floatformat:1 }} <span class="text-muted">({{ row.gamesPlayed }})</span></td>
                     {% endif %}
@@ -122,6 +122,8 @@
             </tbody>
         </table>
         </div>
+        {# Outside the table wrapper so the fixed popup isn't clipped by its scrolling #}
+        <div id="propHoverPopup" class="matchupHoverPopup" hidden></div>
         {% else %}
         <p class="text-muted">No {{ board.label|lower }} lines for {% if selectedGameLabel %}this game{% else %}this week{% endif %}.</p>
         {% endif %}
@@ -165,4 +167,50 @@
 
         {% endif %}
     </div>
+    <script>
+        // Hovering one of a player's recent games shows who it came against
+        // ("Week 7 @ BUF"), just under it, the same popup as the Matchup page's.
+        (function () {
+            var table = document.querySelector(".propTable");
+            var popup = document.getElementById("propHoverPopup");
+            if (!table || !popup) {
+                return;
+            }
+            var hoveredGame = null;
+            table.addEventListener("mouseover", function (e) {
+                var game = e.target.closest("[data-opponent]");
+                if (game === hoveredGame) {
+                    return;
+                }
+                hoveredGame = game;
+                if (!game) {
+                    popup.hidden = true;
+                    return;
+                }
+                popup.textContent = game.getAttribute("data-opponent");
+                popup.hidden = false;
+
+                // Below the game, flipping above it or back inside the window near the edges.
+                var gameBox = game.getBoundingClientRect();
+                var left = gameBox.left;
+                var top = gameBox.bottom + 4;
+                if (left + popup.offsetWidth > window.innerWidth) {
+                    left = Math.max(0, window.innerWidth - popup.offsetWidth - 4);
+                }
+                if (top + popup.offsetHeight > window.innerHeight) {
+                    top = Math.max(0, gameBox.top - popup.offsetHeight - 4);
+                }
+                popup.style.left = left + "px";
+                popup.style.top = top + "px";
+            });
+            table.addEventListener("mouseleave", function () {
+                hoveredGame = null;
+                popup.hidden = true;
+            });
+            window.addEventListener("scroll", function () {
+                hoveredGame = null;
+                popup.hidden = true;
+            }, true);
+        })();
+    </script>
 {% endblock %}

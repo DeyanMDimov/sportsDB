@@ -52,16 +52,20 @@ def matchesWithPlays(seasonYear):
 
 
 def playerGameStats(playerIds, seasonYear, statKeys, playedMatchIds):
-    # {player id: {match id: {stat key: value}}} for every game the player took part in
-    # (played offensive snaps, or turns up in the play-by-play) among playedMatchIds.
-    # A game he played without touching the ball has zeros.
+    # ({player id: {match id: {stat key: value}}}, {(player id, match id): team id}) for
+    # every game the player took part in (played offensive snaps, or turns up in the
+    # play-by-play) among playedMatchIds. A game he played without touching the ball has
+    # zeros. His team is the one his snaps were logged under, else the one on offense
+    # in his plays, so seasons without snap counts still know which side he was on.
     statsByPlayer = {}
+    teamByPlayerMatch = {}
 
-    for playerId, matchId in playerMatchUsage.objects.filter(
+    for playerId, matchId, teamId in playerMatchUsage.objects.filter(
         player_id__in = playerIds, nflMatch__yearOfSeason = seasonYear, offenseSnaps__gt = 0,
-    ).values_list('player_id', 'nflMatch_id'):
+    ).values_list('player_id', 'nflMatch_id', 'team_id'):
         if matchId in playedMatchIds:
             statsByPlayer.setdefault(playerId, {}).setdefault(matchId, {})
+            teamByPlayerMatch[(playerId, matchId)] = teamId
 
     statsBySplitModel = {}
     for statKey in statKeys:
@@ -79,12 +83,13 @@ def playerGameStats(playerIds, seasonYear, statKeys, playedMatchIds):
                 continue
             countedPlays.add((statSplit.player_id, statSplit.play_id))
             gameStats = statsByPlayer.setdefault(statSplit.player_id, {}).setdefault(matchId, {})
+            teamByPlayerMatch.setdefault((statSplit.player_id, matchId), statSplit.play.teamOnOffense_id)
             if playWasNullified(statSplit.play.playDescription):
                 continue
             for statKey, playValue in modelStats:
                 gameStats[statKey] = gameStats.get(statKey, 0) + playValue(statSplit)
 
-    return statsByPlayer
+    return statsByPlayer, teamByPlayerMatch
 
 
 def average(values):
@@ -124,8 +129,22 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
 
     playedMatchIds = matchesWithPlays(seasonYear)
     playerIds = {line.player_id for line in seasonLines}
-    statsByPlayer = playerGameStats(playerIds, seasonYear, statKeys, playedMatchIds)
-    weekByMatchId = dict(nflMatch.objects.filter(yearOfSeason = seasonYear).values_list('id', 'weekOfSeason'))
+    statsByPlayer, teamByPlayerMatch = playerGameStats(playerIds, seasonYear, statKeys, playedMatchIds)
+    teamsByEspnId = {team.espnId: team for team in nflTeam.objects.all()}
+    seasonMatches = {match.id: match for match in nflMatch.objects.filter(yearOfSeason = seasonYear)}
+    weekByMatchId = {matchId: match.weekOfSeason for matchId, match in seasonMatches.items()}
+
+    def opponentLabel(playerId, matchId):
+        # "Week 7 vs BUF" / "Week 7 @ BUF", or "Week 7, BUF @ KC" if his side isn't known.
+        match = seasonMatches[matchId]
+        homeTeam, awayTeam = teamsByEspnId.get(match.homeTeamEspnId), teamsByEspnId.get(match.awayTeamEspnId)
+        teamId = teamByPlayerMatch.get((playerId, matchId))
+        weekLabel = "Week " + str(match.weekOfSeason)
+        if homeTeam and awayTeam and teamId == homeTeam.id:
+            return weekLabel + " vs " + awayTeam.abbreviation
+        if homeTeam and awayTeam and teamId == awayTeam.id:
+            return weekLabel + " @ " + homeTeam.abbreviation
+        return weekLabel + ", " + (awayTeam.abbreviation if awayTeam else "?") + " @ " + (homeTeam.abbreviation if homeTeam else "?")
 
     def gameValue(gameStats):
         return sum(gameStats.get(statKey, 0) for statKey in statKeys)
@@ -135,21 +154,22 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
         line = float(propLine.line)
         playerGames = statsByPlayer.get(propLine.player_id, {})
         # His games before this one, most recent first.
-        priorGames = sorted(((weekByMatchId[matchId], gameValue(gameStats)) for matchId, gameStats in playerGames.items()
+        priorGames = sorted(((weekByMatchId[matchId], gameValue(gameStats), matchId) for matchId, gameStats in playerGames.items()
                              if weekByMatchId.get(matchId, 99) < propLine.nflMatch.weekOfSeason), reverse = True)
         recent = priorGames[:recentGames]
-        recentAverage = average([value for week, value in recent])
+        recentAverage = average([value for week, value, matchId in recent])
 
         row = {
             'propLine': propLine,
             'player': propLine.player,
             'line': line,
             'lineMove': line - float(propLine.openLine) if propLine.openLine != None else None,
-            'recentGames': [{'week': week, 'value': value, 'outcome': lineOutcome(value, line)} for week, value in recent],
+            'recentGames': [{'week': week, 'value': value, 'outcome': lineOutcome(value, line),
+                             'opponent': opponentLabel(propLine.player_id, matchId)} for week, value, matchId in recent],
             'recentAverage': recentAverage,
-            'seasonAverage': average([value for week, value in priorGames]),
+            'seasonAverage': average([value for week, value, matchId in priorGames]),
             'gamesPlayed': len(priorGames),
-            'recentOvers': sum(1 for week, value in recent if value > line),
+            'recentOvers': sum(1 for week, value, matchId in recent if value > line),
             'enoughGames': len(recent) >= min(MIN_GAMES, recentGames),
             'edge': None, 'edgeShare': None, 'lean': None, 'result': None, 'outcome': None, 'leanHit': None,
         }
