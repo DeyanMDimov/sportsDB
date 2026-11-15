@@ -22,7 +22,7 @@ from collections import namedtuple
 
 from django.db.models import Count, F, Min
 
-from nfl_db.models import nflMatch, passerStatSplit, playerWeekStatus, teamMatchPerformance
+from nfl_db.models import chosenStartingQuarterback, nflMatch, nflTeam, passerStatSplit, player, playerWeekStatus, teamMatchPerformance
 
 
 #-------Settings-------#
@@ -371,7 +371,9 @@ predictedGame = namedtuple('predictedGame', [
 PASSING_PLAY_TYPES = (2, 3, 4)
 QUARTERBACK_POSITION = 1
 
-startingQuarterback = namedtuple('startingQuarterback', ['playerId', 'name', 'hasPlayed'])
+# The quarterback a team is rated with for a week. hasPlayed: he took the first
+# dropback of a game already played. chosen: he was picked by hand.
+startingQuarterback = namedtuple('startingQuarterback', ['playerId', 'name', 'hasPlayed', 'chosen'])
 
 
 def loadSeasonGames(yearOfSeason):
@@ -431,20 +433,41 @@ def quarterbacksOut(yearOfSeason, weekOfSeason):
     return {playerId for playerId, status in latestStatus.items() if status in playerWeekStatus.outStatuses}
 
 
+def chosenStarters(yearOfSeason, weekOfSeason):
+    """{teamEspnId: (playerId, name)} for the starters picked by hand for this week."""
+    choices = chosenStartingQuarterback.objects.filter(yearOfSeason = yearOfSeason, weekOfSeason = weekOfSeason).values_list(
+        'team__espnId', 'player_id', 'player__name')
+    return {teamEspnId: (playerId, name) for teamEspnId, playerId, name in choices}
+
+
+def chooseStartingQuarterback(teamEspnId, yearOfSeason, weekOfSeason, playerId):
+    """Remember the quarterback picked by hand for a team's game that week.
+    playerId None goes back to the model's own guess."""
+    team = nflTeam.objects.get(espnId = teamEspnId)
+    if playerId is None:
+        chosenStartingQuarterback.objects.filter(team = team, yearOfSeason = yearOfSeason, weekOfSeason = weekOfSeason).delete()
+        return
+    chosenStartingQuarterback.objects.update_or_create(
+        team = team, yearOfSeason = yearOfSeason, weekOfSeason = weekOfSeason,
+        defaults = {'player': player.objects.get(id = playerId)})
+
+
 class modelData:
     """What the model reads from the database, kept so that a caller working
     through many weeks reads each season once and fits each week once."""
 
-    def __init__(self, useAvailability = True):
-        # Whether an expected starter who is listed as out gets replaced. The
-        # backtest turns this off: past weeks' statuses were often updated after
-        # the game, which a bettor could not have seen.
-        self.useAvailability = useAvailability
+    def __init__(self, usePregameNews = True):
+        # Whether a starter picked by hand is used, and an expected starter who is
+        # listed as out replaced. The backtest turns this off: it has to guess the
+        # way the model would have on its own, and past weeks' statuses were often
+        # updated after the game.
+        self.usePregameNews = usePregameNews
         self.gamesBySeason = {}
         self.quarterbackGamesBySeason = {}
         self.quarterbackNames = {}
         self.ratingsByWeek = {}
         self.quarterbacksOutByWeek = {}
+        self.chosenStartersByWeek = {}
 
     def seasonsFor(self, yearOfSeason):
         return range(yearOfSeason - (SEASONS_OF_HISTORY - 1), yearOfSeason + 1)
@@ -477,22 +500,34 @@ class modelData:
 
     def startingQuarterback(self, yearOfSeason, weekOfSeason, teamEspnId, beforeTheGame = False):
         """The quarterback to rate the team with this week: whoever took its first
-        dropback if the game has been played, otherwise the expected starter.
-        beforeTheGame asks for the expected starter even if it has been played."""
+        dropback if the game has been played; otherwise the one picked by hand, or
+        failing that the expected starter. beforeTheGame asks for the answer as it
+        stood before kickoff even if the game has been played."""
         week = (int(yearOfSeason), int(weekOfSeason))
         for game in self.quarterbackGames(week[0]):
             if beforeTheGame:
                 break
             if (game.yearOfSeason, game.weekOfSeason) == week and game.teamEspnId == teamEspnId:
-                return startingQuarterback(game.starterId, self.quarterbackNames.get(game.starterId), True)
+                return startingQuarterback(game.starterId, self.quarterbackNames.get(game.starterId), True, False)
 
+        if week not in self.chosenStartersByWeek:
+            self.chosenStartersByWeek[week] = chosenStarters(*week) if self.usePregameNews else {}
+        if teamEspnId in self.chosenStartersByWeek[week]:
+            playerId, name = self.chosenStartersByWeek[week][teamEspnId]
+            return startingQuarterback(playerId, name, False, True)
+        return self.guessedQuarterback(*week, teamEspnId)
+
+    def guessedQuarterback(self, yearOfSeason, weekOfSeason, teamEspnId):
+        """The starter the model expects on its own: whoever started the team's last
+        game, or its next most recent quarterback if he is listed as out."""
+        week = (int(yearOfSeason), int(weekOfSeason))
         quarterbacks = self.ratingsForWeek(*week).quarterbacks
         if quarterbacks is None:
-            return startingQuarterback(None, None, False)
+            return startingQuarterback(None, None, False, False)
         if week not in self.quarterbacksOutByWeek:
-            self.quarterbacksOutByWeek[week] = quarterbacksOut(*week) if self.useAvailability else set()
+            self.quarterbacksOutByWeek[week] = quarterbacksOut(*week) if self.usePregameNews else set()
         playerId = quarterbacks.expectedStarter(teamEspnId, self.quarterbacksOutByWeek[week])
-        return startingQuarterback(playerId, self.quarterbackNames.get(playerId), False)
+        return startingQuarterback(playerId, self.quarterbackNames.get(playerId), False, False)
 
 
 def ratingsForWeek(yearOfSeason, weekOfSeason):
@@ -526,7 +561,7 @@ def backtestPredictions(firstSeason = None, lastSeason = None, quarterbacks = "a
         matches = matches.filter(yearOfSeason__lte = lastSeason)
 
     if data is None:
-        data = modelData(useAvailability = False)
+        data = modelData(usePregameNews = False)
     predictions = []
     for match in matches:
         game = pastGame(*match[:7])

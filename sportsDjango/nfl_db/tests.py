@@ -983,7 +983,7 @@ class BettingModelV3QuarterbackDataTests(TestCase):
     def test_a_starter_listed_as_out_gives_way_to_the_backup(self):
         playerWeekStatus.objects.create(player = self.starter, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 4, reportDate = date(2024, 9, 27))
         self.assertEqual(bettingModelV3.modelData().startingQuarterback(2024, 4, 1).playerId, self.backup.id)
-        self.assertEqual(bettingModelV3.modelData(useAvailability = False).startingQuarterback(2024, 4, 1).playerId, self.starter.id)
+        self.assertEqual(bettingModelV3.modelData(usePregameNews = False).startingQuarterback(2024, 4, 1).playerId, self.starter.id)
         # Both out: somebody without a track record.
         playerWeekStatus.objects.create(player = self.backup, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 3, reportDate = date(2024, 9, 27))
         self.assertEqual(bettingModelV3.modelData().startingQuarterback(2024, 4, 1).playerId, bettingModelV3.UNPROVEN_QUARTERBACK)
@@ -997,6 +997,67 @@ class BettingModelV3QuarterbackDataTests(TestCase):
         self.assertEqual(bettingModelV3.quarterbacksOut(2024, 4), set())
         playerWeekStatus.objects.create(player = self.backup, team = self.home, yearOfSeason = 2024, weekOfSeason = 4, playerStatus = 5, reportDate = date(2024, 9, 28))
         self.assertEqual(bettingModelV3.quarterbacksOut(2024, 4), {self.backup.id})
+
+    def test_a_starter_picked_by_hand_is_used_until_the_game_is_played(self):
+        bettingModelV3.chooseStartingQuarterback(1, 2024, 4, self.backup.id)
+        picked = bettingModelV3.modelData().startingQuarterback(2024, 4, 1)
+        self.assertEqual((picked.playerId, picked.name, picked.hasPlayed, picked.chosen), (self.backup.id, "Backup Passer", False, True))
+        # The backtest guesses the way the model would have on its own.
+        self.assertEqual(bettingModelV3.modelData(usePregameNews = False).startingQuarterback(2024, 4, 1).playerId, self.starter.id)
+        # Picking again replaces the choice; picking nobody goes back to the model's guess.
+        bettingModelV3.chooseStartingQuarterback(1, 2024, 4, self.receiver.id)
+        self.assertEqual(bettingModelV3.modelData().startingQuarterback(2024, 4, 1).playerId, self.receiver.id)
+        bettingModelV3.chooseStartingQuarterback(1, 2024, 4, None)
+        notPicked = bettingModelV3.modelData().startingQuarterback(2024, 4, 1)
+        self.assertEqual((notPicked.playerId, notPicked.chosen), (self.starter.id, False))
+
+    def test_a_pick_for_a_game_already_played_changes_nothing(self):
+        bettingModelV3.chooseStartingQuarterback(1, 2024, 3, self.backup.id)
+        played = bettingModelV3.modelData().startingQuarterback(2024, 3, 1)
+        self.assertEqual((played.playerId, played.hasPlayed, played.chosen), (self.starter.id, True, False))
+
+    def test_picking_a_starter_on_the_page(self):
+        from nfl_db.models import chosenStartingQuarterback
+        pick = {'season': "2024", 'week': "4", 'team': "1", 'player': str(self.backup.id), 'returnTo': "summary"}
+        response = self.client.post('/setStartingQuarterback/', pick)
+        self.assertRedirects(response, '/loadModelSummary/?season=2024&week=4&model=v3&movingavg=5', fetch_redirect_response = False)
+        self.assertEqual(chosenStartingQuarterback.objects.get().player, self.backup)
+
+        response = self.client.post('/setStartingQuarterback/', dict(pick, player = "", returnTo = "breakdown"))
+        self.assertRedirects(response, '/loadModel/?season=2024&week=4&model=v3&movingavg=5', fetch_redirect_response = False)
+        self.assertEqual(chosenStartingQuarterback.objects.count(), 0)
+
+        self.assertEqual(self.client.post('/setStartingQuarterback/', dict(pick, team = "99")).status_code, 400)
+        self.assertEqual(self.client.post('/setStartingQuarterback/', dict(pick, player = "987654")).status_code, 400)
+        self.assertEqual(self.client.post('/setStartingQuarterback/', {'season': "2024"}).status_code, 400)
+        self.assertEqual(chosenStartingQuarterback.objects.count(), 0)
+        self.assertRedirects(self.client.get('/setStartingQuarterback/'), '/loadModelSummary/', fetch_redirect_response = False)
+
+    def test_pages_offer_the_teams_quarterbacks_for_an_upcoming_game(self):
+        player.objects.filter(id__in = [self.starter.id, self.backup.id]).update(team = self.home)
+        week = {'season': "2024", 'week': "4", 'model': "v3", 'movingavg': "5"}
+        with mock.patch.object(bettingModelV3, 'MINIMUM_GAMES_FOR_RATINGS', 1):
+            for url in ('/loadModelSummary/', '/loadModel/'):
+                page = self.client.get(url, week)
+                upcoming = page.context['modelResults'][0]
+                self.assertEqual(upcoming.team2QuarterbackChoices, [(self.backup.id, "Backup Passer"), (self.starter.id, "Starting Passer")])
+                self.assertContains(page, "Starting Passer (expected)")
+                self.assertContains(page, '<label for="starter-1"')
+                # The other team has no passing on record, so there is nothing to change.
+                self.assertIsNone(upcoming.team1QuarterbackChoices)
+                self.assertNotContains(page, '<label for="starter-2"')
+
+            bettingModelV3.chooseStartingQuarterback(1, 2024, 4, self.backup.id)
+            page = self.client.get('/loadModelSummary/', week)
+            self.assertContains(page, "Backup Passer (chosen)")
+            # The option that undoes the pick says who the model would go back to.
+            self.assertContains(page, "Model's guess: Starting Passer")
+            self.assertRegex(page.content.decode(), r'<option value="' + str(self.backup.id) + r'"\s+selected>Backup Passer</option>')
+
+            # A played game keeps its actual starter and offers no picker.
+            page = self.client.get('/loadModelSummary/', dict(week, week = "3"))
+            self.assertIsNone(page.context['modelResults'][0].team1QuarterbackChoices)
+            self.assertNotContains(page, "Change Starter:")
 
     def test_details_name_the_quarterback(self):
         with mock.patch.object(bettingModelV3, 'MINIMUM_GAMES_FOR_RATINGS', 1):

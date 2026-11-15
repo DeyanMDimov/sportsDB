@@ -1,6 +1,6 @@
 from nfl_db import models
 from nfl_db import bettingModelV3
-from nfl_db.models import nflMatch, teamMatchPerformance, nflTeam, driveOfPlay, bettingModelResult
+from nfl_db.models import nflMatch, teamMatchPerformance, nflTeam, driveOfPlay, bettingModelResult, player
 from django.db.models import Q
 from datetime import datetime
 import json
@@ -1361,15 +1361,27 @@ class individualV3ModelResult(individualBettingModelResult):
 
     # Each team's quarterback: his value in points per game over a quarterback
     # nobody has seen, and what starting him adds to the team's expected score.
-    # The starter is only "expected" until the game has been played.
+    # Until the game has been played the starter is either the model's guess
+    # ("expected") or one picked by hand ("chosen"), and the team's quarterbacks
+    # are listed as (player id, name) so another can be picked.
+    team1EspnId = None
     team1Quarterback = None
+    team1QuarterbackId = None
     team1QuarterbackValue = None
     team1QuarterbackAdjustment = None
     team1QuarterbackExpected = False
+    team1QuarterbackChosen = False
+    team1QuarterbackChoices = None
+    team1QuarterbackGuess = None
+    team2EspnId = None
     team2Quarterback = None
+    team2QuarterbackId = None
     team2QuarterbackValue = None
     team2QuarterbackAdjustment = None
     team2QuarterbackExpected = False
+    team2QuarterbackChosen = False
+    team2QuarterbackChoices = None
+    team2QuarterbackGuess = None
 
     def __init__(self, t1name, t2name, team1Points, team2Points):
         self.team1Name = t1name
@@ -1499,6 +1511,11 @@ def addV3RatingDetails(matches, modelResults):
     results don't carry them, so they are refitted here, once per week."""
     v3Data = bettingModelV3.modelData()
     rankingsByWeek = {}
+    teamEspnIds = [match.homeTeamEspnId for match in matches] + [match.awayTeamEspnId for match in matches]
+    rosterQuarterbacks = {}
+    for playerId, name, teamEspnId in player.objects.filter(playerPosition = bettingModelV3.QUARTERBACK_POSITION, team__espnId__in = teamEspnIds).values_list('id', 'name', 'team__espnId'):
+        rosterQuarterbacks.setdefault(teamEspnId, {})[playerId] = name
+
     for match, modelResult in zip(matches, modelResults):
         week = (int(match.yearOfSeason), int(match.weekOfSeason))
         ratings = v3Data.ratingsForWeek(*week)
@@ -1526,9 +1543,20 @@ def addV3RatingDetails(matches, modelResults):
                 setattr(modelResult, prefix + 'Quarterback', "Unknown (usual starter out)")
             else:
                 setattr(modelResult, prefix + 'Quarterback', starter.name)
+            setattr(modelResult, prefix + 'EspnId', teamEspnId)
+            setattr(modelResult, prefix + 'QuarterbackId', starter.playerId)
             setattr(modelResult, prefix + 'QuarterbackValue', round(ratings.quarterbacks.pointsAboveUnproven(starter.playerId), 1))
             setattr(modelResult, prefix + 'QuarterbackAdjustment', round(ratings.quarterbackAdjustment(teamEspnId, starter.playerId), 1))
-            setattr(modelResult, prefix + 'QuarterbackExpected', not starter.hasPlayed)
+            setattr(modelResult, prefix + 'QuarterbackExpected', not starter.hasPlayed and not starter.chosen)
+            setattr(modelResult, prefix + 'QuarterbackChosen', starter.chosen)
+
+            if not starter.hasPlayed:
+                # The team's quarterbacks, plus whoever it is being rated with now.
+                choices = dict(rosterQuarterbacks.get(teamEspnId, {}))
+                if starter.playerId != bettingModelV3.UNPROVEN_QUARTERBACK:
+                    choices[starter.playerId] = starter.name
+                setattr(modelResult, prefix + 'QuarterbackChoices', sorted(choices.items(), key = lambda choice: choice[1]))
+                setattr(modelResult, prefix + 'QuarterbackGuess', v3Data.guessedQuarterback(*week, teamEspnId).name)
     return modelResults
 
 

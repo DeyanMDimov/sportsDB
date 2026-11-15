@@ -216,6 +216,15 @@ has no way to see either coming. **When the expected starter is wrong, the numbe
 is wrong by about the size of the adjustment shown**, so check the name before
 trusting a large edge.
 
+**Picking the starter yourself.** For a game that has not been played, both weekly
+pages have a dropdown of the team's quarterbacks. Choosing one saves it and redoes
+that game's numbers with him; he is then marked "(chosen)". Choosing "Model's
+guess" undoes it. In week 11 of 2026, for example, V3 assumed Joe Milton III for
+Philadelphia and made Pittsburgh a 6.4-point favorite; with Jalen Hurts chosen it
+makes Pittsburgh a 1.6-point favorite. A choice only applies until the game is
+played, after which the actual starter is used, and the backtest never uses
+choices.
+
 Quarterback data comes from the play-by-play, which this database has from 2021.
 Games before that get no adjustment.
 
@@ -439,9 +448,10 @@ helped about half as much as valuing each quarterback.
 
 ## What V3 does not know
 
-- **A starter coming back, or a quarterback change by choice.** Before a game V3
-  assumes last game's starter. It can drop a quarterback who is listed as out, but
-  nothing tells it that an injured starter has returned.
+- **A starter coming back, or a quarterback change by choice**, unless you tell it.
+  Before a game V3 assumes last game's starter. It can drop a quarterback who is
+  listed as out, but nothing tells it that an injured starter has returned; that
+  is what the starter dropdown is for.
 - **How much of a quarterback's value is running.** Only passing is measured.
 - **Other injuries, suspensions and players rested late in the season.**
 - **Rest and travel**: byes, Thursday games, long trips.
@@ -492,8 +502,15 @@ England to win by 7.6. A bet shown as "NE -3.5" means: take New England at the
 book's -3.5.
 
 **Before betting an upcoming game**, look at the quarterback names. One marked
-"(expected)" is V3's assumption. Pulling player availability for the week (Players,
-Player Availability tab) lets V3 replace a starter who is out.
+"(expected)" is V3's assumption. If someone else will start, pick him: on Weekly
+Summary, expand the game and use "Change Starter"; on Model Breakdown, use the
+dropdown in the Quarterback row. The dropdown lists the quarterbacks on the team's
+roster. Pulling player availability for the week (Players, Player Availability
+tab) also lets V3 replace a starter who is out on its own.
+
+Choices are kept in the `chosenStartingQuarterback` table. It was added with a
+migration, so any other copy of the database (the web host's) needs `migrate` run
+before the V3 pages will load there.
 
 **Commands.**
 
@@ -528,9 +545,9 @@ this season and last. Where the previous season is missing (2016, 2017 and early
 
 In rough order of likely value:
 
-1. **Better starter information.** The adjustment is only as good as the name it
-   is given. A way to set the starter by hand for an upcoming game, or a depth
-   chart pull, would fix the cases where V3 assumes the wrong quarterback.
+1. **A depth chart pull.** The adjustment is only as good as the name it is given.
+   You can now set the starter by hand; pulling each team's depth chart would do
+   it without you.
 2. **Store opening lines** (fill `nflMatchOdds`) so the model can be tested against
    openers and for closing line value, which is a fairer test than the close.
 3. **Per-play efficiency** from the play-by-play: build an expected-points table by

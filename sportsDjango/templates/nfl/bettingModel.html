@@ -84,7 +84,7 @@
                     <li>Every rating is pulled toward average, as if the team had also played 4 games at exactly league average. That keeps a couple of unusual games from producing an extreme rating.</li>
                     <li>Expected score = league average score, plus the team's offense rating, minus the opponent's defense rating, plus half of home field for the home team and minus half for the visitor.</li>
                     <li>Each team's score then moves by its quarterback adjustment: how many points better or worse this week's starter has passed than the quarterbacks who played the games behind the team's rating. It is zero when the same quarterback played all of them.</li>
-                    <li>For a game that hasn't been played, the model assumes the quarterback who started the team's last game, unless he is listed as out. He is marked "expected". If someone else starts, the adjustment is wrong.</li>
+                    <li>For a game that hasn't been played, the model assumes the quarterback who started the team's last game, unless he is listed as out. He is marked "expected". If someone else will start, pick him in the Quarterback row and the numbers are redone with him.</li>
                     <li>The model only names a bet when its line or total is at least 1 point away from the book's. "Edge" is the size of that gap.</li>
                 </ol>
                 <p>Backtested from 2019 on, this lands about 10.1 points from the final margin in a typical game, against 9.8 for the closing line, and its bets against the closing line have won about half the time. docs/betting-model-v3.md has the full explanation.</p>
@@ -124,8 +124,16 @@
                         </tr>
                         <tr>
                             <td> Quarterback </td>
-                            <td colspan="2"> {{ result.team1Quarterback|default:"-" }}{% if result.team1QuarterbackExpected %} (expected){% endif %}{% if result.team1Quarterback %}: {{ result.team1QuarterbackValue|signed }} pts over an unproven QB{% endif %}</td>
-                            <td colspan="2"> {{ result.team2Quarterback|default:"-" }}{% if result.team2QuarterbackExpected %} (expected){% endif %}{% if result.team2Quarterback %}: {{ result.team2QuarterbackValue|signed }} pts over an unproven QB{% endif %}</td>
+                            <td colspan="2"> {{ result.team1Quarterback|default:"-" }}{% if result.team1QuarterbackExpected %} (expected){% elif result.team1QuarterbackChosen %} (chosen){% endif %}{% if result.team1Quarterback %}: {{ result.team1QuarterbackValue|signed }} pts over an unproven QB{% endif %}
+                                {% if result.team1QuarterbackChoices %}
+                                {% include 'nfl/quarterbackPicker.html' with teamName=result.team1Name teamEspnId=result.team1EspnId choices=result.team1QuarterbackChoices currentId=result.team1QuarterbackId chosen=result.team1QuarterbackChosen guess=result.team1QuarterbackGuess returnTo='breakdown' %}
+                                {% endif %}
+                            </td>
+                            <td colspan="2"> {{ result.team2Quarterback|default:"-" }}{% if result.team2QuarterbackExpected %} (expected){% elif result.team2QuarterbackChosen %} (chosen){% endif %}{% if result.team2Quarterback %}: {{ result.team2QuarterbackValue|signed }} pts over an unproven QB{% endif %}
+                                {% if result.team2QuarterbackChoices %}
+                                {% include 'nfl/quarterbackPicker.html' with teamName=result.team2Name teamEspnId=result.team2EspnId choices=result.team2QuarterbackChoices currentId=result.team2QuarterbackId chosen=result.team2QuarterbackChosen guess=result.team2QuarterbackGuess returnTo='breakdown' %}
+                                {% endif %}
+                            </td>
                         </tr>
                         <tr>
                             <td> Quarterback Adjustment </td>

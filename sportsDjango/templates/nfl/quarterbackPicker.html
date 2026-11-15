@@ -1,0 +1,21 @@
+{% comment %}
+Picks the quarterback betting model V3 rates a team with in a game that hasn't
+been played; choosing one saves it and reloads the week. The caller passes the
+team and its quarterbacks:
+{% include 'nfl/quarterbackPicker.html' with teamName=result.team1Name teamEspnId=result.team1EspnId choices=result.team1QuarterbackChoices currentId=result.team1QuarterbackId chosen=result.team1QuarterbackChosen guess=result.team1QuarterbackGuess returnTo='summary' %}
+{% endcomment %}
+<form method="POST" action="/setStartingQuarterback/" class="d-flex align-items-center gap-2 my-1">
+    {% csrf_token %}
+    <input type="hidden" name="season" value="{{ yearOfSeason }}">
+    <input type="hidden" name="week" value="{{ weekOfSeason }}">
+    <input type="hidden" name="team" value="{{ teamEspnId }}">
+    <input type="hidden" name="returnTo" value="{{ returnTo }}">
+    <label for="starter-{{ teamEspnId }}" style="min-width: 2.5em">{{ teamName }}</label>
+    <select name="player" id="starter-{{ teamEspnId }}" class="form-select form-select-sm" style="max-width: 14em" onchange="this.form.submit()">
+        <option value="">Model's guess{% if guess %}: {{ guess }}{% endif %}</option>
+        {% for playerId, name in choices %}
+        <option value="{{ playerId }}" {% if chosen and playerId == currentId %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-sm btn-outline-secondary">Set</button></noscript>
+</form>

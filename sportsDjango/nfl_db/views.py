@@ -1,11 +1,12 @@
-from django.shortcuts import render
-from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render, redirect
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.utils.http import urlencode
 from django.core import serializers
 import json
 from nfl_db.models import nflTeam, nflMatch, teamMatchPerformance, driveOfPlay, player, playerTeamTenure, playerWeekStatus, playByPlay
 from nfl_db.models import passerStatSplit, rusherStatSplit, receiverStatSplit, returnerStatSplit
 from django.db import models
-from nfl_db import businessLogic, crudLogic, players, propBoard, propLines
+from nfl_db import bettingModelV3, businessLogic, crudLogic, players, propBoard, propLines
 from nfl_db.models import playerPropLine
 import datetime, time, requests, traceback, re
 from zoneinfo import ZoneInfo
@@ -829,6 +830,24 @@ def loadModel(request, target):
             return render(request, 'nfl/bettingModel.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions})
         else:
             return render(request, 'nfl/modelSummary.html', {'weeks':weeksOnPage, 'years': yearsOnPage, 'ma_Len': movingAvgLenOptions})
+
+def setStartingQuarterback(request):
+    """Remember the quarterback picked on a model page as a team's starter for an
+    upcoming game (or, with no player, go back to the model's guess), then show
+    that week again."""
+    if request.method != 'POST':
+        return redirect('/loadModelSummary/')
+    try:
+        yearOfSeason = int(request.POST['season'])
+        weekOfSeason = int(request.POST['week'])
+        teamEspnId = int(request.POST['team'])
+        playerId = int(request.POST['player']) if request.POST.get('player') else None
+        bettingModelV3.chooseStartingQuarterback(teamEspnId, yearOfSeason, weekOfSeason, playerId)
+    except (KeyError, ValueError, nflTeam.DoesNotExist, player.DoesNotExist):
+        return HttpResponseBadRequest("That team, week or quarterback could not be found.")
+
+    page = '/loadModel/' if request.POST.get('returnTo') == 'breakdown' else '/loadModelSummary/'
+    return redirect(page + '?' + urlencode({'season': yearOfSeason, 'week': weekOfSeason, 'model': "v3", 'movingavg': 5}))
 
 def loadModelYear(request):
     yearsOnPage = yearsOnPage_Helper()   
