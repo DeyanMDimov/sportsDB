@@ -73,6 +73,8 @@
             {{ sportsbooks }} lines against each player's average over his last {{ selectedGames }} games this season.
             The <strong>lean</strong> is the side of the line that average is on, and the table is sorted by how far it sits from the line,
             with players who have fewer than {{ board.minGames }} games (greyed out) at the bottom.
+            The number after the opponent is its rank against the player's position in {{ board.label|lower }} allowed per game before this week:
+            1st allows the fewest (a <span class="propRankTough">tough</span> matchup), the last allows the most (an <span class="propRankEasy">easy</span> one).
             {% if board.weekRecord.bets %}{% if selectedGameLabel %}In this game{% else %}This week{% endif %} the lean went {{ board.weekRecord.hits }}&ndash;{{ board.weekRecord.misses }} ({{ board.weekRecord.hitRate|percent }}).{% endif %}
             At &minus;110 a side has to win {{ breakEvenRate|percent:1 }} of the time to break even.
         </p>
@@ -88,7 +90,7 @@
                     <th class="propNum">L{{ selectedGames }} Avg</th>
                     <th class="propNum">Edge</th>
                     <th class="propNum">Over</th>
-                    <th>Last {{ selectedGames }} (newest on right)</th>
+                    <th>Last {{ selectedGames }} (new on right)</th>
                     <th class="propNum">Season Avg</th>
                     <th class="propNum">Result</th>
                 </tr>
@@ -96,8 +98,8 @@
             <tbody>
                 {% for row in board.weekRows %}
                 <tr{% if not row.enoughGames %} class="propFewGames"{% endif %}>
-                    <td class="propPlayer">{{ row.player.name }}</td>
-                    <td class="propGame">{{ row.matchup }}</td>
+                    <td class="propPlayer">{{ row.player.name }}{% if row.team %} <span class="propPlayerTeam">({{ row.team.abbreviation }})</span>{% endif %}</td>
+                    <td class="propGame">{{ row.matchup }}{% if row.opponentRank %} <span class="propOpponentRank{% if row.opponentRank <= 10 %} propRankTough{% elif row.opponentRank >= 23 %} propRankEasy{% endif %}" title="{{ row.opponent.abbreviation }} ranks {{ row.opponentRankLabel }} against {{ row.player.get_playerPosition_display }}s in {{ board.label|lower }} allowed per game (1st allows the fewest)">({{ row.opponentRankLabel }})</span>{% endif %}</td>
                     <td class="propNum">
                         {{ row.line|floatformat:"-1" }}
                         {% if row.lineMove %}<span class="propLineMove" title="Opened at {{ row.propLine.openLine|floatformat:'-1' }}">{{ row.lineMove|signed }}</span>{% endif %}

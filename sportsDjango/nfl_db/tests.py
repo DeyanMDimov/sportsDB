@@ -564,6 +564,30 @@ class PropTypeTests(SimpleTestCase):
         self.assertEqual(propLines.propTypeLabel('Longest Rush (incl. overtime)'), 'Longest Rush')
 
 
+
+from nfl_db import propBoard
+
+
+class OpponentRankTests(SimpleTestCase):
+    def test_least_allowed_per_game_ranks_first(self):
+        # WRs: team 1 allowed 300 in 2 games (150), team 2 400 in 4 (100), team 3 200 in 1 (200).
+        ranks = propBoard.rankDefenses({(1, 2): 300, (2, 2): 400, (3, 2): 200}, {1: 2, 2: 4, 3: 1})
+        self.assertEqual((ranks[(2, 2)], ranks[(1, 2)], ranks[(3, 2)]), (1, 2, 3))
+
+    def test_positions_are_ranked_separately(self):
+        ranks = propBoard.rankDefenses({(1, 2): 100, (2, 2): 50, (1, 4): 10, (2, 4): 90}, {1: 1, 2: 1})
+        self.assertEqual((ranks[(2, 2)], ranks[(1, 2)]), (1, 2))
+        self.assertEqual((ranks[(1, 4)], ranks[(2, 4)]), (1, 2))
+
+    def test_team_that_allowed_nothing_to_a_position_ranks_first(self):
+        ranks = propBoard.rankDefenses({(1, 3): 40}, {1: 1, 2: 1})
+        self.assertEqual((ranks[(2, 3)], ranks[(1, 3)]), (1, 2))
+
+    def test_ordinals(self):
+        self.assertEqual([propBoard.ordinal(n) for n in (1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 32)],
+                         ['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '32nd'])
+
+
 from nfl_db import bettingModelV3, businessLogic
 from nfl_db.models import bettingModelResult
 

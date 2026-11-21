@@ -1383,6 +1383,19 @@ table thead tr th:first-child {
   color: #6b7a90;
 }
 
+/* The player's team, after his name. */
+.propPlayerTeam {
+  color: #93a4bd;
+}
+/* The opponent's rank against the player's position, after its abbreviation:
+   red when it's one of the ten stingiest defenses, green for the ten most generous. */
+.propRankTough {
+  color: #fca5a5;
+}
+.propRankEasy {
+  color: #86efac;
+}
+
 /* How far the line has moved since it opened. */
 .propLineMove {
   font-size: 0.75em;

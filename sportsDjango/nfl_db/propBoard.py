@@ -95,6 +95,60 @@ def playerGameStats(playerIds, seasonYear, statKeys, playedMatchIds):
     return statsByPlayer, teamByPlayerMatch
 
 
+def rankDefenses(allowedTotals, gamesByTeam):
+    # {(defense, position): rank}, from {(defense, position): stat total allowed} and
+    # {defense: games played}. Ranked within each position by the amount allowed per
+    # game, the way ESPN ranks fantasy opponents: 1st allowed the least (the hardest
+    # matchup), the last allowed the most. Per game so a bye week doesn't look like
+    # good defense. A team that played but never allowed any is ranked at 0 a game.
+    positions = {position for defense, position in allowedTotals}
+    ranks = {}
+    for position in positions:
+        perGame = sorted((allowedTotals.get((defense, position), 0) / games, defense)
+                         for defense, games in gamesByTeam.items() if games)
+        for rank, (allowedPerGame, defense) in enumerate(perGame, start = 1):
+            ranks[(defense, position)] = rank
+    return ranks
+
+
+def opponentRanks(seasonYear, weekOfSeason, statKeys, playedMatchIds):
+    # {(defense team espn id, position): rank} for this stat, from the games played
+    # before weekOfSeason: what each defense has allowed per game to the players of
+    # each position, ranked as rankDefenses does.
+    seasonMatches = {match.id: match for match in nflMatch.objects.filter(yearOfSeason = seasonYear, weekOfSeason__lt = weekOfSeason)
+                     if match.id in playedMatchIds}
+    espnIdByTeamId = dict(nflTeam.objects.values_list('id', 'espnId'))
+    gamesByTeam = {}
+    for match in seasonMatches.values():
+        for teamEspnId in (match.homeTeamEspnId, match.awayTeamEspnId):
+            gamesByTeam[teamEspnId] = gamesByTeam.get(teamEspnId, 0) + 1
+
+    statsBySplitModel = {}
+    for statKey in statKeys:
+        splitModel, playValue = PROP_STAT_VALUES[statKey]
+        statsBySplitModel.setdefault(splitModel, []).append(playValue)
+
+    allowedTotals = {}
+    for splitModel, playValues in statsBySplitModel.items():
+        countedPlays = set()
+        for statSplit in splitModel.objects.filter(play__nflMatch_id__in = seasonMatches.keys()).select_related('play', 'player'):
+            if (statSplit.player_id, statSplit.play_id) in countedPlays or playWasNullified(statSplit.play.playDescription):
+                continue
+            countedPlays.add((statSplit.player_id, statSplit.play_id))
+            match = seasonMatches[statSplit.play.nflMatch_id]
+            offenseEspnId = espnIdByTeamId.get(statSplit.play.teamOnOffense_id)
+            if offenseEspnId == match.homeTeamEspnId:
+                defenseEspnId = match.awayTeamEspnId
+            elif offenseEspnId == match.awayTeamEspnId:
+                defenseEspnId = match.homeTeamEspnId
+            else:
+                continue
+            key = (defenseEspnId, statSplit.player.playerPosition)
+            allowedTotals[key] = allowedTotals.get(key, 0) + sum(playValue(statSplit) for playValue in playValues)
+
+    return rankDefenses(allowedTotals, gamesByTeam)
+
+
 def average(values):
     return sum(values) / len(values) if values else None
 
@@ -136,17 +190,22 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
     teamsByEspnId = {team.espnId: team for team in nflTeam.objects.all()}
     seasonMatches = {match.id: match for match in nflMatch.objects.filter(yearOfSeason = seasonYear)}
     weekByMatchId = {matchId: match.weekOfSeason for matchId, match in seasonMatches.items()}
+    # How each defense ranks against each position in this stat, going into the week.
+    ranks = opponentRanks(seasonYear, weekOfSeason, statKeys, playedMatchIds)
 
-    def opponentLabel(playerId, matchId):
-        # "Week 7 vs BUF" / "Week 7 @ BUF", or "Week 7, BUF @ KC" if his side isn't known.
+    def opponentLabel(playerId, position, matchId):
+        # "Week 7 vs BUF (5th)" / "Week 7 @ BUF (5th)", with BUF's rank against his
+        # position going into the selected week, or "Week 7, BUF @ KC" if his side
+        # isn't known.
         match = seasonMatches[matchId]
         homeTeam, awayTeam = teamsByEspnId.get(match.homeTeamEspnId), teamsByEspnId.get(match.awayTeamEspnId)
         teamId = teamByPlayerMatch.get((playerId, matchId))
         weekLabel = "Week " + str(match.weekOfSeason)
-        if homeTeam and awayTeam and teamId == homeTeam.id:
-            return weekLabel + " vs " + awayTeam.abbreviation
-        if homeTeam and awayTeam and teamId == awayTeam.id:
-            return weekLabel + " @ " + homeTeam.abbreviation
+        if homeTeam and awayTeam and teamId in (homeTeam.id, awayTeam.id):
+            opponent = awayTeam if teamId == homeTeam.id else homeTeam
+            rank = ranks.get((opponent.espnId, position))
+            return (weekLabel + (" vs " if teamId == homeTeam.id else " @ ") + opponent.abbreviation
+                    + (" (" + ordinal(rank) + ")" if rank else ""))
         return weekLabel + ", " + (awayTeam.abbreviation if awayTeam else "?") + " @ " + (homeTeam.abbreviation if homeTeam else "?")
 
     def gameValue(gameStats):
@@ -168,7 +227,7 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
             'line': line,
             'lineMove': line - float(propLine.openLine) if propLine.openLine != None else None,
             'recentGames': [{'week': week, 'value': value, 'outcome': lineOutcome(value, line),
-                             'opponent': opponentLabel(propLine.player_id, matchId)} for week, value, matchId in recent],
+                             'opponent': opponentLabel(propLine.player_id, propLine.player.playerPosition, matchId)} for week, value, matchId in recent],
             'recentAverage': recentAverage,
             'seasonAverage': average([value for week, value, matchId in priorGames]),
             'gamesPlayed': len(priorGames),
@@ -192,7 +251,7 @@ def buildPropBoard(seasonYear, weekOfSeason, propTypeId, recentGames = DEFAULT_R
 
     weekRows = [row for row in rows if row['propLine'].nflMatch.weekOfSeason == weekOfSeason
                 and (matchId == None or row['propLine'].nflMatch_id == matchId)]
-    addMatchups(weekRows)
+    addMatchups(weekRows, ranks)
     # Biggest lean either way first; players with too few games at the bottom.
     weekRows.sort(key = lambda row: (not row['enoughGames'], row['edgeShare'] == None, -abs(row['edgeShare'] or 0), row['player'].name))
 
@@ -220,8 +279,16 @@ def weekGameChoices(seasonYear, weekOfSeason):
     return choices
 
 
-def addMatchups(weekRows):
+def ordinal(number):
+    # 1 -> "1st", 12 -> "12th", 23 -> "23rd".
+    suffix = 'th' if 10 <= number % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(number % 10, 'th')
+    return str(number) + suffix
+
+
+def addMatchups(weekRows, ranks = None):
     # "vs NE" / "@ NE" when we know which side the player was on, else "NE @ DET".
+    # With ranks (from opponentRanks), also the opponent's rank against the player's
+    # position, shown next to its abbreviation.
     matchIds = {row['propLine'].nflMatch_id for row in weekRows}
     teamsByEspnId = {team.espnId: team for team in nflTeam.objects.all()}
     teamsByPlayerMatch = playerTeamsByMatch({row['player'].id for row in weekRows}, matchIds)
@@ -232,12 +299,19 @@ def addMatchups(weekRows):
         if playerTeam == None and row['player'].team in (homeTeam, awayTeam):
             playerTeam = row['player'].team
         row['team'] = playerTeam
+        row['opponent'] = None
+        row['opponentRank'] = None
         if playerTeam != None and playerTeam == homeTeam and awayTeam:
             row['matchup'] = "vs " + awayTeam.abbreviation
+            row['opponent'] = awayTeam
         elif playerTeam != None and playerTeam == awayTeam and homeTeam:
             row['matchup'] = "@ " + homeTeam.abbreviation
+            row['opponent'] = homeTeam
         else:
             row['matchup'] = (awayTeam.abbreviation if awayTeam else "?") + " @ " + (homeTeam.abbreviation if homeTeam else "?")
+        if row['opponent'] != None and ranks:
+            row['opponentRank'] = ranks.get((row['opponent'].espnId, row['player'].playerPosition))
+        row['opponentRankLabel'] = ordinal(row['opponentRank']) if row['opponentRank'] else None
 
 
 def leanRecord(rows):
